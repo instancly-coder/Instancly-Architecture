@@ -4,7 +4,7 @@ import {
   Flame, ChevronRight, FolderTree, Database, History, Settings as SettingsIcon, MoreVertical,
   Monitor, Tablet, Smartphone, Copy, ExternalLink, X, Play,
   Brain, Sparkles, FileText, Loader2, CheckCircle2, Send,
-  FileCode2, FolderClosed
+  FileCode2, FolderClosed, Eye, MessageSquare
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -29,6 +29,7 @@ export default function Builder() {
   const [activePanel, setActivePanel] = useState<"none" | "files" | "database" | "history">("none");
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [activeFile, setActiveFile] = useState<string | null>(null);
+  const [mobileView, setMobileView] = useState<"chat" | "preview">("chat");
 
   const togglePanel = (panel: "files" | "database" | "history") => {
     setActivePanel(prev => prev === panel ? "none" : panel);
@@ -109,8 +110,8 @@ export default function Builder() {
           </DropdownMenu>
         </div>
 
-        <div className="flex items-center gap-4">
-          <span className="text-xs text-secondary font-mono">£0.03 spend</span>
+        <div className="flex items-center gap-2 md:gap-4">
+          <span className="hidden sm:inline text-xs text-secondary font-mono">£0.03 spend</span>
           
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -147,7 +148,7 @@ export default function Builder() {
       <div className="flex flex-1 overflow-hidden relative">
         
         {/* Left Panel - Chat */}
-        <div className="w-[340px] shrink-0 border-r border-border bg-surface flex flex-col h-full z-10 relative">
+        <div className={`w-full md:w-[340px] md:shrink-0 border-r border-border bg-surface flex-col h-full z-10 relative ${mobileView === 'chat' ? 'flex' : 'hidden md:flex'}`}>
           <div className="p-3 border-b border-border">
             <select className="w-full bg-background border border-border rounded-md text-xs px-2 py-1.5 text-foreground font-mono focus:ring-1 focus:ring-primary outline-none">
               {mockModels.map(m => (
@@ -189,6 +190,13 @@ export default function Builder() {
                 placeholder="Describe your app..."
                 className="w-full min-h-[80px] max-h-[200px] bg-background border border-border rounded-lg p-3 pr-12 text-sm focus:outline-none focus:ring-1 focus:ring-primary resize-none"
               />
+              <button
+                onClick={() => setMobileView("preview")}
+                className="md:hidden absolute right-12 bottom-2 w-8 h-8 rounded bg-surface-raised text-secondary hover:text-foreground border border-border flex items-center justify-center transition-colors"
+                title="View preview"
+              >
+                <Eye className="w-4 h-4" />
+              </button>
               <button 
                 onClick={handleSend}
                 disabled={!chatInput.trim() || isStreaming}
@@ -197,12 +205,13 @@ export default function Builder() {
                 <Send className="w-4 h-4" />
               </button>
             </div>
-            <div className="text-[10px] text-secondary text-center mt-2">Enter to send, Shift+Enter for newline</div>
+            <div className="text-[10px] text-secondary text-center mt-2 hidden md:block">Enter to send, Shift+Enter for newline</div>
+            <div className="text-[10px] text-secondary text-center mt-2 md:hidden">Tap the eye to view your preview</div>
           </div>
         </div>
 
         {/* History Sheet */}
-        <div className={`absolute top-0 bottom-0 left-[340px] w-80 bg-surface border-r border-border z-20 transition-transform duration-300 ease-in-out ${activePanel === 'history' ? 'translate-x-0 shadow-2xl' : '-translate-x-full'}`}>
+        <div className={`absolute top-0 bottom-0 left-0 md:left-[340px] w-full md:w-80 bg-surface border-r border-border z-20 transition-transform duration-300 ease-in-out ${activePanel === 'history' ? 'translate-x-0 shadow-2xl' : '-translate-x-full pointer-events-none opacity-0'}`}>
           <div className="h-12 border-b border-border flex items-center justify-between px-4">
             <h3 className="font-bold text-sm">Build History</h3>
             <button onClick={() => setActivePanel("none")} className="text-secondary hover:text-foreground">
@@ -224,8 +233,8 @@ export default function Builder() {
         </div>
 
         {/* Right Panel - Preview Area */}
-        <div className="flex-1 bg-[#000000] flex flex-col relative overflow-hidden z-0">
-          <div className="flex-1 p-8 flex items-center justify-center overflow-hidden relative">
+        <div className={`flex-1 bg-[#000000] flex-col relative overflow-hidden z-0 ${mobileView === 'preview' ? 'flex' : 'hidden md:flex'}`}>
+          <div className="flex-1 p-2 md:p-8 flex items-center justify-center overflow-hidden relative">
              <div 
                className="bg-white w-full h-full flex flex-col transition-all duration-200 ease-in-out"
                style={{ 
@@ -288,16 +297,25 @@ export default function Page() {
           </div>
 
           {/* Bottom Bar */}
-          <div className="h-10 border-t border-border bg-surface flex items-center justify-between px-4 shrink-0">
+          <div className="h-10 border-t border-border bg-surface flex items-center justify-between px-4 shrink-0 gap-2">
             <div className="flex items-center gap-1">
-              <ViewportBtn active={viewport==='desktop'} icon={Monitor} onClick={()=>setViewport('desktop')} />
-              <ViewportBtn active={viewport==='tablet'} icon={Tablet} onClick={()=>setViewport('tablet')} />
-              <ViewportBtn active={viewport==='mobile'} icon={Smartphone} onClick={()=>setViewport('mobile')} />
+              <button
+                onClick={() => setMobileView("chat")}
+                className="md:hidden w-8 h-8 rounded flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
+                title="Back to chat"
+              >
+                <MessageSquare className="w-4 h-4" />
+              </button>
+              <div className="hidden md:flex items-center gap-1">
+                <ViewportBtn active={viewport==='desktop'} icon={Monitor} onClick={()=>setViewport('desktop')} />
+                <ViewportBtn active={viewport==='tablet'} icon={Tablet} onClick={()=>setViewport('tablet')} />
+                <ViewportBtn active={viewport==='mobile'} icon={Smartphone} onClick={()=>setViewport('mobile')} />
+              </div>
             </div>
             
-            <div className="flex items-center gap-2 text-xs font-mono text-secondary hover:text-foreground cursor-pointer transition-colors px-2 py-1 rounded hover:bg-surface-raised" onClick={copyUrl}>
-              {slug}-{username}.instancly.app
-              <Copy className="w-3 h-3" />
+            <div className="flex items-center gap-2 text-xs font-mono text-secondary hover:text-foreground cursor-pointer transition-colors px-2 py-1 rounded hover:bg-surface-raised truncate min-w-0" onClick={copyUrl}>
+              <span className="truncate">{slug}-{username}.instancly.app</span>
+              <Copy className="w-3 h-3 shrink-0" />
             </div>
 
             <div className="flex items-center">
