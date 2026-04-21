@@ -1,22 +1,16 @@
 import { Link, useParams } from "wouter";
-import { Flame, MapPin, Link as LinkIcon, Calendar } from "lucide-react";
+import { MapPin, Link as LinkIcon, Calendar } from "lucide-react";
 import { mockUser, mockProjects } from "@/lib/mock-data";
+import { MarketingNav } from "@/components/marketing-nav";
+import { MarketingFooter } from "@/components/marketing-footer";
 
 export default function Profile() {
   const { username } = useParams();
   // using mockUser for any profile
   
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <nav className="border-b border-border bg-surface h-14 flex items-center px-6 sticky top-0 z-10">
-        <Link href="/" className="flex items-center gap-2 hover:opacity-80 mr-8">
-          <Flame className="w-5 h-5 text-primary" />
-          <span className="font-bold tracking-tight">instancly</span>
-        </Link>
-        <div className="flex items-center gap-6 text-sm ml-auto">
-          <Link href="/dashboard" className="text-secondary hover:text-foreground">Dashboard</Link>
-        </div>
-      </nav>
+    <div className="min-h-screen bg-background text-foreground flex flex-col">
+      <MarketingNav />
 
       <main className="max-w-5xl mx-auto p-8">
         <div className="flex flex-col md:flex-row gap-12">
@@ -77,6 +71,10 @@ export default function Profile() {
           </div>
         </div>
       </main>
+
+      <div className="mt-auto">
+        <MarketingFooter />
+      </div>
     </div>
   );
 }

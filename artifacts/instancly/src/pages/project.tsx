@@ -1,8 +1,10 @@
 import { Link, useParams } from "wouter";
-import { Flame, Copy, ExternalLink, ChevronRight, FolderTree, FileCode2 } from "lucide-react";
+import { Copy, ExternalLink, ChevronRight, FolderTree, FileCode2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { mockProjects } from "@/lib/mock-data";
 import { toast } from "sonner";
+import { MarketingNav } from "@/components/marketing-nav";
+import { MarketingFooter } from "@/components/marketing-footer";
 
 export default function Project() {
   const { username, slug } = useParams();
@@ -14,19 +16,16 @@ export default function Project() {
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
-      <nav className="border-b border-border bg-surface h-14 flex items-center px-6 shrink-0">
-        <Link href="/" className="flex items-center gap-2 hover:opacity-80">
-          <Flame className="w-5 h-5 text-primary" />
-          <span className="font-bold tracking-tight hidden sm:inline">instancly</span>
-        </Link>
-        <div className="w-px h-4 bg-border mx-4"></div>
-        <div className="flex items-center text-sm font-mono text-secondary">
-          <Link href={`/${username}`} className="hover:text-foreground transition-colors">{username}</Link>
-          <ChevronRight className="w-4 h-4 mx-1" />
-          <span className="text-foreground">{slug}</span>
+      <MarketingNav />
+
+      <div className="border-b border-border bg-surface/50 px-4 sm:px-6 py-2 flex items-center gap-3 flex-wrap">
+        <div className="flex items-center text-sm font-mono text-secondary min-w-0">
+          <Link href={`/${username}`} className="hover:text-foreground transition-colors truncate">{username}</Link>
+          <ChevronRight className="w-4 h-4 mx-1 shrink-0" />
+          <span className="text-foreground truncate">{slug}</span>
         </div>
-        
-        <div className="ml-auto flex items-center gap-3">
+
+        <div className="ml-auto flex items-center gap-2">
           <Button variant="ghost" size="sm" className="hidden sm:flex hover:bg-surface-raised">
             <ExternalLink className="w-4 h-4 mr-2" /> Open live app
           </Button>
@@ -34,9 +33,9 @@ export default function Project() {
             <Copy className="w-4 h-4 mr-2" /> Clone
           </Button>
         </div>
-      </nav>
+      </div>
 
-      <main className="flex-1 flex flex-col md:flex-row overflow-hidden">
+      <main className="flex-1 flex flex-col md:flex-row">
         {/* Sidebar info */}
         <div className="w-full md:w-80 border-r border-border bg-surface p-6 flex flex-col shrink-0 overflow-y-auto">
           <h1 className="text-2xl font-bold tracking-tight mb-2">{project.name}</h1>
@@ -101,6 +100,8 @@ export default function Project() {
           </div>
         </div>
       </main>
+
+      <MarketingFooter />
     </div>
   );
 }

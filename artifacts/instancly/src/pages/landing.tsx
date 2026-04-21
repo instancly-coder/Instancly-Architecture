@@ -1,7 +1,9 @@
-import { Flame, ArrowRight, Github, Code, Database, Zap, Sparkles, Server, Terminal, Lock, ArrowUp } from "lucide-react";
+import { Code, Database, Zap, Sparkles, Server, ArrowUp } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useEffect, useState, type KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
+import { MarketingNav } from "@/components/marketing-nav";
+import { MarketingFooter } from "@/components/marketing-footer";
 
 const PROMPT_SUGGESTIONS = [
   "A todo app with Postgres",
@@ -51,28 +53,7 @@ export default function Landing() {
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
-      <nav className="sticky top-0 z-50 bg-surface/80 backdrop-blur-md border-b border-border h-14 flex items-center justify-between px-6">
-        <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-          <Flame className="w-5 h-5 text-primary" />
-          <span className="font-bold text-lg tracking-tight">instancly</span>
-        </Link>
-        <div className="hidden md:flex items-center gap-6 text-sm text-secondary">
-          <a href="#features" className="hover:text-foreground transition-colors">Features</a>
-          <a href="#pricing" className="hover:text-foreground transition-colors">Pricing</a>
-          <Link href="/explore" className="hover:text-foreground transition-colors">Explore</Link>
-          <a href="#" className="hover:text-foreground transition-colors">Docs</a>
-        </div>
-        <div className="flex items-center gap-4">
-          <Link href="/login" className="text-sm font-medium hover:text-foreground text-secondary transition-colors hidden sm:block">
-            Log in
-          </Link>
-          <Link href="/login">
-            <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90 font-medium">
-              Start building
-            </Button>
-          </Link>
-        </div>
-      </nav>
+      <MarketingNav />
 
       <main className="flex-1">
         {/* Hero */}
@@ -242,65 +223,7 @@ export default function Landing() {
         </section>
       </main>
 
-      <footer className="border-t border-border bg-surface">
-        <div className="max-w-6xl mx-auto px-6 py-12 grid grid-cols-2 md:grid-cols-5 gap-8">
-          <div className="col-span-2 md:col-span-1">
-            <div className="flex items-center gap-2 mb-3">
-              <Flame className="w-4 h-4 text-primary" />
-              <span className="font-bold tracking-tight">instancly</span>
-            </div>
-            <p className="text-xs text-secondary leading-relaxed">
-              Ship apps from a single prompt. Real Postgres, real URLs, no DevOps.
-            </p>
-          </div>
-
-          <div>
-            <h4 className="text-xs font-mono uppercase text-secondary mb-3 tracking-wider">Product</h4>
-            <ul className="space-y-2 text-sm">
-              <li><a href="#features" className="text-foreground/80 hover:text-primary transition-colors">Features</a></li>
-              <li><a href="#pricing" className="text-foreground/80 hover:text-primary transition-colors">Pricing</a></li>
-              <li><Link href="/explore" className="text-foreground/80 hover:text-primary transition-colors">Explore</Link></li>
-              <li><Link href="/login" className="text-foreground/80 hover:text-primary transition-colors">Start building</Link></li>
-            </ul>
-          </div>
-
-          <div>
-            <h4 className="text-xs font-mono uppercase text-secondary mb-3 tracking-wider">Resources</h4>
-            <ul className="space-y-2 text-sm">
-              <li><a href="#" className="text-foreground/80 hover:text-primary transition-colors">Docs</a></li>
-              <li><a href="#" className="text-foreground/80 hover:text-primary transition-colors">Changelog</a></li>
-              <li><a href="#" className="text-foreground/80 hover:text-primary transition-colors">Templates</a></li>
-              <li><a href="#" className="text-foreground/80 hover:text-primary transition-colors">Status</a></li>
-            </ul>
-          </div>
-
-          <div>
-            <h4 className="text-xs font-mono uppercase text-secondary mb-3 tracking-wider">Community</h4>
-            <ul className="space-y-2 text-sm">
-              <li><a href="#" className="text-foreground/80 hover:text-primary transition-colors">Discord</a></li>
-              <li><a href="#" className="text-foreground/80 hover:text-primary transition-colors">GitHub</a></li>
-              <li><a href="#" className="text-foreground/80 hover:text-primary transition-colors">Twitter / X</a></li>
-              <li><a href="#" className="text-foreground/80 hover:text-primary transition-colors">Blog</a></li>
-            </ul>
-          </div>
-
-          <div>
-            <h4 className="text-xs font-mono uppercase text-secondary mb-3 tracking-wider">Company</h4>
-            <ul className="space-y-2 text-sm">
-              <li><a href="#" className="text-foreground/80 hover:text-primary transition-colors">About</a></li>
-              <li><a href="#" className="text-foreground/80 hover:text-primary transition-colors">Careers</a></li>
-              <li><a href="#" className="text-foreground/80 hover:text-primary transition-colors">Privacy</a></li>
-              <li><a href="#" className="text-foreground/80 hover:text-primary transition-colors">Terms</a></li>
-            </ul>
-          </div>
-        </div>
-        <div className="border-t border-border">
-          <div className="max-w-6xl mx-auto px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-2">
-            <p className="text-xs text-secondary">© {new Date().getFullYear()} Instancly. All rights reserved.</p>
-            <p className="text-xs text-secondary font-mono">v2.0 · Built with Instancly</p>
-          </div>
-        </div>
-      </footer>
+      <MarketingFooter />
     </div>
   );
 }
