@@ -1,8 +1,36 @@
-import { Flame, ArrowRight, Github, Code, Database, Zap, Sparkles, Server, Terminal, Lock } from "lucide-react";
-import { Link } from "wouter";
+import { Flame, ArrowRight, Github, Code, Database, Zap, Sparkles, Server, Terminal, Lock, ArrowUp } from "lucide-react";
+import { Link, useLocation } from "wouter";
+import { useState, type KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 
+const PROMPT_SUGGESTIONS = [
+  "A todo app with Postgres",
+  "A Stripe-powered SaaS landing page",
+  "A real-time chat room",
+  "An invoice generator",
+];
+
 export default function Landing() {
+  const [, navigate] = useLocation();
+  const [prompt, setPrompt] = useState("");
+
+  const submit = () => {
+    const value = prompt.trim();
+    if (value) {
+      try {
+        sessionStorage.setItem("instancly:initial-prompt", value);
+      } catch {}
+    }
+    navigate("/login");
+  };
+
+  const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      submit();
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
       <nav className="sticky top-0 z-50 bg-surface/80 backdrop-blur-md border-b border-border h-14 flex items-center justify-between px-6">
@@ -35,21 +63,47 @@ export default function Landing() {
             <Sparkles className="w-3 h-3" />
             <span>Instancly v2.0 is now live</span>
           </div>
-          <h1 className="text-5xl md:text-7xl font-bold tracking-tight mb-6 leading-tight">
-            Build and deploy real<br />web apps with AI.
+          <h1 className="text-5xl md:text-7xl font-bold tracking-tight mb-10 leading-tight">
+            What do you want to build today?
           </h1>
-          <p className="text-xl text-secondary mb-10 max-w-2xl mx-auto">
-            Real Postgres. Real URL. No DevOps. Just describe what you want, and Instancly builds a full-stack Next.js application in seconds.
-          </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link href="/login">
-              <Button size="lg" className="bg-primary text-primary-foreground hover:bg-primary/90 h-12 px-8 text-base">
-                Start building for free <ArrowRight className="ml-2 w-4 h-4" />
-              </Button>
-            </Link>
-            <Button size="lg" variant="outline" className="h-12 px-8 text-base border-border bg-transparent hover:bg-surface-raised">
-              <Terminal className="mr-2 w-4 h-4" /> Read the docs
-            </Button>
+
+          <div className="max-w-2xl mx-auto">
+            <div className="relative rounded-xl border border-border bg-surface focus-within:border-primary/60 transition-colors shadow-2xl shadow-black/40">
+              <textarea
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                onKeyDown={onKeyDown}
+                placeholder="Describe an app, e.g. a habit tracker with streaks and a weekly chart..."
+                rows={3}
+                className="w-full resize-none bg-transparent px-5 py-4 pr-14 text-base text-foreground placeholder:text-muted outline-none rounded-xl"
+              />
+              <button
+                type="button"
+                onClick={submit}
+                aria-label="Generate"
+                className="absolute right-3 bottom-3 h-9 w-9 inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+                disabled={!prompt.trim()}
+              >
+                <ArrowUp className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+              {PROMPT_SUGGESTIONS.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setPrompt(s)}
+                  className="px-3 py-1.5 rounded-full text-xs text-secondary border border-border bg-surface/60 hover:text-foreground hover:border-primary/40 transition-colors"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+
+            <p className="mt-8 text-sm text-secondary">
+              Real Postgres. Real URL. No DevOps. Free to start, no credit card.
+            </p>
           </div>
         </section>
 
