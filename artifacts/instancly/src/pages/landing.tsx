@@ -1,6 +1,6 @@
 import { Flame, ArrowRight, Github, Code, Database, Zap, Sparkles, Server, Terminal, Lock, ArrowUp } from "lucide-react";
 import { Link, useLocation } from "wouter";
-import { useState, type KeyboardEvent } from "react";
+import { useEffect, useState, type KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 
 const PROMPT_SUGGESTIONS = [
@@ -10,9 +10,27 @@ const PROMPT_SUGGESTIONS = [
   "An invoice generator",
 ];
 
+const ROTATING_NOUNS = [
+  "side project",
+  "SaaS",
+  "dashboard",
+  "internal tool",
+  "weekend hack",
+  "prototype",
+  "MVP",
+];
+
 export default function Landing() {
   const [, navigate] = useLocation();
   const [prompt, setPrompt] = useState("");
+  const [nounIndex, setNounIndex] = useState(0);
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setNounIndex((i) => (i + 1) % ROTATING_NOUNS.length);
+    }, 1800);
+    return () => window.clearInterval(id);
+  }, []);
 
   const submit = () => {
     const value = prompt.trim();
@@ -63,8 +81,21 @@ export default function Landing() {
             <Sparkles className="w-3 h-3" />
             <span>Instancly v2.0 is now live</span>
           </div>
-          <h1 className="text-5xl md:text-7xl font-bold tracking-tight mb-10 leading-tight">
-            What do you want to build today?
+          <h1 className="text-5xl md:text-7xl font-bold tracking-tight mb-10 leading-[1.05]">
+            <span className="block">Ship your next</span>
+            <span className="block mt-2">
+              <span
+                key={nounIndex}
+                className="inline-block text-primary animate-rotate-in"
+                style={{
+                  textShadow: "0 0 40px rgba(255,69,0,0.35)",
+                }}
+              >
+                {ROTATING_NOUNS[nounIndex]}
+              </span>{" "}
+              <span className="text-foreground">before</span>
+            </span>
+            <span className="block mt-2">your coffee gets cold.</span>
           </h1>
 
           <div className="max-w-2xl mx-auto">
