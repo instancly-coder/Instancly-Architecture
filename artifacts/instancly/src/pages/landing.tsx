@@ -155,22 +155,23 @@ export default function Landing() {
         </section>
 
         {/* Hero Visual - Mini Builder Component */}
-        <section className="py-24 px-6 max-w-6xl mx-auto">
+        <section className="py-16 md:py-24 px-4 md:px-6 max-w-6xl mx-auto">
           <div className="rounded-xl border border-border bg-surface overflow-hidden shadow-2xl">
-            <div className="h-10 border-b border-border flex items-center px-4 gap-2 bg-surface-raised">
-              <div className="flex gap-1.5">
+            <div className="h-10 border-b border-border flex items-center px-3 md:px-4 gap-2 bg-surface-raised">
+              <div className="flex gap-1.5 shrink-0">
                 <div className="w-3 h-3 rounded-full bg-border/50"></div>
                 <div className="w-3 h-3 rounded-full bg-border/50"></div>
                 <div className="w-3 h-3 rounded-full bg-border/50"></div>
               </div>
-              <div className="mx-auto px-24 py-1 text-xs font-mono text-secondary bg-background rounded border border-border">
-                johndoe/crm-app • Claude Sonnet 4.5
+              <div className="mx-auto px-3 md:px-24 py-1 text-[10px] md:text-xs font-mono text-secondary bg-background rounded border border-border truncate max-w-full">
+                <span className="hidden sm:inline">johndoe/crm-app • Claude Sonnet 4.5</span>
+                <span className="sm:hidden">crm-app</span>
               </div>
             </div>
-            <div className="flex h-[400px]">
+            <div className="flex flex-col md:flex-row h-auto md:h-[400px]">
               {/* Left Panel - Chat */}
-              <div className="w-1/3 border-r border-border bg-surface p-4 flex flex-col">
-                <div className="flex-1 space-y-4 font-mono text-xs text-secondary overflow-hidden relative">
+              <div className="w-full md:w-1/3 border-b md:border-b-0 md:border-r border-border bg-surface p-4 flex flex-col">
+                <div className="flex-1 space-y-4 font-mono text-xs text-secondary overflow-hidden relative min-h-[120px]">
                   <div className="flex gap-2">
                     <Sparkles className="w-4 h-4 text-primary shrink-0" />
                     <span>Planning architecture...</span>
@@ -190,12 +191,12 @@ export default function Landing() {
                 </div>
               </div>
               {/* Right Panel - Preview */}
-              <div className="w-2/3 bg-black flex items-center justify-center p-8 relative">
-                 <div className="w-full h-full bg-white rounded flex items-center justify-center text-black/50 font-medium border border-border">
+              <div className="w-full md:w-2/3 h-48 md:h-auto bg-black flex items-center justify-center p-4 md:p-8 relative">
+                 <div className="w-full h-full bg-white rounded flex items-center justify-center text-black/50 font-medium border border-border text-sm md:text-base text-center px-2">
                     Live Preview Rendering...
                  </div>
-                 <div className="absolute bottom-4 text-xs font-mono text-secondary/50">
-                    Deployed to crm-app-johndoe.instancly.app
+                 <div className="absolute bottom-2 md:bottom-4 text-[10px] md:text-xs font-mono text-secondary/50 truncate max-w-[90%] text-center">
+                    crm-app-johndoe.instancly.app
                  </div>
               </div>
             </div>
