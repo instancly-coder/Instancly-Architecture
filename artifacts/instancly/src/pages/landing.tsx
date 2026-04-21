@@ -81,7 +81,7 @@ export default function Landing() {
             <Sparkles className="w-3 h-3" />
             <span>Instancly v2.0 is now live</span>
           </div>
-          <h1 className="text-5xl md:text-7xl font-bold tracking-tight mb-10 leading-[1.05]">
+          <h1 className="text-3xl sm:text-5xl md:text-7xl font-bold tracking-tight mb-10 leading-[1.05]">
             <span className="block">Ship your next</span>
             <span className="block mt-2">
               <span
