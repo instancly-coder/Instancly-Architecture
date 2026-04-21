@@ -76,7 +76,7 @@ export default function Landing() {
 
       <main className="flex-1">
         {/* Hero */}
-        <section className="px-6 max-w-5xl mx-auto text-center flex flex-col items-center justify-center min-h-[calc(100vh-3.5rem)] py-12">
+        <section className="px-6 max-w-5xl mx-auto text-center flex flex-col items-center justify-center min-h-screen -mt-14 pt-14 py-12">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-mono mb-8 border border-primary/20">
             <Sparkles className="w-3 h-3" />
             <span>Instancly v2.0 is now live</span>
