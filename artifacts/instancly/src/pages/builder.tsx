@@ -80,15 +80,15 @@ export default function Builder() {
             <Flame className="w-5 h-5 text-primary" />
           </Link>
           <div className="w-px h-4 bg-border mx-1"></div>
-          <div className="flex items-center text-sm font-mono text-secondary">
-            <span>{username}</span>
-            <ChevronRight className="w-4 h-4 mx-1" />
-            <span className="text-foreground">{slug}</span>
+          <div className="flex items-center text-sm font-mono text-secondary min-w-0">
+            <span className="hidden sm:inline">{username}</span>
+            <ChevronRight className="w-4 h-4 mx-1 hidden sm:inline" />
+            <span className="text-foreground truncate">{slug}</span>
           </div>
-          <div className="status-dot ml-2" title="Live"></div>
+          <div className="status-dot ml-2 shrink-0" title="Live"></div>
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="hidden md:flex items-center gap-1">
           <NavIconButton icon={FolderTree} tooltip="Files" active={activePanel === "files"} onClick={() => togglePanel("files")} />
           <NavIconButton icon={Database} tooltip="Database" active={activePanel === "database"} onClick={() => togglePanel("database")} />
           <NavIconButton icon={History} tooltip="History" active={activePanel === "history"} onClick={() => togglePanel("history")} />
@@ -110,8 +110,33 @@ export default function Builder() {
           </DropdownMenu>
         </div>
 
-        <div className="flex items-center gap-2 md:gap-4">
-          <span className="hidden sm:inline text-xs text-secondary font-mono">£0.03 spend</span>
+        <div className="flex items-center gap-2 md:gap-4 shrink-0">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="md:hidden w-8 h-8 rounded-md flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors">
+                <MoreVertical className="w-4 h-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="bg-surface-raised border-border">
+              <DropdownMenuItem onClick={() => togglePanel("files")}>
+                <FolderTree className="w-4 h-4 mr-2" /> Files
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => togglePanel("database")}>
+                <Database className="w-4 h-4 mr-2" /> Database
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => togglePanel("history")}>
+                <History className="w-4 h-4 mr-2" /> History
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setIsSettingsOpen(true)}>
+                <SettingsIcon className="w-4 h-4 mr-2" /> Settings
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="bg-border" />
+              <DropdownMenuItem>Rules Book</DropdownMenuItem>
+              <DropdownMenuItem>Integrations</DropdownMenuItem>
+              <DropdownMenuItem>Export ZIP</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <span className="hidden lg:inline text-xs text-secondary font-mono">£0.03 spend</span>
           
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
