@@ -5,10 +5,10 @@ import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 const NAV_LINKS = [
-  { label: "Features", href: "/#features" },
-  { label: "Pricing", href: "/#pricing" },
+  { label: "How it works", href: "/#how" },
+  { label: "Templates", href: "/templates" },
   { label: "Explore", href: "/explore" },
-  { label: "Docs", href: "#" },
+  { label: "Docs", href: "/docs" },
 ];
 
 export function MarketingNav() {

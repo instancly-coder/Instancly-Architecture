@@ -21,6 +21,18 @@ import Admin from "@/pages/admin";
 import AdminModels from "@/pages/admin/models";
 import AdminUsers from "@/pages/admin/users";
 import AdminRevenue from "@/pages/admin/revenue";
+import {
+  Docs,
+  Changelog,
+  Templates,
+  Status,
+  Blog,
+  About,
+  Careers,
+  Privacy,
+  Terms,
+  Community,
+} from "@/pages/info";
 
 const queryClient = new QueryClient();
 
@@ -38,6 +50,16 @@ function Router() {
       <Route path="/admin/models" component={AdminModels} />
       <Route path="/admin/users" component={AdminUsers} />
       <Route path="/admin/revenue" component={AdminRevenue} />
+      <Route path="/docs" component={Docs} />
+      <Route path="/changelog" component={Changelog} />
+      <Route path="/templates" component={Templates} />
+      <Route path="/status" component={Status} />
+      <Route path="/blog" component={Blog} />
+      <Route path="/about" component={About} />
+      <Route path="/careers" component={Careers} />
+      <Route path="/privacy" component={Privacy} />
+      <Route path="/terms" component={Terms} />
+      <Route path="/community" component={Community} />
       <Route path="/:username" component={Profile} />
       <Route path="/:username/:slug" component={Project} />
       <Route path="/:username/:slug/build" component={Builder} />

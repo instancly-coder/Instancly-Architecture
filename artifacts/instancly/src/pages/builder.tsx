@@ -331,7 +331,7 @@ export default function Builder() {
                   key={key}
                   className={`group h-8 pl-3 pr-1 rounded-md text-sm flex items-center gap-2 whitespace-nowrap transition-colors ${
                     active
-                      ? "bg-primary/15 text-primary"
+                      ? "bg-primary text-primary-foreground"
                       : "text-secondary hover:text-foreground hover:bg-surface-raised"
                   }`}
                 >
@@ -348,7 +348,11 @@ export default function Builder() {
                         e.stopPropagation();
                         closeTab(key);
                       }}
-                      className="w-5 h-5 rounded flex items-center justify-center text-secondary hover:text-foreground hover:bg-background/60 ml-0.5"
+                      className={`w-5 h-5 rounded flex items-center justify-center ml-0.5 transition-colors ${
+                        active
+                          ? "text-primary-foreground/70 hover:text-primary-foreground hover:bg-black/20"
+                          : "text-secondary hover:text-foreground hover:bg-background/60"
+                      }`}
                       aria-label={`Close ${meta.label}`}
                     >
                       <X className="w-3 h-3" />
@@ -843,7 +847,7 @@ function ViewportBtn({
       onClick={onClick}
       className={`w-8 h-8 rounded flex items-center justify-center transition-colors ${
         active
-          ? "text-primary bg-primary/15"
+          ? "bg-primary text-primary-foreground"
           : "text-secondary hover:text-foreground hover:bg-surface-raised"
       }`}
     >
@@ -880,7 +884,7 @@ function FilesPane({
             onClick={() => setActiveFile(f.path)}
             className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs font-mono text-left transition-colors ${
               activeFile === f.path
-                ? "bg-primary/15 text-primary"
+                ? "bg-primary text-primary-foreground"
                 : "text-secondary hover:text-foreground hover:bg-surface-raised"
             }`}
           >

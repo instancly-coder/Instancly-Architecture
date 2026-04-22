@@ -18,8 +18,8 @@ export function MarketingFooter() {
         <div>
           <h4 className="text-xs font-mono uppercase text-secondary mb-3 tracking-wider">Product</h4>
           <ul className="space-y-2 text-sm">
-            <li><a href="/#features" className="text-foreground/80 hover:text-primary transition-colors">Features</a></li>
-            <li><a href="/#pricing" className="text-foreground/80 hover:text-primary transition-colors">Pricing</a></li>
+            <li><a href="/#how" className="text-foreground/80 hover:text-primary transition-colors">How it works</a></li>
+            <li><a href="/#templates" className="text-foreground/80 hover:text-primary transition-colors">Templates</a></li>
             <li><Link href="/explore" className="text-foreground/80 hover:text-primary transition-colors">Explore</Link></li>
             <li><Link href="/login" className="text-foreground/80 hover:text-primary transition-colors">Start building</Link></li>
           </ul>
@@ -28,30 +28,30 @@ export function MarketingFooter() {
         <div>
           <h4 className="text-xs font-mono uppercase text-secondary mb-3 tracking-wider">Resources</h4>
           <ul className="space-y-2 text-sm">
-            <li><a href="#" className="text-foreground/80 hover:text-primary transition-colors">Docs</a></li>
-            <li><a href="#" className="text-foreground/80 hover:text-primary transition-colors">Changelog</a></li>
-            <li><a href="#" className="text-foreground/80 hover:text-primary transition-colors">Templates</a></li>
-            <li><a href="#" className="text-foreground/80 hover:text-primary transition-colors">Status</a></li>
+            <li><Link href="/docs" className="text-foreground/80 hover:text-primary transition-colors">Docs</Link></li>
+            <li><Link href="/changelog" className="text-foreground/80 hover:text-primary transition-colors">Changelog</Link></li>
+            <li><Link href="/templates" className="text-foreground/80 hover:text-primary transition-colors">Templates</Link></li>
+            <li><Link href="/status" className="text-foreground/80 hover:text-primary transition-colors">Status</Link></li>
           </ul>
         </div>
 
         <div>
           <h4 className="text-xs font-mono uppercase text-secondary mb-3 tracking-wider">Community</h4>
           <ul className="space-y-2 text-sm">
-            <li><a href="#" className="text-foreground/80 hover:text-primary transition-colors">Discord</a></li>
-            <li><a href="#" className="text-foreground/80 hover:text-primary transition-colors">GitHub</a></li>
-            <li><a href="#" className="text-foreground/80 hover:text-primary transition-colors">Twitter / X</a></li>
-            <li><a href="#" className="text-foreground/80 hover:text-primary transition-colors">Blog</a></li>
+            <li><Link href="/community" className="text-foreground/80 hover:text-primary transition-colors">Discord</Link></li>
+            <li><Link href="/community" className="text-foreground/80 hover:text-primary transition-colors">GitHub</Link></li>
+            <li><Link href="/community" className="text-foreground/80 hover:text-primary transition-colors">Twitter / X</Link></li>
+            <li><Link href="/blog" className="text-foreground/80 hover:text-primary transition-colors">Blog</Link></li>
           </ul>
         </div>
 
         <div>
           <h4 className="text-xs font-mono uppercase text-secondary mb-3 tracking-wider">Company</h4>
           <ul className="space-y-2 text-sm">
-            <li><a href="#" className="text-foreground/80 hover:text-primary transition-colors">About</a></li>
-            <li><a href="#" className="text-foreground/80 hover:text-primary transition-colors">Careers</a></li>
-            <li><a href="#" className="text-foreground/80 hover:text-primary transition-colors">Privacy</a></li>
-            <li><a href="#" className="text-foreground/80 hover:text-primary transition-colors">Terms</a></li>
+            <li><Link href="/about" className="text-foreground/80 hover:text-primary transition-colors">About</Link></li>
+            <li><Link href="/careers" className="text-foreground/80 hover:text-primary transition-colors">Careers</Link></li>
+            <li><Link href="/privacy" className="text-foreground/80 hover:text-primary transition-colors">Privacy</Link></li>
+            <li><Link href="/terms" className="text-foreground/80 hover:text-primary transition-colors">Terms</Link></li>
           </ul>
         </div>
       </div>
