@@ -170,7 +170,7 @@ export default function Landing() {
               <span
                 key={nounIndex}
                 className="inline-block text-primary animate-rotate-in"
-                style={{ textShadow: "0 0 40px rgba(242,98,7,0.45)" }}
+                style={{ textShadow: "0 0 40px rgba(204,255,0,0.45)" }}
               >
                 {ROTATING_NOUNS[nounIndex]}
               </span>
@@ -219,7 +219,7 @@ export default function Landing() {
 
             <div className="mt-10 flex items-center justify-center gap-2 text-xs text-secondary">
               <div className="flex -space-x-1.5">
-                {["#f26207", "#7c3aed", "#0ea5e9", "#10b981"].map((c) => (
+                {["#ccff00", "#7c3aed", "#0ea5e9", "#10b981"].map((c) => (
                   <span
                     key={c}
                     className="w-5 h-5 rounded-full border-2 border-background"
