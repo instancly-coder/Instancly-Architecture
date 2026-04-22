@@ -1,0 +1,8 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "corepack enable && pnpm install --no-frozen-lockfile",
+  "buildCommand": "BASE_PATH=/ PORT=3000 pnpm --filter @workspace/instancly run build",
+  "outputDirectory": "artifacts/instancly/dist/public",
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+}

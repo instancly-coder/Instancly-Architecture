@@ -183,7 +183,7 @@ export default function Landing() {
                 {ROTATING_NOUNS[nounIndex]}
               </span>
             </span>
-            <span className="block mt-2">before your coffee gets cold.</span>
+            <span className="block mt-2">in an afternoon.</span>
           </h1>
 
           <p className="text-base sm:text-lg text-secondary max-w-xl mx-auto mb-10">

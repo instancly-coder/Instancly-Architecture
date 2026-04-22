@@ -33,6 +33,14 @@ import {
   ArrowUp,
   Paperclip,
   Cpu,
+  Globe,
+  ShieldCheck,
+  AlertCircle,
+  Activity,
+  Users,
+  TrendingUp,
+  TrendingDown,
+  Filter,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -57,6 +65,7 @@ type TabKey =
   | "analytics"
   | "payments"
   | "integrations"
+  | "domains"
   | "history"
   | "settings";
 
@@ -67,6 +76,7 @@ const TAB_META: Record<TabKey, { label: string; icon: any }> = {
   analytics: { label: "Analytics", icon: BarChart3 },
   payments: { label: "Payments", icon: CreditCard },
   integrations: { label: "Integrations", icon: Plug },
+  domains: { label: "Domains", icon: Globe },
   history: { label: "History", icon: History },
   settings: { label: "Settings", icon: SettingsIcon },
 };
@@ -76,6 +86,7 @@ const ADDABLE_TABS: TabKey[] = [
   "database",
   "analytics",
   "payments",
+  "domains",
   "integrations",
   "history",
   "settings",
@@ -553,26 +564,11 @@ export default function Builder() {
             {activeTab === "files" && (
               <FilesPane activeFile={activeFile} setActiveFile={setActiveFile} />
             )}
-            {activeTab === "database" && (
-              <div className="absolute inset-0 overflow-auto p-4 md:p-6 bg-background">
-                <DatabaseView copyDbUrl={copyDbUrl} />
-              </div>
-            )}
-            {activeTab === "analytics" && (
-              <div className="absolute inset-0 overflow-auto p-4 md:p-6 bg-background">
-                <AnalyticsView />
-              </div>
-            )}
-            {activeTab === "payments" && (
-              <div className="absolute inset-0 overflow-auto p-4 md:p-6 bg-background">
-                <PaymentsView />
-              </div>
-            )}
-            {activeTab === "integrations" && (
-              <div className="absolute inset-0 overflow-auto p-4 md:p-6 bg-background">
-                <IntegrationsView />
-              </div>
-            )}
+            {activeTab === "database" && <DatabaseView copyDbUrl={copyDbUrl} />}
+            {activeTab === "analytics" && <AnalyticsView />}
+            {activeTab === "payments" && <PaymentsView />}
+            {activeTab === "integrations" && <IntegrationsView />}
+            {activeTab === "domains" && <DomainsView />}
             {activeTab === "history" && (
               <HistoryPane
                 openBuildId={openBuildId}
@@ -1143,212 +1139,702 @@ export default function Page() {
   );
 }
 
-function IntegrationsView() {
-  const items = [
-    { name: "Stripe", desc: "Subscriptions and one-off payments", connected: true },
-    { name: "Postgres", desc: "Primary application database", connected: true },
-    { name: "Resend", desc: "Transactional email", connected: false },
-    { name: "OpenAI", desc: "LLM-powered features", connected: true },
-    { name: "Sentry", desc: "Error tracking and alerts", connected: false },
-    { name: "Slack", desc: "Notifications and webhooks", connected: false },
-  ];
+/* ----------------------------- Pane shell ----------------------------- */
+
+function PaneShell({
+  title,
+  subtitle,
+  actions,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  actions?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="space-y-4 max-w-4xl">
-      <div className="text-xs font-mono uppercase text-secondary tracking-wider">
-        Connected services
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {items.map((it) => (
-          <div
-            key={it.name}
-            className="rounded-lg border border-border bg-surface p-4 flex items-center justify-between gap-3"
-          >
-            <div className="min-w-0">
-              <div className="font-medium">{it.name}</div>
-              <div className="text-xs text-secondary truncate">{it.desc}</div>
-            </div>
-            {it.connected ? (
-              <span className="text-[10px] font-mono uppercase px-2 py-1 rounded bg-success/10 text-success">
-                Connected
-              </span>
-            ) : (
-              <Button
-                size="sm"
-                variant="outline"
-                className="border-border h-7 text-xs"
-              >
-                Connect
-              </Button>
+    <div className="absolute inset-0 overflow-auto bg-background">
+      <div className="max-w-7xl mx-auto px-4 md:px-8 py-6 md:py-8">
+        <div className="flex flex-wrap items-end justify-between gap-3 mb-6 pb-5 border-b border-border">
+          <div className="min-w-0">
+            <h1 className="text-xl md:text-2xl font-bold tracking-tight">
+              {title}
+            </h1>
+            {subtitle && (
+              <p className="text-sm text-secondary mt-1 max-w-2xl">{subtitle}</p>
             )}
           </div>
-        ))}
+          {actions && <div className="flex items-center gap-2">{actions}</div>}
+        </div>
+        <div className="space-y-8 pb-8">{children}</div>
       </div>
     </div>
   );
 }
 
-function DatabaseView({ copyDbUrl }: { copyDbUrl: () => void }) {
+function SectionHeader({
+  title,
+  hint,
+  action,
+}: {
+  title: string;
+  hint?: string;
+  action?: React.ReactNode;
+}) {
   return (
-    <div className="space-y-6 max-w-4xl">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <KpiCard label="Tables" value="4" />
-        <KpiCard label="Total Rows" value="1,042" />
-        <KpiCard label="Storage" value="2.4 MB" />
+    <div className="flex items-end justify-between gap-3 mb-3">
+      <div className="min-w-0">
+        <div className="text-sm font-semibold text-foreground">{title}</div>
+        {hint && (
+          <div className="text-xs text-secondary mt-0.5">{hint}</div>
+        )}
       </div>
-      <div>
-        <div className="text-xs font-mono uppercase text-secondary mb-2 tracking-wider">
-          Connection
+      {action}
+    </div>
+  );
+}
+
+function KpiCard({
+  label,
+  value,
+  delta,
+  positive,
+}: {
+  label: string;
+  value: string;
+  delta?: string;
+  positive?: boolean;
+}) {
+  return (
+    <div className="rounded-xl border border-border bg-surface p-5">
+      <div className="text-[10px] uppercase tracking-wider font-mono text-secondary mb-2">
+        {label}
+      </div>
+      <div className="flex items-baseline gap-2">
+        <div className="text-2xl md:text-3xl font-mono font-semibold tracking-tight text-foreground">
+          {value}
         </div>
+        {delta && (
+          <span
+            className={`inline-flex items-center gap-0.5 text-[11px] font-mono ${
+              positive ? "text-success" : "text-destructive"
+            }`}
+          >
+            {positive ? (
+              <TrendingUp className="w-3 h-3" />
+            ) : (
+              <TrendingDown className="w-3 h-3" />
+            )}
+            {delta}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ----------------------------- Integrations ----------------------------- */
+
+function IntegrationsView() {
+  const items = [
+    { name: "Stripe", desc: "Subscriptions and one-off payments", connected: true, category: "Payments" },
+    { name: "Postgres", desc: "Primary application database", connected: true, category: "Data" },
+    { name: "Resend", desc: "Transactional email", connected: false, category: "Email" },
+    { name: "OpenAI", desc: "LLM-powered features", connected: true, category: "AI" },
+    { name: "Sentry", desc: "Error tracking and alerts", connected: false, category: "Observability" },
+    { name: "Slack", desc: "Notifications and webhooks", connected: false, category: "Comms" },
+    { name: "Cloudflare R2", desc: "Object storage for uploads", connected: false, category: "Storage" },
+    { name: "PostHog", desc: "Product analytics & funnels", connected: true, category: "Analytics" },
+  ];
+  const connected = items.filter((i) => i.connected).length;
+  return (
+    <PaneShell
+      title="Integrations"
+      subtitle="Plug in third-party services. Keys are encrypted and scoped to this project."
+      actions={
+        <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90">
+          <Plus className="w-4 h-4 mr-1.5" /> Browse all
+        </Button>
+      }
+    >
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <KpiCard label="Connected" value={`${connected}`} delta={`of ${items.length}`} positive />
+        <KpiCard label="API calls (24h)" value="14.2K" delta="+8%" positive />
+        <KpiCard label="Failures (24h)" value="3" delta="-2" positive />
+      </div>
+
+      <div>
+        <SectionHeader
+          title="Available services"
+          hint="Tap any service to connect or manage credentials."
+        />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {items.map((it) => (
+            <div
+              key={it.name}
+              className="rounded-xl border border-border bg-surface p-4 flex flex-col gap-3 hover-elevate"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="font-medium text-sm">{it.name}</div>
+                  <div className="text-[10px] uppercase font-mono text-secondary tracking-wider mt-0.5">
+                    {it.category}
+                  </div>
+                </div>
+                {it.connected ? (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-mono uppercase px-2 py-1 rounded bg-success/10 text-success shrink-0">
+                    <span className="w-1.5 h-1.5 rounded-full bg-success" />
+                    Live
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-mono uppercase px-2 py-1 rounded bg-surface-raised text-secondary shrink-0">
+                    Off
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-secondary leading-relaxed">{it.desc}</p>
+              <Button
+                size="sm"
+                variant={it.connected ? "outline" : "default"}
+                className={
+                  it.connected
+                    ? "border-border h-7 text-xs"
+                    : "h-7 text-xs bg-primary text-primary-foreground hover:bg-primary/90"
+                }
+              >
+                {it.connected ? "Manage" : "Connect"}
+              </Button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </PaneShell>
+  );
+}
+
+/* ------------------------------- Database ------------------------------- */
+
+function DatabaseView({ copyDbUrl }: { copyDbUrl: () => void }) {
+  const tables = [
+    { name: "users", rows: 412, size: "284 KB", updated: "2 min ago" },
+    { name: "tasks", rows: 524, size: "1.6 MB", updated: "12 sec ago" },
+    { name: "sessions", rows: 98, size: "44 KB", updated: "1 hr ago" },
+    { name: "audit_logs", rows: 8, size: "12 KB", updated: "3 hrs ago" },
+  ];
+  return (
+    <PaneShell
+      title="Database"
+      subtitle="A serverless Postgres instance, branched per project. Snapshots run every hour."
+      actions={
+        <>
+          <Button size="sm" variant="outline" className="border-border h-8">
+            <Copy className="w-3.5 h-3.5 mr-1.5" /> SQL editor
+          </Button>
+          <Button size="sm" className="h-8 bg-primary text-primary-foreground hover:bg-primary/90">
+            <Plus className="w-3.5 h-3.5 mr-1.5" /> New table
+          </Button>
+        </>
+      }
+    >
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <KpiCard label="Tables" value="4" />
+        <KpiCard label="Total Rows" value="1,042" delta="+38" positive />
+        <KpiCard label="Storage" value="2.4 MB" delta="+0.1 MB" positive />
+        <KpiCard label="Region" value="lhr1" />
+      </div>
+
+      <div>
+        <SectionHeader title="Connection string" hint="Use this URL in your scripts and migrations." />
         <div className="flex flex-col sm:flex-row gap-2">
-          <div className="flex-1 bg-surface border border-border rounded-md px-3 py-2 font-mono text-xs text-secondary truncate">
+          <div className="flex-1 bg-surface border border-border rounded-lg px-4 py-2.5 font-mono text-xs text-secondary truncate">
             postgres://user:••••••••@ep-cool-db.neon.tech/main
           </div>
-          <Button variant="outline" onClick={copyDbUrl} className="border-border">
+          <Button variant="outline" onClick={copyDbUrl} className="border-border h-10">
             <Copy className="w-4 h-4 mr-2" /> Copy
           </Button>
         </div>
       </div>
+
       <div>
-        <div className="text-xs font-mono uppercase text-secondary mb-2 tracking-wider">
-          Tables
-        </div>
-        <div className="rounded-lg border border-border overflow-hidden">
-          {[
-            { name: "users", rows: 412 },
-            { name: "tasks", rows: 524 },
-            { name: "sessions", rows: 98 },
-            { name: "audit_logs", rows: 8 },
-          ].map((t, i, arr) => (
+        <SectionHeader
+          title="Tables"
+          hint={`${tables.length} tables · click to inspect schema and rows`}
+          action={
+            <button className="text-xs text-secondary hover:text-foreground inline-flex items-center gap-1">
+              <Filter className="w-3 h-3" /> Filter
+            </button>
+          }
+        />
+        <div className="rounded-xl border border-border overflow-hidden">
+          <div className="grid grid-cols-[1fr_auto_auto_auto] gap-4 px-4 py-2.5 bg-surface-raised text-[10px] uppercase tracking-wider font-mono text-secondary">
+            <div>Table</div>
+            <div className="text-right">Rows</div>
+            <div className="text-right">Size</div>
+            <div className="text-right hidden sm:block">Updated</div>
+          </div>
+          {tables.map((t, i, arr) => (
             <div
               key={t.name}
-              className={`flex items-center justify-between px-4 py-3 bg-surface ${
+              className={`grid grid-cols-[1fr_auto_auto_auto] gap-4 items-center px-4 py-3 bg-surface hover:bg-surface-raised transition-colors cursor-pointer ${
                 i < arr.length - 1 ? "border-b border-border" : ""
               }`}
             >
-              <div className="flex items-center gap-2">
-                <Database className="w-4 h-4 text-secondary" />
-                <span className="font-mono text-sm">{t.name}</span>
+              <div className="flex items-center gap-2 min-w-0">
+                <Database className="w-4 h-4 text-secondary shrink-0" />
+                <span className="font-mono text-sm truncate">{t.name}</span>
               </div>
-              <span className="text-xs text-secondary font-mono">
-                {t.rows.toLocaleString()} rows
+              <span className="text-xs text-foreground font-mono text-right">
+                {t.rows.toLocaleString()}
+              </span>
+              <span className="text-xs text-secondary font-mono text-right">
+                {t.size}
+              </span>
+              <span className="text-xs text-secondary font-mono text-right hidden sm:block">
+                {t.updated}
               </span>
             </div>
           ))}
         </div>
       </div>
-    </div>
+    </PaneShell>
   );
 }
 
+/* ------------------------------- Payments ------------------------------- */
+
 function PaymentsView() {
+  const payments = [
+    { who: "alex@startup.io", amount: "£29.00", when: "2 min ago", ok: true, plan: "Pro" },
+    { who: "sara@design.co", amount: "£29.00", when: "14 min ago", ok: true, plan: "Pro" },
+    { who: "mike@founder.dev", amount: "£99.00", when: "1 hr ago", ok: true, plan: "Team" },
+    { who: "lily@indie.com", amount: "£29.00", when: "3 hrs ago", ok: false, plan: "Pro" },
+    { who: "raj@studio.io", amount: "£9.00", when: "5 hrs ago", ok: true, plan: "Hobby" },
+    { who: "noah@labs.dev", amount: "£99.00", when: "1 day ago", ok: true, plan: "Team" },
+  ];
   return (
-    <div className="space-y-6 max-w-4xl">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <KpiCard label="MRR" value="£1,284" />
-        <KpiCard label="Active subs" value="42" />
-        <KpiCard label="Churn (30d)" value="2.1%" />
+    <PaneShell
+      title="Payments"
+      subtitle="Live data from Stripe. Subscriptions, one-off charges, and payouts in one place."
+      actions={
+        <>
+          <Button size="sm" variant="outline" className="border-border h-8">
+            Export CSV
+          </Button>
+          <Button size="sm" className="h-8 bg-primary text-primary-foreground hover:bg-primary/90">
+            Open in Stripe <ExternalLink className="w-3.5 h-3.5 ml-1.5" />
+          </Button>
+        </>
+      }
+    >
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <KpiCard label="MRR" value="£1,284" delta="+12%" positive />
+        <KpiCard label="Active subs" value="42" delta="+3" positive />
+        <KpiCard label="Churn (30d)" value="2.1%" delta="-0.4%" positive />
+        <KpiCard label="Failed (24h)" value="1" delta="+1" positive={false} />
       </div>
+
       <div>
-        <div className="text-xs font-mono uppercase text-secondary mb-2 tracking-wider">
-          Recent payments
-        </div>
-        <div className="rounded-lg border border-border overflow-hidden">
-          {[
-            { who: "alex@startup.io", amount: "£29.00", when: "2 min ago", ok: true },
-            { who: "sara@design.co", amount: "£29.00", when: "14 min ago", ok: true },
-            { who: "mike@founder.dev", amount: "£99.00", when: "1 hr ago", ok: true },
-            { who: "lily@indie.com", amount: "£29.00", when: "3 hrs ago", ok: false },
-          ].map((p, i, arr) => (
+        <SectionHeader title="Recent payments" hint="Last 24 hours" />
+        <div className="rounded-xl border border-border overflow-hidden">
+          <div className="grid grid-cols-[1fr_auto_auto_auto] gap-4 px-4 py-2.5 bg-surface-raised text-[10px] uppercase tracking-wider font-mono text-secondary">
+            <div>Customer</div>
+            <div className="text-right hidden sm:block">Plan</div>
+            <div className="text-right">Status</div>
+            <div className="text-right">Amount</div>
+          </div>
+          {payments.map((p, i, arr) => (
             <div
               key={i}
-              className={`flex items-center justify-between px-4 py-3 bg-surface ${
+              className={`grid grid-cols-[1fr_auto_auto_auto] gap-4 items-center px-4 py-3 bg-surface hover:bg-surface-raised transition-colors ${
                 i < arr.length - 1 ? "border-b border-border" : ""
               }`}
             >
               <div className="flex items-center gap-2 min-w-0">
                 <CreditCard className="w-4 h-4 text-secondary shrink-0" />
-                <span className="font-mono text-xs truncate">{p.who}</span>
+                <div className="min-w-0">
+                  <div className="font-mono text-xs truncate">{p.who}</div>
+                  <div className="text-[10px] text-secondary font-mono">
+                    {p.when}
+                  </div>
+                </div>
               </div>
-              <div className="flex items-center gap-3 shrink-0">
-                <span
-                  className={`text-[10px] font-mono uppercase ${
-                    p.ok ? "text-success" : "text-destructive"
-                  }`}
-                >
-                  {p.ok ? "Paid" : "Failed"}
-                </span>
-                <span className="text-xs text-secondary font-mono">{p.when}</span>
-                <span className="text-sm font-mono">{p.amount}</span>
-              </div>
+              <span className="text-xs text-secondary font-mono text-right hidden sm:block">
+                {p.plan}
+              </span>
+              <span
+                className={`text-[10px] font-mono uppercase px-2 py-0.5 rounded text-right ${
+                  p.ok
+                    ? "bg-success/10 text-success"
+                    : "bg-destructive/10 text-destructive"
+                }`}
+              >
+                {p.ok ? "Paid" : "Failed"}
+              </span>
+              <span className="text-sm font-mono font-medium text-right">
+                {p.amount}
+              </span>
             </div>
           ))}
         </div>
       </div>
-    </div>
+    </PaneShell>
   );
 }
+
+/* ------------------------------- Analytics ------------------------------- */
 
 function AnalyticsView() {
   const bars = [40, 62, 55, 80, 70, 95, 88, 76, 90, 110, 102, 120];
   const max = Math.max(...bars);
+  const labels = ["00", "02", "04", "06", "08", "10", "12", "14", "16", "18", "20", "22"];
+  const pages = [
+    { p: "/", v: 1240, change: "+18%" },
+    { p: "/explore", v: 612, change: "+4%" },
+    { p: "/login", v: 398, change: "-2%" },
+    { p: "/dashboard", v: 181, change: "+22%" },
+    { p: "/pricing", v: 142, change: "+9%" },
+  ];
   return (
-    <div className="space-y-6 max-w-4xl">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <KpiCard label="Visitors (24h)" value="2,431" />
-        <KpiCard label="Signups" value="64" />
-        <KpiCard label="Conversion" value="2.6%" />
+    <PaneShell
+      title="Analytics"
+      subtitle="First-party visitor and event data. No third-party scripts, no cookie banners required."
+      actions={
+        <>
+          <select className="h-8 bg-background border border-border rounded-md text-xs px-2 font-mono outline-none focus:ring-1 focus:ring-primary">
+            <option>Last 24 hours</option>
+            <option>Last 7 days</option>
+            <option>Last 30 days</option>
+          </select>
+          <Button size="sm" variant="outline" className="border-border h-8">
+            Export
+          </Button>
+        </>
+      }
+    >
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <KpiCard label="Visitors" value="2,431" delta="+18%" positive />
+        <KpiCard label="Signups" value="64" delta="+9" positive />
+        <KpiCard label="Conversion" value="2.6%" delta="+0.4%" positive />
+        <KpiCard label="Avg session" value="3m 42s" delta="-12s" positive={false} />
       </div>
+
       <div>
-        <div className="text-xs font-mono uppercase text-secondary mb-2 tracking-wider">
-          Visitors · last 12 hours
-        </div>
-        <div className="rounded-lg border border-border bg-surface p-4">
-          <div className="flex items-end gap-1.5 h-40">
+        <SectionHeader title="Visitors" hint="Hourly · last 12 hours" />
+        <div className="rounded-xl border border-border bg-surface p-5">
+          <div className="flex items-end gap-2 h-48">
             {bars.map((v, i) => (
-              <div
-                key={i}
-                className="flex-1 bg-primary/70 rounded-sm hover:bg-primary transition-colors"
-                style={{ height: `${(v / max) * 100}%` }}
-                title={`${v}`}
-              />
+              <div key={i} className="flex-1 flex flex-col items-center gap-1.5">
+                <div
+                  className="w-full bg-primary/70 hover:bg-primary rounded-md transition-colors cursor-pointer"
+                  style={{ height: `${(v / max) * 100}%` }}
+                  title={`${v} visitors`}
+                />
+                <span className="text-[9px] font-mono text-secondary">
+                  {labels[i]}
+                </span>
+              </div>
             ))}
           </div>
         </div>
       </div>
-      <div>
-        <div className="text-xs font-mono uppercase text-secondary mb-2 tracking-wider">
-          Top pages
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div>
+          <SectionHeader title="Top pages" />
+          <div className="rounded-xl border border-border overflow-hidden">
+            {pages.map((row, i, arr) => {
+              const pct = (row.v / pages[0].v) * 100;
+              const positive = row.change.startsWith("+");
+              return (
+                <div
+                  key={row.p}
+                  className={`relative px-4 py-3 bg-surface ${
+                    i < arr.length - 1 ? "border-b border-border" : ""
+                  }`}
+                >
+                  <div
+                    className="absolute inset-y-0 left-0 bg-primary/8"
+                    style={{ width: `${pct}%` }}
+                  />
+                  <div className="relative flex items-center justify-between gap-3">
+                    <span className="font-mono text-xs">{row.p}</span>
+                    <div className="flex items-center gap-3 text-xs font-mono">
+                      <span
+                        className={positive ? "text-success" : "text-destructive"}
+                      >
+                        {row.change}
+                      </span>
+                      <span className="text-secondary tabular-nums">
+                        {row.v.toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
-        <div className="rounded-lg border border-border overflow-hidden">
-          {[
-            { p: "/", v: 1240 },
-            { p: "/explore", v: 612 },
-            { p: "/login", v: 398 },
-            { p: "/dashboard", v: 181 },
-          ].map((row, i, arr) => (
-            <div
-              key={row.p}
-              className={`flex items-center justify-between px-4 py-3 bg-surface ${
-                i < arr.length - 1 ? "border-b border-border" : ""
-              }`}
-            >
-              <span className="font-mono text-xs">{row.p}</span>
-              <span className="text-xs text-secondary font-mono">{row.v}</span>
+
+        <div>
+          <SectionHeader title="Live now" hint="Active in the last 5 minutes" />
+          <div className="rounded-xl border border-border bg-surface p-5">
+            <div className="flex items-baseline gap-2 mb-4">
+              <Activity className="w-5 h-5 text-success" />
+              <span className="text-4xl font-mono font-semibold">37</span>
+              <span className="text-sm text-secondary">visitors</span>
             </div>
-          ))}
+            {[
+              { country: "United Kingdom", count: 14 },
+              { country: "United States", count: 9 },
+              { country: "Germany", count: 6 },
+              { country: "Brazil", count: 4 },
+              { country: "Other", count: 4 },
+            ].map((r) => (
+              <div
+                key={r.country}
+                className="flex items-center justify-between text-xs py-1.5"
+              >
+                <span className="text-foreground">{r.country}</span>
+                <span className="font-mono text-secondary">{r.count}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
-    </div>
+    </PaneShell>
   );
 }
 
-function KpiCard({ label, value }: { label: string; value: string }) {
+/* -------------------------------- Domains -------------------------------- */
+
+type DomainStatus = "active" | "pending" | "error";
+
+function DomainsView() {
+  const [domains, setDomains] = useState<
+    { host: string; primary: boolean; status: DomainStatus; ssl: boolean; addedAgo: string }[]
+  >([
+    { host: "todo-app-johndoe.instancly.app", primary: true, status: "active", ssl: true, addedAgo: "27 mins ago" },
+    { host: "todoapp.com", primary: false, status: "active", ssl: true, addedAgo: "3 days ago" },
+    { host: "www.todoapp.com", primary: false, status: "pending", ssl: false, addedAgo: "12 mins ago" },
+  ]);
+  const [newDomain, setNewDomain] = useState("");
+
+  const addDomain = () => {
+    const host = newDomain.trim().toLowerCase();
+    if (!host) return;
+    if (domains.some((d) => d.host === host)) {
+      toast.error("That domain is already on the list");
+      return;
+    }
+    setDomains((prev) => [
+      ...prev,
+      { host, primary: false, status: "pending", ssl: false, addedAgo: "just now" },
+    ]);
+    setNewDomain("");
+    toast.success(`Added ${host} · waiting for DNS`);
+  };
+
+  const setPrimary = (host: string) => {
+    setDomains((prev) =>
+      prev.map((d) => ({ ...d, primary: d.host === host }))
+    );
+    toast.success(`${host} is now the primary domain`);
+  };
+
+  const removeDomain = (host: string) => {
+    setDomains((prev) => prev.filter((d) => d.host !== host));
+    toast.message(`Removed ${host}`);
+  };
+
   return (
-    <div className="rounded-lg border border-border bg-surface p-4">
-      <div className="text-[10px] uppercase tracking-wider font-mono text-secondary mb-1">
-        {label}
+    <PaneShell
+      title="Domains"
+      subtitle="Connect a custom domain. We provision SSL automatically once DNS resolves."
+      actions={
+        <Button size="sm" variant="outline" className="border-border h-8">
+          DNS guide
+        </Button>
+      }
+    >
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <KpiCard label="Domains" value={`${domains.length}`} />
+        <KpiCard
+          label="Active"
+          value={`${domains.filter((d) => d.status === "active").length}`}
+        />
+        <KpiCard
+          label="Pending DNS"
+          value={`${domains.filter((d) => d.status === "pending").length}`}
+        />
+        <KpiCard label="SSL renewals" value="Auto" />
       </div>
-      <div className="text-2xl font-mono">{value}</div>
+
+      <div>
+        <SectionHeader
+          title="Add a custom domain"
+          hint="Point a CNAME at the address below, then add the domain here."
+        />
+        <div className="rounded-xl border border-border bg-surface p-5">
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Input
+              value={newDomain}
+              onChange={(e) => setNewDomain(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") addDomain();
+              }}
+              placeholder="app.example.com"
+              className="bg-background border-border font-mono"
+            />
+            <Button
+              onClick={addDomain}
+              disabled={!newDomain.trim()}
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
+            >
+              <Plus className="w-4 h-4 mr-1.5" /> Add domain
+            </Button>
+          </div>
+
+          <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-3">
+            <DnsRow
+              type="CNAME"
+              name="@ (or your subdomain)"
+              value="cname.instancly.app"
+            />
+            <DnsRow type="TXT" name="_instancly" value="verify=ab12-cd34-ef56" />
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <SectionHeader title="Connected domains" hint="The primary domain receives all traffic." />
+        <div className="rounded-xl border border-border overflow-hidden">
+          {domains.map((d, i, arr) => {
+            const last = i === arr.length - 1;
+            return (
+              <div
+                key={d.host}
+                className={`flex flex-wrap items-center gap-3 px-4 py-4 bg-surface ${
+                  last ? "" : "border-b border-border"
+                }`}
+              >
+                <Globe className="w-4 h-4 text-secondary shrink-0" />
+                <div className="flex-1 min-w-[200px]">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-mono text-sm">{d.host}</span>
+                    {d.primary && (
+                      <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-primary/10 text-primary">
+                        Primary
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-secondary font-mono mt-0.5">
+                    Added {d.addedAgo}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <DomainStatusBadge status={d.status} />
+                  {d.ssl ? (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-mono uppercase px-2 py-1 rounded bg-success/10 text-success">
+                      <ShieldCheck className="w-3 h-3" /> SSL
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-mono uppercase px-2 py-1 rounded bg-surface-raised text-secondary">
+                      <ShieldCheck className="w-3 h-3" /> SSL pending
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-1 shrink-0">
+                  {!d.primary && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-border h-7 text-xs"
+                      onClick={() => setPrimary(d.host)}
+                    >
+                      Set primary
+                    </Button>
+                  )}
+                  <a
+                    href={`https://${d.host}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-7 h-7 rounded flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised"
+                    title="Open"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                  {!d.host.endsWith(".instancly.app") && (
+                    <button
+                      onClick={() => removeDomain(d.host)}
+                      className="w-7 h-7 rounded flex items-center justify-center text-secondary hover:text-destructive hover:bg-destructive/10"
+                      title="Remove"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          {domains.length === 0 && (
+            <div className="px-6 py-10 text-center text-sm text-secondary bg-surface">
+              No custom domains yet.
+            </div>
+          )}
+        </div>
+      </div>
+    </PaneShell>
+  );
+}
+
+function DomainStatusBadge({ status }: { status: DomainStatus }) {
+  if (status === "active") {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-mono uppercase px-2 py-1 rounded bg-success/10 text-success">
+        <span className="w-1.5 h-1.5 rounded-full bg-success" /> Active
+      </span>
+    );
+  }
+  if (status === "pending") {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-mono uppercase px-2 py-1 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400">
+        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" /> Pending DNS
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 text-[10px] font-mono uppercase px-2 py-1 rounded bg-destructive/10 text-destructive">
+      <AlertCircle className="w-3 h-3" /> Error
+    </span>
+  );
+}
+
+function DnsRow({ type, name, value }: { type: string; name: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-border bg-background p-3">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[10px] uppercase tracking-wider font-mono text-secondary">
+          {type} record
+        </span>
+        <button
+          onClick={() => {
+            navigator.clipboard.writeText(value);
+            toast.success("Value copied");
+          }}
+          className="text-secondary hover:text-foreground"
+          title="Copy value"
+        >
+          <Copy className="w-3.5 h-3.5" />
+        </button>
+      </div>
+      <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+        <span className="text-secondary">Name</span>
+        <span className="font-mono truncate">{name}</span>
+        <span className="text-secondary">Value</span>
+        <span className="font-mono truncate">{value}</span>
+      </div>
     </div>
   );
 }
@@ -1360,77 +1846,103 @@ function HistoryPane({
   openBuildId: string | null;
   setOpenBuildId: (id: string | null) => void;
 }) {
+  const totalCost = PAST_BUILDS.reduce((s, b) => s + b.cost, 0);
+  const totalFiles = PAST_BUILDS.reduce((s, b) => s + b.filesChanged, 0);
+  const totalTime = PAST_BUILDS.reduce((s, b) => s + b.durationSec, 0);
+  const fmtTime = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return m < 1 ? `${sec}s` : s === 0 ? `${m} min` : `${m} min ${s}s`;
+  };
   return (
-    <div className="absolute inset-0 overflow-auto p-4 md:p-6 bg-background">
-      <div className="max-w-3xl space-y-3">
-        <h2 className="text-lg font-bold">Build history</h2>
-        <p className="text-sm text-secondary mb-4">
-          Every successful build is restorable. Tap one to inspect prompt and cost.
-        </p>
-        {PAST_BUILDS.map((b) => {
-          const open = openBuildId === b.id;
-          const mins = Math.round(b.durationSec / 60);
-          return (
-            <div
-              key={b.id}
-              className="border border-border bg-surface rounded-lg overflow-hidden"
-            >
-              <button
-                onClick={() => setOpenBuildId(open ? null : b.id)}
-                className="w-full flex items-center justify-between p-4 text-left hover:bg-surface-raised transition-colors"
-              >
-                <div>
-                  <div className="font-medium">Build #{b.number}</div>
-                  <div className="text-xs text-secondary font-mono mt-0.5">
-                    worked for {mins < 1 ? `${b.durationSec}s` : `${mins} min`} · {b.ago}
-                  </div>
-                </div>
-                <ChevronDown
-                  className={`w-4 h-4 text-secondary transition-transform ${
-                    open ? "rotate-180" : ""
-                  }`}
-                />
-              </button>
-              {open && (
-                <div className="border-t border-border bg-background p-4 space-y-3">
-                  <div>
-                    <div className="text-[10px] uppercase tracking-wider font-mono text-secondary mb-1">
-                      Prompt
-                    </div>
-                    <p className="text-sm">{b.prompt}</p>
-                  </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    <Stat label="Cost" value={`£${b.cost.toFixed(2)}`} />
-                    <Stat label="Files changed" value={`${b.filesChanged}`} />
-                    <Stat
-                      label="Duration"
-                      value={mins < 1 ? `${b.durationSec}s` : `${mins} min`}
-                    />
-                  </div>
-                  <Button size="sm" variant="outline" className="border-border">
-                    Restore this build
-                  </Button>
-                </div>
-              )}
-            </div>
-          );
-        })}
+    <PaneShell
+      title="Build history"
+      subtitle="Every build is a restorable checkpoint. Tap one to inspect the prompt, cost, and changes."
+      actions={
+        <Button size="sm" variant="outline" className="border-border h-8">
+          <Filter className="w-3.5 h-3.5 mr-1.5" /> Filter
+        </Button>
+      }
+    >
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <KpiCard label="Builds" value={`${PAST_BUILDS.length}`} />
+        <KpiCard label="Total spent" value={`£${totalCost.toFixed(2)}`} />
+        <KpiCard label="Files changed" value={`${totalFiles}`} />
+        <KpiCard label="Total time" value={fmtTime(totalTime)} />
       </div>
-    </div>
+
+      <div>
+        <SectionHeader title="Timeline" hint="Newest first" />
+        <div className="space-y-2">
+          {PAST_BUILDS.map((b) => {
+            const open = openBuildId === b.id;
+            return (
+              <div
+                key={b.id}
+                className="border border-border bg-surface rounded-xl overflow-hidden"
+              >
+                <button
+                  onClick={() => setOpenBuildId(open ? null : b.id)}
+                  className="w-full flex items-center justify-between p-4 text-left hover:bg-surface-raised transition-colors"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-mono text-sm shrink-0">
+                      #{b.number}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-medium text-sm truncate">{b.prompt}</div>
+                      <div className="text-[11px] text-secondary font-mono mt-0.5">
+                        {b.ago} · {fmtTime(b.durationSec)} · £{b.cost.toFixed(2)} · {b.filesChanged} files
+                      </div>
+                    </div>
+                  </div>
+                  <ChevronDown
+                    className={`w-4 h-4 text-secondary transition-transform shrink-0 ml-2 ${
+                      open ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
+                {open && (
+                  <div className="border-t border-border bg-background p-4 space-y-4">
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wider font-mono text-secondary mb-1">
+                        AI response
+                      </div>
+                      <p className="text-sm leading-relaxed">{b.aiMessage}</p>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      <Stat label="Model" value={b.model} />
+                      <Stat label="Cost" value={`£${b.cost.toFixed(2)}`} />
+                      <Stat label="Files" value={`${b.filesChanged}`} />
+                      <Stat label="Duration" value={fmtTime(b.durationSec)} />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" className="border-border">
+                        Restore this build
+                      </Button>
+                      <Button size="sm" variant="ghost">
+                        View diff
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </PaneShell>
   );
 }
 
 function SettingsPane() {
   return (
-    <div className="absolute inset-0 overflow-auto p-4 md:p-6 bg-background">
-      <div className="max-w-2xl space-y-6">
-        <div>
-          <h2 className="text-lg font-bold">Project settings</h2>
-          <p className="text-sm text-secondary">
-            Configure routing, visibility, and integrations.
-          </p>
-        </div>
-        <div className="rounded-lg border border-border bg-surface p-5 space-y-4">
+    <PaneShell
+      title="Project settings"
+      subtitle="Configure routing, visibility, and project metadata."
+    >
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 rounded-xl border border-border bg-surface p-6 space-y-4">
           <div className="grid gap-2">
             <Label htmlFor="name">Project name</Label>
             <Input
@@ -1474,18 +1986,67 @@ function SettingsPane() {
             </Button>
           </div>
         </div>
-        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-5">
-          <h4 className="text-destructive font-medium text-sm mb-2">
-            Danger zone
-          </h4>
-          <p className="text-xs text-secondary mb-3">
-            This will permanently delete the project, its database, and all builds.
-          </p>
-          <Button variant="destructive" size="sm">
-            <Trash2 className="w-4 h-4 mr-2" /> Delete project
-          </Button>
+
+        <div className="space-y-3">
+          <div className="rounded-xl border border-border bg-surface p-5">
+            <div className="text-[10px] uppercase tracking-wider font-mono text-secondary mb-3">
+              Project info
+            </div>
+            <div className="space-y-2.5 text-sm">
+              <div className="flex justify-between gap-3">
+                <span className="text-secondary">Owner</span>
+                <span className="font-mono">johndoe</span>
+              </div>
+              <div className="flex justify-between gap-3">
+                <span className="text-secondary">Created</span>
+                <span className="font-mono">3 days ago</span>
+              </div>
+              <div className="flex justify-between gap-3">
+                <span className="text-secondary">Region</span>
+                <span className="font-mono">lhr1 · London</span>
+              </div>
+              <div className="flex justify-between gap-3">
+                <span className="text-secondary">Plan</span>
+                <span className="font-mono">Pro · £29/mo</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-border bg-surface p-5">
+            <div className="text-[10px] uppercase tracking-wider font-mono text-secondary mb-3">
+              Members
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex -space-x-2">
+                {["#f26207", "#7c3aed", "#10b981"].map((c) => (
+                  <span
+                    key={c}
+                    className="w-7 h-7 rounded-full border-2 border-surface"
+                    style={{ background: c }}
+                  />
+                ))}
+              </div>
+              <Button size="sm" variant="outline" className="border-border h-7 text-xs">
+                <Users className="w-3 h-3 mr-1.5" /> Invite
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
+
+      <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 flex items-start justify-between gap-4">
+        <div>
+          <h4 className="text-destructive font-semibold text-sm mb-1">
+            Danger zone
+          </h4>
+          <p className="text-xs text-secondary max-w-md">
+            This will permanently delete the project, its database, and all build history. There is no undo.
+          </p>
+        </div>
+        <Button variant="destructive" size="sm" className="shrink-0">
+          <Trash2 className="w-4 h-4 mr-2" /> Delete project
+        </Button>
+      </div>
+    </PaneShell>
   );
 }
