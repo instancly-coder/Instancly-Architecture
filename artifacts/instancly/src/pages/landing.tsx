@@ -163,7 +163,7 @@ export default function Landing() {
             />
           </div>
 
-          <div className="px-4 sm:px-6 max-w-5xl mx-auto text-center flex flex-col items-center justify-center min-h-[88vh] pt-10 pb-16">
+          <div className="px-4 sm:px-8 max-w-7xl mx-auto w-full text-center flex flex-col items-center justify-center min-h-[88vh] pt-10 pb-16">
           <h1 className="text-4xl sm:text-5xl md:text-7xl font-bold tracking-tight mb-6 leading-[1.02]">
             <span className="block">Ship your</span>
             <span className="block mt-2">
@@ -243,7 +243,7 @@ export default function Landing() {
 
         {/* Stats strip */}
         <section className="border-y border-border bg-surface/40">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10 grid grid-cols-2 sm:grid-cols-4 gap-6 sm:gap-2 items-center">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10 grid grid-cols-2 sm:grid-cols-4 gap-6 sm:gap-2 items-center">
             {STATS.map((s) => (
               <div key={s.label} className="text-center">
                 <div className="text-2xl md:text-3xl font-bold text-foreground tracking-tight">
@@ -265,7 +265,7 @@ export default function Landing() {
 
         {/* How it works — visual zig-zag */}
         <section id="how" className="py-20 md:py-32 px-4 sm:px-6">
-          <div className="max-w-6xl mx-auto">
+          <div className="max-w-7xl mx-auto">
             <div className="text-center max-w-2xl mx-auto mb-16 md:mb-24">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-mono mb-5 backdrop-blur-md bg-foreground/[0.04] dark:bg-foreground/[0.06] border border-border/80 text-foreground/80 shadow-sm">
                 <Sparkles className="w-3 h-3 text-primary" />
@@ -413,7 +413,7 @@ export default function Landing() {
 
         {/* Bento features */}
         <section className="py-20 md:py-28 px-4 sm:px-6 border-t border-border bg-surface/40">
-          <div className="max-w-6xl mx-auto">
+          <div className="max-w-7xl mx-auto">
             <div className="text-center max-w-2xl mx-auto mb-12">
               <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-4">
                 Everything's in the box.
@@ -462,7 +462,7 @@ export default function Landing() {
 
         {/* Templates */}
         <section id="templates" className="py-20 md:py-28 px-4 sm:px-6 border-t border-border">
-          <div className="max-w-6xl mx-auto">
+          <div className="max-w-7xl mx-auto">
             <div className="flex items-end justify-between mb-10 gap-4 flex-wrap">
               <div>
                 <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-3">
@@ -519,7 +519,7 @@ export default function Landing() {
 
         {/* Testimonials */}
         <section className="py-20 md:py-28 px-4 sm:px-6 border-t border-border bg-surface/40">
-          <div className="max-w-6xl mx-auto">
+          <div className="max-w-7xl mx-auto">
             <div className="text-center max-w-2xl mx-auto mb-12">
               <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-4">
                 People are shipping wild things.
@@ -549,25 +549,27 @@ export default function Landing() {
         </section>
 
         {/* Final CTA */}
-        <section className="py-24 md:py-32 px-4 sm:px-6 text-center border-t border-border">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-mono mb-6 backdrop-blur-md bg-foreground/[0.04] dark:bg-foreground/[0.06] border border-border/80 text-foreground/80 shadow-sm">
-            <Sparkles className="w-3 h-3 text-primary" />
-            AI App Builder
+        <section className="py-24 md:py-32 px-4 sm:px-6 border-t border-border">
+          <div className="max-w-7xl mx-auto text-center">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-mono mb-6 backdrop-blur-md bg-foreground/[0.04] dark:bg-foreground/[0.06] border border-border/80 text-foreground/80 shadow-sm">
+              <Sparkles className="w-3 h-3 text-primary" />
+              AI App Builder
+            </div>
+            <h2 className="text-4xl md:text-5xl font-bold mb-6 tracking-tight">
+              Ready to build?
+            </h2>
+            <p className="text-lg text-secondary mb-10 max-w-xl mx-auto">
+              Free to start. No credit card. No "schedule a demo" nonsense.
+            </p>
+            <Link href="/login">
+              <Button
+                size="lg"
+                className="bg-primary text-primary-foreground hover:bg-primary/90 h-14 px-10 text-lg font-semibold"
+              >
+                Start building for free
+              </Button>
+            </Link>
           </div>
-          <h2 className="text-4xl md:text-5xl font-bold mb-6 tracking-tight">
-            Ready to build?
-          </h2>
-          <p className="text-lg text-secondary mb-10 max-w-xl mx-auto">
-            Free to start. No credit card. No "schedule a demo" nonsense.
-          </p>
-          <Link href="/login">
-            <Button
-              size="lg"
-              className="bg-primary text-primary-foreground hover:bg-primary/90 h-14 px-10 text-lg font-semibold"
-            >
-              Start building for free
-            </Button>
-          </Link>
         </section>
       </main>
 

@@ -1,42 +1,104 @@
 import { type ReactNode } from "react";
-import { Link } from "wouter";
-import { ArrowRight, CheckCircle2, Circle } from "lucide-react";
+import { Link, useLocation } from "wouter";
+import {
+  ArrowRight,
+  CheckCircle2,
+  Circle,
+  Book,
+  GitCommit,
+  LayoutTemplate,
+  Activity as ActivityIcon,
+  Newspaper,
+  Building2,
+  Briefcase,
+  Lock,
+  Scale,
+  Users,
+} from "lucide-react";
 import { MarketingNav } from "@/components/marketing-nav";
 import { MarketingFooter } from "@/components/marketing-footer";
 import { Button } from "@/components/ui/button";
+
+const MARKETING_LINKS = [
+  { href: "/docs", label: "Docs", icon: Book },
+  { href: "/changelog", label: "Changelog", icon: GitCommit },
+  { href: "/templates", label: "Templates", icon: LayoutTemplate },
+  { href: "/status", label: "Status", icon: ActivityIcon },
+  { href: "/blog", label: "Blog", icon: Newspaper },
+  { href: "/about", label: "About", icon: Building2 },
+  { href: "/careers", label: "Careers", icon: Briefcase },
+  { href: "/community", label: "Community", icon: Users },
+  { href: "/privacy", label: "Privacy", icon: Lock },
+  { href: "/terms", label: "Terms", icon: Scale },
+];
+
+function SideNav() {
+  const [loc] = useLocation();
+  return (
+    <nav className="lg:sticky lg:top-24 lg:self-start space-y-1 text-sm">
+      <div className="text-[10px] uppercase tracking-wider font-mono text-secondary px-3 py-2">
+        Resources
+      </div>
+      {MARKETING_LINKS.map(({ href, label, icon: Icon }) => {
+        const active = loc === href;
+        return (
+          <Link
+            key={href}
+            href={href}
+            className={`flex items-center gap-2 px-3 py-2 rounded-md transition-colors ${
+              active
+                ? "bg-primary/15 text-primary border border-primary/25"
+                : "text-secondary hover:text-foreground hover:bg-surface"
+            }`}
+          >
+            <Icon className="w-3.5 h-3.5 shrink-0" />
+            {label}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
 
 function Shell({
   eyebrow,
   title,
   intro,
   children,
+  prose = false,
 }: {
   eyebrow?: string;
   title: string;
   intro?: string;
   children: ReactNode;
+  prose?: boolean;
 }) {
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
       <MarketingNav />
       <main className="flex-1">
-        <section className="px-4 sm:px-6 max-w-4xl mx-auto pt-16 pb-10">
-          {eyebrow && (
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-mono mb-5 backdrop-blur-md bg-foreground/[0.04] dark:bg-foreground/[0.06] border border-border/80 text-foreground/80 shadow-sm">
-              <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-              {eyebrow}
-            </div>
-          )}
-          <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-4">
-            {title}
-          </h1>
-          {intro && (
-            <p className="text-lg text-secondary max-w-2xl">{intro}</p>
-          )}
-        </section>
-        <section className="px-4 sm:px-6 max-w-4xl mx-auto pb-24">
-          {children}
-        </section>
+        <div className="px-4 sm:px-8 max-w-7xl mx-auto w-full pt-12 pb-24 grid grid-cols-1 lg:grid-cols-[200px_1fr] gap-10 lg:gap-14">
+          <aside className="hidden lg:block">
+            <SideNav />
+          </aside>
+          <div className="min-w-0">
+            <header className="mb-10 pb-8 border-b border-border">
+              {eyebrow && (
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-mono mb-5 backdrop-blur-md bg-foreground/[0.04] dark:bg-foreground/[0.06] border border-border/80 text-foreground/80 shadow-sm">
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                  {eyebrow}
+                </div>
+              )}
+              <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-4">
+                {title}
+              </h1>
+              {intro && (
+                <p className="text-lg text-secondary max-w-2xl">{intro}</p>
+              )}
+            </header>
+            <div className={prose ? "max-w-3xl" : ""}>{children}</div>
+          </div>
+        </div>
       </main>
       <MarketingFooter />
     </div>
@@ -325,6 +387,7 @@ export function About() {
       eyebrow="About"
       title="We're building the fastest path from idea to live app."
       intro="Instancly started as a side project. Now millions of builders use it to ship real software without writing a line of code."
+      prose
     >
       <Section title="Our mission">
         <p>
@@ -405,6 +468,7 @@ export function Privacy() {
       eyebrow="Privacy"
       title="Privacy policy"
       intro="The short version: we collect what we need to make Instancly work, and we don't sell your data. Ever."
+      prose
     >
       <Section title="What we collect">
         <p>Account info (email, name, profile photo), the projects and prompts you write on Instancly, and basic usage analytics so we can make the product better.</p>
@@ -428,6 +492,7 @@ export function Terms() {
       eyebrow="Terms"
       title="Terms of service"
       intro="Plain-English summary above each section. The legal language follows."
+      prose
     >
       <Section title="Using Instancly">
         <p>You can use Instancly for any lawful purpose. Don't use it to build anything illegal, abusive, or designed to harm people.</p>

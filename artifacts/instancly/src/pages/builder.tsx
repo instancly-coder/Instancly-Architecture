@@ -1082,58 +1082,132 @@ function FilesPane({
   activeFile: string;
   setActiveFile: (f: string) => void;
 }) {
-  const files = [
-    { path: "src/app/page.tsx", folder: "src/app" },
-    { path: "src/app/layout.tsx", folder: "src/app" },
-    { path: "src/components/ui/button.tsx", folder: "src/components/ui" },
-    { path: "src/lib/db.ts", folder: "src/lib" },
-    { path: "package.json", folder: "" },
-    { path: "tailwind.config.ts", folder: "" },
+  const tree: { path: string; group: string; size: string; status?: "M" | "A" }[] = [
+    { path: "src/app/page.tsx", group: "src/app", size: "1.4 KB", status: "M" },
+    { path: "src/app/layout.tsx", group: "src/app", size: "612 B" },
+    { path: "src/app/api/tasks/route.ts", group: "src/app/api/tasks", size: "987 B", status: "A" },
+    { path: "src/components/ui/button.tsx", group: "src/components/ui", size: "1.1 KB" },
+    { path: "src/components/ui/input.tsx", group: "src/components/ui", size: "740 B" },
+    { path: "src/components/task-list.tsx", group: "src/components", size: "2.1 KB", status: "A" },
+    { path: "src/lib/db.ts", group: "src/lib", size: "488 B" },
+    { path: "src/lib/utils.ts", group: "src/lib", size: "212 B" },
+    { path: "package.json", group: "", size: "1.6 KB" },
+    { path: "tailwind.config.ts", group: "", size: "894 B" },
+    { path: "tsconfig.json", group: "", size: "401 B" },
   ];
-
-  return (
-    <div className="absolute inset-0 flex bg-background">
-      <div className="w-60 border-r border-border bg-surface overflow-y-auto p-2 shrink-0">
-        <div className="text-[10px] uppercase tracking-wider font-mono text-secondary px-2 py-1.5">
-          Project
-        </div>
-        {files.map((f) => (
-          <button
-            key={f.path}
-            onClick={() => setActiveFile(f.path)}
-            className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs font-mono text-left transition-colors ${
-              activeFile === f.path
-                ? "bg-primary text-primary-foreground"
-                : "text-secondary hover:text-foreground hover:bg-surface-raised"
-            }`}
-          >
-            <FileCode2 className="w-3.5 h-3.5 shrink-0" />
-            <span className="truncate">{f.path}</span>
-          </button>
-        ))}
-      </div>
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="h-9 border-b border-border bg-surface px-4 flex items-center gap-2">
-          <FileCode2 className="w-4 h-4 text-secondary" />
-          <span className="font-mono text-xs text-secondary truncate">
-            {activeFile}
-          </span>
-        </div>
-        <pre className="flex-1 overflow-auto p-4 font-mono text-xs leading-relaxed text-secondary">
-{`import { useState } from "react";
+  const grouped = tree.reduce<Record<string, typeof tree>>((acc, f) => {
+    const k = f.group || "/";
+    (acc[k] ||= []).push(f);
+    return acc;
+  }, {});
+  const codeByFile: Record<string, string> = {
+    "src/app/page.tsx": `import { useState } from "react";
 import { db } from "@/lib/db";
+import { TaskList } from "@/components/task-list";
 
 export default function Page() {
   const [tasks, setTasks] = useState<Task[]>([]);
 
   return (
-    <div className="p-6">
+    <main className="p-6">
       <h1 className="text-2xl font-bold mb-4">Tasks</h1>
-      {/* implementation */}
-    </div>
+      <TaskList items={tasks} onChange={setTasks} />
+    </main>
   );
-}`}
-        </pre>
+}`,
+  };
+  const code = codeByFile[activeFile] ?? `// ${activeFile}\n\nexport default function Module() {\n  return null;\n}\n`;
+  const lines = code.split("\n");
+  const ext = activeFile.split(".").pop() ?? "txt";
+
+  return (
+    <div className="absolute inset-0 flex bg-background">
+      <div className="w-64 border-r border-border bg-surface overflow-y-auto shrink-0">
+        <div className="flex items-center justify-between px-3 py-2 border-b border-border">
+          <div className="text-[10px] uppercase tracking-wider font-mono text-secondary">
+            Explorer
+          </div>
+          <span className="text-[10px] font-mono text-secondary">
+            {tree.length} files
+          </span>
+        </div>
+        <div className="p-2 space-y-3">
+          {Object.entries(grouped).map(([group, files]) => (
+            <div key={group}>
+              <div className="px-2 py-1 text-[10px] uppercase tracking-wider font-mono text-secondary/70 truncate">
+                {group || "root"}
+              </div>
+              {files.map((f) => {
+                const name = f.path.split("/").pop()!;
+                const active = activeFile === f.path;
+                return (
+                  <button
+                    key={f.path}
+                    onClick={() => setActiveFile(f.path)}
+                    className={`group w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs font-mono text-left transition-colors ${
+                      active
+                        ? "bg-primary/15 text-primary"
+                        : "text-secondary hover:text-foreground hover:bg-surface-raised"
+                    }`}
+                  >
+                    <FileCode2 className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate flex-1">{name}</span>
+                    {f.status && (
+                      <span
+                        className={`text-[9px] font-mono px-1 rounded ${
+                          f.status === "A"
+                            ? "bg-success/15 text-success"
+                            : "bg-primary/15 text-primary"
+                        }`}
+                      >
+                        {f.status}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="h-9 border-b border-border bg-surface flex items-stretch">
+          <div className="flex items-center gap-2 px-4 border-r border-border bg-background">
+            <FileCode2 className="w-4 h-4 text-primary" />
+            <span className="font-mono text-xs truncate">
+              {activeFile.split("/").pop()}
+            </span>
+          </div>
+          <div className="flex-1 flex items-center px-4 text-[10px] font-mono text-secondary truncate">
+            {activeFile}
+          </div>
+          <div className="hidden sm:flex items-center px-4 text-[10px] font-mono text-secondary border-l border-border">
+            UTF-8 · LF · {ext.toUpperCase()}
+          </div>
+        </div>
+        <div className="flex-1 overflow-auto bg-background">
+          <div className="grid grid-cols-[3.25rem_1fr] font-mono text-xs leading-6">
+            <div className="text-right pr-3 py-3 select-none text-secondary/60 border-r border-border bg-surface/40">
+              {lines.map((_, i) => (
+                <div key={i}>{i + 1}</div>
+              ))}
+            </div>
+            <pre className="py-3 px-4 text-foreground whitespace-pre overflow-x-auto">{code}</pre>
+          </div>
+        </div>
+        <div className="h-7 border-t border-border bg-surface px-4 flex items-center justify-between text-[10px] font-mono text-secondary">
+          <div className="flex items-center gap-3">
+            <span className="inline-flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-success" />
+              No errors
+            </span>
+            <span>{lines.length} lines</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span>Branch: main</span>
+            <span>Last build: 2 min ago</span>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -2018,7 +2092,7 @@ function SettingsPane() {
             </div>
             <div className="flex items-center gap-2">
               <div className="flex -space-x-2">
-                {["#f26207", "#7c3aed", "#10b981"].map((c) => (
+                {["#ccff00", "#7c3aed", "#10b981"].map((c) => (
                   <span
                     key={c}
                     className="w-7 h-7 rounded-full border-2 border-surface"
