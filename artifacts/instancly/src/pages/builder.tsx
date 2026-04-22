@@ -406,10 +406,10 @@ export default function Builder() {
               return (
                 <div
                   key={key}
-                  className={`group h-8 pl-3 pr-1 rounded-md text-sm flex items-center gap-2 whitespace-nowrap transition-colors ${
+                  className={`group h-8 pl-3 pr-1 rounded-md text-sm flex items-center gap-2 whitespace-nowrap transition-colors border ${
                     active
-                      ? "bg-primary text-primary-foreground"
-                      : "text-secondary hover:text-foreground hover:bg-surface-raised"
+                      ? "bg-primary/15 text-primary border-primary"
+                      : "text-secondary hover:text-foreground hover:bg-surface-raised border-transparent"
                   }`}
                 >
                   <button
@@ -427,7 +427,7 @@ export default function Builder() {
                       }}
                       className={`w-5 h-5 rounded flex items-center justify-center ml-0.5 transition-colors ${
                         active
-                          ? "text-primary-foreground/70 hover:text-primary-foreground hover:bg-black/20"
+                          ? "text-primary/70 hover:text-primary hover:bg-primary/10"
                           : "text-secondary hover:text-foreground hover:bg-background/60"
                       }`}
                       aria-label={`Close ${meta.label}`}
