@@ -1119,10 +1119,57 @@ export default function Page() {
   const code = codeByFile[activeFile] ?? `// ${activeFile}\n\nexport default function Module() {\n  return null;\n}\n`;
   const lines = code.split("\n");
   const ext = activeFile.split(".").pop() ?? "txt";
+  const [mobileTreeOpen, setMobileTreeOpen] = useState(false);
+  const activeName = activeFile.split("/").pop()!;
+  const activeMeta = tree.find((t) => t.path === activeFile);
+
+  const TreeBody = (
+    <div className="p-2 space-y-3">
+      {Object.entries(grouped).map(([group, files]) => (
+        <div key={group}>
+          <div className="px-2 py-1 text-[10px] uppercase tracking-wider font-mono text-secondary/70 truncate">
+            {group || "root"}
+          </div>
+          {files.map((f) => {
+            const name = f.path.split("/").pop()!;
+            const active = activeFile === f.path;
+            return (
+              <button
+                key={f.path}
+                onClick={() => {
+                  setActiveFile(f.path);
+                  setMobileTreeOpen(false);
+                }}
+                className={`group w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs font-mono text-left transition-colors ${
+                  active
+                    ? "bg-primary/15 text-primary"
+                    : "text-secondary hover:text-foreground hover:bg-surface-raised"
+                }`}
+              >
+                <FileCode2 className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate flex-1">{name}</span>
+                {f.status && (
+                  <span
+                    className={`text-[9px] font-mono px-1 rounded ${
+                      f.status === "A"
+                        ? "bg-success/15 text-success"
+                        : "bg-primary/15 text-primary"
+                    }`}
+                  >
+                    {f.status}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
 
   return (
     <div className="absolute inset-0 flex bg-background">
-      <div className="w-64 border-r border-border bg-surface overflow-y-auto shrink-0">
+      <div className="hidden md:flex w-64 border-r border-border bg-surface overflow-y-auto shrink-0 flex-col">
         <div className="flex items-center justify-between px-3 py-2 border-b border-border">
           <div className="text-[10px] uppercase tracking-wider font-mono text-secondary">
             Explorer
@@ -1131,46 +1178,60 @@ export default function Page() {
             {tree.length} files
           </span>
         </div>
-        <div className="p-2 space-y-3">
-          {Object.entries(grouped).map(([group, files]) => (
-            <div key={group}>
-              <div className="px-2 py-1 text-[10px] uppercase tracking-wider font-mono text-secondary/70 truncate">
-                {group || "root"}
-              </div>
-              {files.map((f) => {
-                const name = f.path.split("/").pop()!;
-                const active = activeFile === f.path;
-                return (
-                  <button
-                    key={f.path}
-                    onClick={() => setActiveFile(f.path)}
-                    className={`group w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs font-mono text-left transition-colors ${
-                      active
-                        ? "bg-primary/15 text-primary"
-                        : "text-secondary hover:text-foreground hover:bg-surface-raised"
-                    }`}
-                  >
-                    <FileCode2 className="w-3.5 h-3.5 shrink-0" />
-                    <span className="truncate flex-1">{name}</span>
-                    {f.status && (
-                      <span
-                        className={`text-[9px] font-mono px-1 rounded ${
-                          f.status === "A"
-                            ? "bg-success/15 text-success"
-                            : "bg-primary/15 text-primary"
-                        }`}
-                      >
-                        {f.status}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          ))}
-        </div>
+        {TreeBody}
       </div>
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+        <div className="md:hidden border-b border-border bg-surface relative">
+          <button
+            type="button"
+            onClick={() => setMobileTreeOpen((v) => !v)}
+            className="w-full flex items-center gap-2 px-3 py-2 text-left"
+            aria-expanded={mobileTreeOpen}
+          >
+            <FileCode2 className="w-4 h-4 text-primary shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="font-mono text-xs truncate">{activeName}</div>
+              <div className="font-mono text-[10px] text-secondary truncate">
+                {activeFile}
+              </div>
+            </div>
+            {activeMeta?.status && (
+              <span
+                className={`text-[9px] font-mono px-1 rounded ${
+                  activeMeta.status === "A"
+                    ? "bg-success/15 text-success"
+                    : "bg-primary/15 text-primary"
+                }`}
+              >
+                {activeMeta.status}
+              </span>
+            )}
+            <ChevronDown
+              className={`w-4 h-4 text-secondary transition-transform shrink-0 ${
+                mobileTreeOpen ? "rotate-180" : ""
+              }`}
+            />
+          </button>
+          {mobileTreeOpen && (
+            <>
+              <div
+                className="fixed inset-0 z-20 bg-background/60 backdrop-blur-sm"
+                onClick={() => setMobileTreeOpen(false)}
+              />
+              <div className="absolute left-2 right-2 top-full mt-1 z-30 rounded-lg border border-border bg-surface shadow-2xl max-h-[60vh] overflow-y-auto">
+                <div className="flex items-center justify-between px-3 py-2 border-b border-border sticky top-0 bg-surface">
+                  <div className="text-[10px] uppercase tracking-wider font-mono text-secondary">
+                    Explorer
+                  </div>
+                  <span className="text-[10px] font-mono text-secondary">
+                    {tree.length} files
+                  </span>
+                </div>
+                {TreeBody}
+              </div>
+            </>
+          )}
+        </div>
         <div className="h-9 border-b border-border bg-surface flex items-stretch">
           <div className="flex items-center gap-2 px-4 border-r border-border bg-background">
             <FileCode2 className="w-4 h-4 text-primary" />
