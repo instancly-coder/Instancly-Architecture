@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { mockUser } from "@/lib/mock-data";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const NAV = [
   { href: "/dashboard", label: "Projects", icon: LayoutDashboard },
@@ -38,13 +39,16 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
           <Flame className="w-5 h-5 text-primary" />
           <span className="font-bold tracking-tight">instancly</span>
         </Link>
-        <button
-          onClick={() => setOpen(true)}
-          className="w-9 h-9 rounded-md flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised"
-          aria-label="Open menu"
-        >
-          <Menu className="w-5 h-5" />
-        </button>
+        <div className="flex items-center gap-1">
+          <ThemeToggle />
+          <button
+            onClick={() => setOpen(true)}
+            className="w-9 h-9 rounded-md flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised"
+            aria-label="Open menu"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+        </div>
       </header>
 
       {/* Mobile drawer backdrop */}
@@ -98,7 +102,11 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
           </nav>
         </div>
 
-        <div className="p-4 border-t border-border">
+        <div className="p-4 border-t border-border space-y-2">
+          <div className="hidden md:flex items-center justify-between text-xs text-secondary px-1">
+            <span>Theme</span>
+            <ThemeToggle />
+          </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="flex items-center gap-3 w-full p-2 rounded-md hover:bg-surface-raised transition-colors text-left">

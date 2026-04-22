@@ -68,7 +68,7 @@ export default function AdminRevenue() {
                     contentStyle={{ backgroundColor: '#111111', borderColor: '#2A2A2A', borderRadius: '8px' }}
                     itemStyle={{ color: '#fff' }}
                   />
-                  <Area type="monotone" dataKey="profit" stackId="1" stroke="#FF4500" fill="#FF4500" fillOpacity={0.2} />
+                  <Area type="monotone" dataKey="profit" stackId="1" stroke="#00ffee" fill="#00ffee" fillOpacity={0.2} />
                   <Area type="monotone" dataKey="cost" stackId="2" stroke="#555555" fill="#555555" fillOpacity={0.2} />
                 </AreaChart>
               </ResponsiveContainer>

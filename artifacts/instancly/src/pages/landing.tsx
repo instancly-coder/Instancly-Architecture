@@ -6,10 +6,14 @@ import { MarketingNav } from "@/components/marketing-nav";
 import { MarketingFooter } from "@/components/marketing-footer";
 
 const PROMPT_SUGGESTIONS = [
-  "A todo app with Postgres",
-  "A Stripe-powered SaaS landing page",
-  "A real-time chat room",
-  "An invoice generator",
+  "Ecommerce",
+  "SaaS",
+  "Marketplace",
+  "Dashboard",
+  "Landing page",
+  "Internal tool",
+  "Mobile app",
+  "Blog",
 ];
 
 const ROTATING_NOUNS = [
@@ -69,7 +73,7 @@ export default function Landing() {
                 key={nounIndex}
                 className="inline-block text-primary animate-rotate-in"
                 style={{
-                  textShadow: "0 0 40px rgba(255,69,0,0.35)",
+                  textShadow: "0 0 40px rgba(0,255,238,0.45)",
                 }}
               >
                 {ROTATING_NOUNS[nounIndex]}

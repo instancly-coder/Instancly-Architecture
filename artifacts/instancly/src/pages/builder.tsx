@@ -4,7 +4,6 @@ import {
   Flame,
   ChevronRight,
   FolderTree,
-  LayoutDashboard,
   History,
   Settings as SettingsIcon,
   MoreVertical,
@@ -25,7 +24,13 @@ import {
   Save,
   Trash2,
   Plug,
+  Plus,
+  ArrowLeft,
+  ArrowRight,
+  RotateCw,
+  Search,
 } from "lucide-react";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -41,8 +46,36 @@ import { Switch } from "@/components/ui/switch";
 import { mockUser, mockModels } from "@/lib/mock-data";
 import { toast } from "sonner";
 
-type Tab = "preview" | "files" | "project" | "history" | "settings";
-type ProjectTab = "analytics" | "database" | "payments" | "integrations";
+type TabKey =
+  | "preview"
+  | "files"
+  | "database"
+  | "analytics"
+  | "payments"
+  | "integrations"
+  | "history"
+  | "settings";
+
+const TAB_META: Record<TabKey, { label: string; icon: any }> = {
+  preview: { label: "Preview", icon: Play },
+  files: { label: "Files", icon: FolderTree },
+  database: { label: "Database", icon: Database },
+  analytics: { label: "Analytics", icon: BarChart3 },
+  payments: { label: "Payments", icon: CreditCard },
+  integrations: { label: "Integrations", icon: Plug },
+  history: { label: "History", icon: History },
+  settings: { label: "Settings", icon: SettingsIcon },
+};
+
+const ADDABLE_TABS: TabKey[] = [
+  "files",
+  "database",
+  "analytics",
+  "payments",
+  "integrations",
+  "history",
+  "settings",
+];
 
 type PastBuild = {
   id: string;
@@ -97,9 +130,43 @@ export default function Builder() {
   const params = useParams();
   const { username, slug } = params;
 
-  const [activeTab, setActiveTab] = useState<Tab>("preview");
-  const [projectTab, setProjectTab] = useState<ProjectTab>("analytics");
+  const [openTabs, setOpenTabs] = useState<TabKey[]>(["preview"]);
+  const [activeTab, setActiveTab] = useState<TabKey>("preview");
   const [viewport, setViewport] = useState<"desktop" | "tablet" | "mobile">("desktop");
+  const [tabSearch, setTabSearch] = useState("");
+  const [addOpen, setAddOpen] = useState(false);
+
+  const liveUrl = `https://${slug}-${username}.instancly.app`;
+  const [urlValue, setUrlValue] = useState(liveUrl);
+  const [iframeKey, setIframeKey] = useState(0);
+
+  useEffect(() => {
+    setUrlValue(liveUrl);
+  }, [liveUrl]);
+
+  const openTab = (key: TabKey) => {
+    setOpenTabs((tabs) => (tabs.includes(key) ? tabs : [...tabs, key]));
+    setActiveTab(key);
+    setAddOpen(false);
+    setTabSearch("");
+  };
+
+  const closeTab = (key: TabKey) => {
+    if (key === "preview") return;
+    setOpenTabs((tabs) => {
+      const next = tabs.filter((t) => t !== key);
+      if (activeTab === key) {
+        const idx = tabs.indexOf(key);
+        const fallback = next[idx - 1] ?? next[0] ?? "preview";
+        setActiveTab(fallback);
+      }
+      return next;
+    });
+  };
+
+  const availableToAdd = ADDABLE_TABS.filter((k) => !openTabs.includes(k)).filter(
+    (k) => TAB_META[k].label.toLowerCase().includes(tabSearch.toLowerCase())
+  );
 
   const [chatInput, setChatInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
@@ -173,6 +240,8 @@ export default function Builder() {
           <span className="hidden lg:inline text-xs text-secondary font-mono">
             £0.03 spend
           </span>
+
+          <ThemeToggle className="hidden sm:inline-flex" />
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -249,60 +318,178 @@ export default function Builder() {
         </aside>
 
         {/* Right Panel - Tabbed Workspace */}
-        <section className="flex-1 flex flex-col bg-background overflow-hidden">
+        <section className="flex-1 flex flex-col bg-background overflow-hidden min-w-0">
           {/* Tab strip */}
           <div className="h-11 border-b border-border bg-surface flex items-center px-2 gap-1 overflow-x-auto shrink-0">
-            <TabBtn
-              icon={Play}
-              label="Preview"
-              active={activeTab === "preview"}
-              onClick={() => setActiveTab("preview")}
-            />
-            <TabBtn
-              icon={FolderTree}
-              label="Files"
-              active={activeTab === "files"}
-              onClick={() => setActiveTab("files")}
-            />
-            <TabBtn
-              icon={LayoutDashboard}
-              label="Project"
-              active={activeTab === "project"}
-              onClick={() => setActiveTab("project")}
-            />
-            <TabBtn
-              icon={History}
-              label="History"
-              active={activeTab === "history"}
-              onClick={() => setActiveTab("history")}
-            />
-            <TabBtn
-              icon={SettingsIcon}
-              label="Settings"
-              active={activeTab === "settings"}
-              onClick={() => setActiveTab("settings")}
-            />
+            {openTabs.map((key) => {
+              const meta = TAB_META[key];
+              const Icon = meta.icon;
+              const active = activeTab === key;
+              const closeable = key !== "preview";
+              return (
+                <div
+                  key={key}
+                  className={`group h-8 pl-3 pr-1 rounded-md text-sm flex items-center gap-2 whitespace-nowrap transition-colors ${
+                    active
+                      ? "bg-primary/15 text-primary"
+                      : "text-secondary hover:text-foreground hover:bg-surface-raised"
+                  }`}
+                >
+                  <button
+                    onClick={() => setActiveTab(key)}
+                    className="flex items-center gap-2 h-full pr-1"
+                  >
+                    <Icon className="w-4 h-4" />
+                    <span>{meta.label}</span>
+                  </button>
+                  {closeable ? (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        closeTab(key);
+                      }}
+                      className="w-5 h-5 rounded flex items-center justify-center text-secondary hover:text-foreground hover:bg-background/60 ml-0.5"
+                      aria-label={`Close ${meta.label}`}
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  ) : (
+                    <span className="w-1.5" />
+                  )}
+                </div>
+              );
+            })}
+
+            <Popover open={addOpen} onOpenChange={setAddOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  className="ml-1 w-7 h-7 rounded-md flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors shrink-0"
+                  aria-label="Add tab"
+                  title="Add tab"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-64 p-2 border-border">
+                <div className="relative mb-2">
+                  <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-secondary" />
+                  <input
+                    autoFocus
+                    value={tabSearch}
+                    onChange={(e) => setTabSearch(e.target.value)}
+                    placeholder="Search tabs..."
+                    className="w-full bg-background border border-border rounded-md pl-7 pr-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+                <div className="max-h-64 overflow-y-auto">
+                  {availableToAdd.length === 0 ? (
+                    <div className="text-xs text-secondary px-2 py-3 text-center">
+                      No tabs match
+                    </div>
+                  ) : (
+                    availableToAdd.map((k) => {
+                      const meta = TAB_META[k];
+                      const Icon = meta.icon;
+                      return (
+                        <button
+                          key={k}
+                          onClick={() => openTab(k)}
+                          className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-left text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
+                        >
+                          <Icon className="w-3.5 h-3.5" />
+                          <span>{meta.label}</span>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
+
+          {/* Live URL bar (preview only) */}
+          {activeTab === "preview" && (
+            <div className="h-10 border-b border-border bg-surface flex items-center gap-1 px-2 shrink-0">
+              <button
+                className="w-7 h-7 rounded flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
+                title="Back"
+                onClick={() => toast.message("Navigated back")}
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </button>
+              <button
+                className="w-7 h-7 rounded flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
+                title="Forward"
+                onClick={() => toast.message("Navigated forward")}
+              >
+                <ArrowRight className="w-4 h-4" />
+              </button>
+              <button
+                className="w-7 h-7 rounded flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
+                title="Refresh"
+                onClick={() => {
+                  setIframeKey((k) => k + 1);
+                  toast.success("Preview refreshed");
+                }}
+              >
+                <RotateCw className="w-4 h-4" />
+              </button>
+              <div className="flex-1 mx-1 min-w-0">
+                <input
+                  value={urlValue}
+                  onChange={(e) => setUrlValue(e.target.value)}
+                  className="w-full h-7 bg-background border border-border rounded-md px-3 text-xs font-mono text-foreground outline-none focus:ring-1 focus:ring-primary truncate"
+                />
+              </div>
+              <button
+                onClick={copyUrl}
+                className="w-7 h-7 rounded flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
+                title="Copy URL"
+              >
+                <Copy className="w-3.5 h-3.5" />
+              </button>
+              <a
+                href={liveUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="w-7 h-7 rounded flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
+                title="Open in new tab"
+              >
+                <ExternalLink className="w-4 h-4" />
+              </a>
+            </div>
+          )}
 
           <div className="flex-1 overflow-hidden relative">
             {activeTab === "preview" && (
               <PreviewPane
+                key={iframeKey}
                 viewport={viewport}
                 setViewport={setViewport}
-                slug={slug}
-                username={username}
-                copyUrl={copyUrl}
               />
             )}
             {activeTab === "files" && (
               <FilesPane activeFile={activeFile} setActiveFile={setActiveFile} />
             )}
-            {activeTab === "project" && (
-              <ProjectPane
-                projectTab={projectTab}
-                setProjectTab={setProjectTab}
-                copyDbUrl={copyDbUrl}
-              />
+            {activeTab === "database" && (
+              <div className="absolute inset-0 overflow-auto p-4 md:p-6 bg-background">
+                <DatabaseView copyDbUrl={copyDbUrl} />
+              </div>
+            )}
+            {activeTab === "analytics" && (
+              <div className="absolute inset-0 overflow-auto p-4 md:p-6 bg-background">
+                <AnalyticsView />
+              </div>
+            )}
+            {activeTab === "payments" && (
+              <div className="absolute inset-0 overflow-auto p-4 md:p-6 bg-background">
+                <PaymentsView />
+              </div>
+            )}
+            {activeTab === "integrations" && (
+              <div className="absolute inset-0 overflow-auto p-4 md:p-6 bg-background">
+                <IntegrationsView />
+              </div>
             )}
             {activeTab === "history" && (
               <HistoryPane
@@ -569,15 +756,9 @@ function Stat({ label, value }: { label: string; value: string }) {
 function PreviewPane({
   viewport,
   setViewport,
-  slug,
-  username,
-  copyUrl,
 }: {
   viewport: "desktop" | "tablet" | "mobile";
   setViewport: (v: "desktop" | "tablet" | "mobile") => void;
-  slug?: string;
-  username?: string;
-  copyUrl: () => void;
 }) {
   return (
     <div className="absolute inset-0 flex flex-col bg-black">
@@ -627,40 +808,22 @@ function PreviewPane({
         </div>
       </div>
 
-      <div className="h-10 border-t border-border bg-surface flex items-center justify-between px-3 md:px-4 shrink-0 gap-2">
-        <div className="flex items-center gap-1">
-          <ViewportBtn
-            active={viewport === "desktop"}
-            icon={Monitor}
-            onClick={() => setViewport("desktop")}
-          />
-          <ViewportBtn
-            active={viewport === "tablet"}
-            icon={Tablet}
-            onClick={() => setViewport("tablet")}
-          />
-          <ViewportBtn
-            active={viewport === "mobile"}
-            icon={Smartphone}
-            onClick={() => setViewport("mobile")}
-          />
-        </div>
-        <button
-          className="flex items-center gap-2 text-xs font-mono text-secondary hover:text-foreground cursor-pointer transition-colors px-2 py-1 rounded hover:bg-surface-raised truncate min-w-0"
-          onClick={copyUrl}
-        >
-          <span className="truncate">
-            {slug}-{username}.instancly.app
-          </span>
-          <Copy className="w-3 h-3 shrink-0" />
-        </button>
-        <a
-          href="#"
-          className="w-8 h-8 rounded flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
-          title="Open in new tab"
-        >
-          <ExternalLink className="w-4 h-4" />
-        </a>
+      <div className="h-10 border-t border-border bg-surface flex items-center justify-center px-3 md:px-4 shrink-0 gap-1">
+        <ViewportBtn
+          active={viewport === "desktop"}
+          icon={Monitor}
+          onClick={() => setViewport("desktop")}
+        />
+        <ViewportBtn
+          active={viewport === "tablet"}
+          icon={Tablet}
+          onClick={() => setViewport("tablet")}
+        />
+        <ViewportBtn
+          active={viewport === "mobile"}
+          icon={Smartphone}
+          onClick={() => setViewport("mobile")}
+        />
       </div>
     </div>
   );
@@ -753,54 +916,6 @@ export default function Page() {
   );
 }
 
-function ProjectPane({
-  projectTab,
-  setProjectTab,
-  copyDbUrl,
-}: {
-  projectTab: ProjectTab;
-  setProjectTab: (t: ProjectTab) => void;
-  copyDbUrl: () => void;
-}) {
-  return (
-    <div className="absolute inset-0 flex flex-col bg-background overflow-hidden">
-      <div className="h-10 border-b border-border bg-surface flex items-center px-2 gap-1 shrink-0 overflow-x-auto">
-        <SubTab
-          icon={BarChart3}
-          label="Analytics"
-          active={projectTab === "analytics"}
-          onClick={() => setProjectTab("analytics")}
-        />
-        <SubTab
-          icon={Database}
-          label="Database"
-          active={projectTab === "database"}
-          onClick={() => setProjectTab("database")}
-        />
-        <SubTab
-          icon={CreditCard}
-          label="Payments"
-          active={projectTab === "payments"}
-          onClick={() => setProjectTab("payments")}
-        />
-        <SubTab
-          icon={Plug}
-          label="Integrations"
-          active={projectTab === "integrations"}
-          onClick={() => setProjectTab("integrations")}
-        />
-      </div>
-
-      <div className="flex-1 overflow-auto p-4 md:p-6">
-        {projectTab === "analytics" && <AnalyticsView />}
-        {projectTab === "database" && <DatabaseView copyDbUrl={copyDbUrl} />}
-        {projectTab === "payments" && <PaymentsView />}
-        {projectTab === "integrations" && <IntegrationsView />}
-      </div>
-    </div>
-  );
-}
-
 function IntegrationsView() {
   const items = [
     { name: "Stripe", desc: "Subscriptions and one-off payments", connected: true },
@@ -842,32 +957,6 @@ function IntegrationsView() {
         ))}
       </div>
     </div>
-  );
-}
-
-function SubTab({
-  icon: Icon,
-  label,
-  active,
-  onClick,
-}: {
-  icon: any;
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`h-7 px-3 rounded text-xs flex items-center gap-2 whitespace-nowrap transition-colors ${
-        active
-          ? "bg-primary/15 text-primary"
-          : "text-secondary hover:text-foreground hover:bg-surface-raised"
-      }`}
-    >
-      <Icon className="w-3.5 h-3.5" />
-      {label}
-    </button>
   );
 }
 
