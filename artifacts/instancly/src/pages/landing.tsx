@@ -164,14 +164,6 @@ export default function Landing() {
           </div>
 
           <div className="px-4 sm:px-6 max-w-5xl mx-auto text-center flex flex-col items-center justify-center min-h-[88vh] pt-10 pb-16">
-          <a
-            href="/changelog"
-            className="group inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-mono mb-8 backdrop-blur-md bg-foreground/[0.04] dark:bg-foreground/[0.06] border border-border/80 text-foreground/80 hover:text-foreground hover:border-primary/40 transition-colors shadow-sm"
-          >
-            <Sparkles className="w-3 h-3 text-primary" />
-            <span>Instancly v2.0 — now with one-click publish</span>
-            <ArrowRight className="w-3 h-3 opacity-60 group-hover:translate-x-0.5 transition-transform" />
-          </a>
           <h1 className="text-4xl sm:text-5xl md:text-7xl font-bold tracking-tight mb-6 leading-[1.02]">
             <span className="block">Ship your</span>
             <span className="block mt-2">
@@ -279,9 +271,11 @@ export default function Landing() {
                 <Sparkles className="w-3 h-3 text-primary" />
                 Meet Instancly
               </div>
-              <h2 className="text-3xl md:text-5xl font-bold tracking-tight mb-4">
-                From "wouldn't it be cool if…"<br />
-                to <span className="text-primary">live in production.</span>
+              <h2 className="text-3xl md:text-5xl font-bold tracking-tight mb-4 text-balance">
+                <span className="block sm:inline">From "wouldn't it be cool if…"</span>{" "}
+                <span className="block sm:inline">
+                  to <span className="text-primary">live in production.</span>
+                </span>
               </h2>
               <p className="text-secondary text-base md:text-lg">
                 Three moves. Each one is a single sentence. No frameworks to learn.
@@ -323,7 +317,7 @@ export default function Landing() {
                               <div
                                 className={`max-w-[80%] px-4 py-2.5 rounded-xl text-sm ${
                                   m.who === "you"
-                                    ? "bg-primary text-primary-foreground rounded-br-sm"
+                                    ? "bg-primary/15 text-primary rounded-br-sm border border-primary/25"
                                     : "bg-surface-raised text-foreground rounded-bl-sm border border-border"
                                 }`}
                               >
@@ -355,7 +349,7 @@ export default function Landing() {
                                   key={f}
                                   className={`flex items-center gap-1.5 px-1.5 py-1 rounded ${
                                     j === 1
-                                      ? "bg-primary text-primary-foreground"
+                                      ? "bg-primary/15 text-primary"
                                       : "text-secondary"
                                   }`}
                                 >
