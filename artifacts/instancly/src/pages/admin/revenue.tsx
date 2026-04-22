@@ -1,5 +1,6 @@
 import { Link } from "wouter";
-import { Box, TrendingUp } from "lucide-react";
+import { BoxLogo } from "@/components/box-logo";
+import { TrendingUp } from "lucide-react";
 import { mockAdminStats } from "@/lib/mock-data";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
@@ -18,7 +19,7 @@ export default function AdminRevenue() {
     <div className="min-h-screen bg-background text-foreground flex flex-col">
       <nav className="border-b border-border bg-surface h-14 flex items-center px-6 sticky top-0 z-10">
         <Link href="/" className="flex items-center gap-2 hover:opacity-80 mr-8">
-          <Box className="w-5 h-5 text-primary" />
+          <BoxLogo className="w-5 h-5 text-primary" />
           <span className="font-bold tracking-tight">instancly admin</span>
         </Link>
         <div className="flex items-center gap-6 text-sm">

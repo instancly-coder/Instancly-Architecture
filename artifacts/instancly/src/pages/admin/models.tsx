@@ -1,5 +1,6 @@
 import { Link } from "wouter";
-import { Box, Plus, Play } from "lucide-react";
+import { BoxLogo } from "@/components/box-logo";
+import { Plus, Play } from "lucide-react";
 import { mockModels } from "@/lib/mock-data";
 import { Button } from "@/components/ui/button";
 
@@ -8,7 +9,7 @@ export default function AdminModels() {
     <div className="min-h-screen bg-background text-foreground flex flex-col">
       <nav className="border-b border-border bg-surface h-14 flex items-center px-6 sticky top-0 z-10">
         <Link href="/" className="flex items-center gap-2 hover:opacity-80 mr-8">
-          <Box className="w-5 h-5 text-primary" />
+          <BoxLogo className="w-5 h-5 text-primary" />
           <span className="font-bold tracking-tight">instancly admin</span>
         </Link>
         <div className="flex items-center gap-6 text-sm">

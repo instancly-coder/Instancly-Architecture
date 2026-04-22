@@ -1,5 +1,6 @@
 import { Link, useLocation } from "wouter";
-import { Box, Menu } from "lucide-react";
+import { BoxLogo } from "@/components/box-logo";
+import { Menu } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 
@@ -23,7 +24,7 @@ export function MarketingNav() {
   return (
     <nav className="sticky top-0 z-50 bg-surface/80 backdrop-blur-md border-b border-border h-14 flex items-center justify-between px-6">
       <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-        <Box className="w-5 h-5 text-primary" />
+        <BoxLogo className="w-5 h-5 text-primary" />
         <span className="font-bold text-lg tracking-tight">instancly</span>
       </Link>
 

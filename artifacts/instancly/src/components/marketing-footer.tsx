@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { Box } from "lucide-react";
+import { BoxLogo } from "@/components/box-logo";
 
 export function MarketingFooter() {
   return (
@@ -7,7 +7,7 @@ export function MarketingFooter() {
       <div className="max-w-6xl mx-auto px-6 py-12 grid grid-cols-2 md:grid-cols-5 gap-8">
         <div className="col-span-2 md:col-span-1">
           <div className="flex items-center gap-2 mb-3">
-            <Box className="w-4 h-4 text-primary" />
+            <BoxLogo className="w-4 h-4 text-primary" />
             <span className="font-bold tracking-tight">instancly</span>
           </div>
           <p className="text-xs text-secondary leading-relaxed">
