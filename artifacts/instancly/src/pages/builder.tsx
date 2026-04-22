@@ -30,6 +30,9 @@ import {
   RotateCw,
   Search,
   Check,
+  ArrowUp,
+  Paperclip,
+  Cpu,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -196,6 +199,41 @@ export default function Builder() {
   const [openBuildId, setOpenBuildId] = useState<string | null>(null);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
 
+  // Resizable chat panel (desktop)
+  const [chatWidth, setChatWidth] = useState<number>(() => {
+    if (typeof window === "undefined") return 400;
+    const saved = Number(localStorage.getItem("instancly:chatWidth"));
+    return saved >= 280 && saved <= 720 ? saved : 400;
+  });
+  const draggingRef = useRef(false);
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!draggingRef.current) return;
+      const w = Math.min(720, Math.max(280, e.clientX));
+      setChatWidth(w);
+    };
+    const onUp = () => {
+      if (!draggingRef.current) return;
+      draggingRef.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      try {
+        localStorage.setItem("instancly:chatWidth", String(chatWidth));
+      } catch {}
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [chatWidth]);
+  const startDrag = () => {
+    draggingRef.current = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  };
+
   // Typewriter for current step
   useEffect(() => {
     if (stepIndex < 0 || stepIndex >= STREAM_STEPS.length) return;
@@ -324,7 +362,10 @@ export default function Builder() {
       {/* Main Area */}
       <div className="flex flex-1 overflow-hidden relative">
         {/* Left Panel - Chat (desktop) */}
-        <aside className="hidden md:flex w-[340px] shrink-0 border-r border-border bg-surface flex-col h-full">
+        <aside
+          className="hidden md:flex shrink-0 border-r border-border bg-surface flex-col h-full"
+          style={{ width: chatWidth }}
+        >
           <ChatPanel
             chatInput={chatInput}
             setChatInput={setChatInput}
@@ -336,6 +377,13 @@ export default function Builder() {
             setOpenBuildId={setOpenBuildId}
           />
         </aside>
+        {/* Drag handle to resize chat */}
+        <div
+          onMouseDown={startDrag}
+          onDoubleClick={() => setChatWidth(400)}
+          className="hidden md:block w-1 shrink-0 cursor-col-resize bg-transparent hover:bg-primary/40 active:bg-primary/60 transition-colors -ml-px relative z-10"
+          title="Drag to resize · double-click to reset"
+        />
 
         {/* Right Panel - Tabbed Workspace */}
         <section className="flex-1 flex flex-col bg-background overflow-hidden min-w-0">
@@ -433,54 +481,64 @@ export default function Builder() {
 
           {/* Live URL bar (preview only) */}
           {activeTab === "preview" && (
-            <div className="h-10 border-b border-border bg-surface flex items-center gap-1 px-2 shrink-0">
-              <button
-                className="w-7 h-7 rounded flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
-                title="Back"
-                onClick={() => toast.message("Navigated back")}
-              >
-                <ArrowLeft className="w-4 h-4" />
-              </button>
-              <button
-                className="w-7 h-7 rounded flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
-                title="Forward"
-                onClick={() => toast.message("Navigated forward")}
-              >
-                <ArrowRight className="w-4 h-4" />
-              </button>
-              <button
-                className="w-7 h-7 rounded flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
-                title="Refresh"
-                onClick={() => {
-                  setIframeKey((k) => k + 1);
-                  toast.success("Preview refreshed");
-                }}
-              >
-                <RotateCw className="w-4 h-4" />
-              </button>
-              <div className="flex-1 mx-1 min-w-0">
+            <div className="h-10 border-b border-border bg-surface grid grid-cols-[auto_1fr_auto] items-center gap-1 px-2 shrink-0">
+              {/* Left: nav controls */}
+              <div className="flex items-center gap-0.5">
+                <button
+                  className="w-7 h-7 rounded flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
+                  title="Back"
+                  onClick={() => toast.message("Navigated back")}
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                </button>
+                <button
+                  className="w-7 h-7 rounded flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
+                  title="Forward"
+                  onClick={() => toast.message("Navigated forward")}
+                >
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+                <button
+                  className="w-7 h-7 rounded flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
+                  title="Refresh"
+                  onClick={() => {
+                    setIframeKey((k) => k + 1);
+                    toast.success("Preview refreshed");
+                  }}
+                >
+                  <RotateCw className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Center: URL input */}
+              <div className="flex justify-center min-w-0 px-2">
                 <input
                   value={urlValue}
                   onChange={(e) => setUrlValue(e.target.value)}
-                  className="w-full h-7 bg-background border border-border rounded-md px-3 text-xs font-mono text-foreground outline-none focus:ring-1 focus:ring-primary truncate"
+                  className="w-full max-w-[520px] h-7 bg-background border border-border rounded-md px-3 text-xs font-mono text-foreground text-center outline-none focus:ring-1 focus:ring-primary truncate"
                 />
               </div>
-              <button
-                onClick={copyUrl}
-                className="w-7 h-7 rounded flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
-                title="Copy URL"
-              >
-                <Copy className="w-3.5 h-3.5" />
-              </button>
-              <a
-                href={liveUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="w-7 h-7 rounded flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
-                title="Open in new tab"
-              >
-                <ExternalLink className="w-4 h-4" />
-              </a>
+
+              {/* Right: viewport dropdown + actions */}
+              <div className="flex items-center gap-0.5">
+                <ViewportPicker viewport={viewport} setViewport={setViewport} />
+                <button
+                  onClick={copyUrl}
+                  className="w-7 h-7 rounded flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
+                  title="Copy URL"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                </button>
+                <a
+                  href={liveUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-7 h-7 rounded flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
+                  title="Open in new tab"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+              </div>
             </div>
           )}
 
@@ -621,19 +679,20 @@ function ChatPanel({
   setOpenBuildId: (id: string | null) => void;
 }) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const [selectedModel, setSelectedModel] = useState<string>(
+    mockModels[0]?.name ?? "Claude Sonnet 4.5"
+  );
+  const [modelOpen, setModelOpen] = useState(false);
+
+  const handleFiles = (files: FileList | null) => {
+    if (!files) return;
+    setAttachments((prev) => [...prev, ...Array.from(files)].slice(0, 6));
+  };
 
   return (
     <>
-      <div className="p-3 border-b border-border shrink-0">
-        <select className="w-full bg-background border border-border rounded-md text-xs px-2 py-1.5 text-foreground font-mono focus:ring-1 focus:ring-primary outline-none">
-          {mockModels.map((m) => (
-            <option key={m.name} value={m.name}>
-              {m.name} ({m.costRange})
-            </option>
-          ))}
-        </select>
-      </div>
-
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-5">
         {/* Conversation thread (oldest first, like a chat) */}
         {[...PAST_BUILDS].reverse().map((b) => {
@@ -661,16 +720,22 @@ function ChatPanel({
                   {b.aiMessage}
                 </p>
 
-                {/* Footer with clickable price/time */}
-                <div className="flex items-center gap-3 pt-1 text-xs text-secondary">
-                  <Check className="w-3.5 h-3.5 text-success" />
-                  <span className="font-mono">Checkpoint · {b.ago}</span>
-                  <span className="opacity-40">·</span>
+                {/* Footer: Checkpoint on its own line, then clickable price/time */}
+                <div className="pt-1 space-y-1.5 text-xs text-secondary">
+                  <button
+                    onClick={() =>
+                      toast.success(`Restored to checkpoint · Build #${b.number}`)
+                    }
+                    className="flex items-center gap-1.5 font-mono hover:text-foreground transition-colors"
+                  >
+                    <Check className="w-3.5 h-3.5 text-success" />
+                    <span>Checkpoint · {b.ago}</span>
+                  </button>
                   <button
                     onClick={() => setOpenBuildId(open ? null : b.id)}
                     className="font-mono inline-flex items-center gap-1 hover:text-primary underline-offset-2 hover:underline transition-colors"
                   >
-                    Worked for {durationLabel}
+                    Worked for {durationLabel} · £{b.cost.toFixed(2)}
                     <ChevronDown
                       className={`w-3 h-3 transition-transform ${
                         open ? "rotate-180" : ""
@@ -759,7 +824,31 @@ function ChatPanel({
       </div>
 
       <div className="p-3 border-t border-border bg-surface shrink-0">
-        <div className="relative">
+        <div className="rounded-xl border border-border bg-background focus-within:ring-1 focus-within:ring-primary transition-shadow">
+          {/* Attachment chips */}
+          {attachments.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 p-2 pb-0">
+              {attachments.map((f, i) => (
+                <span
+                  key={i}
+                  className="inline-flex items-center gap-1.5 max-w-[180px] px-2 py-1 rounded-md bg-surface-raised border border-border text-[11px] text-foreground"
+                >
+                  <Paperclip className="w-3 h-3 text-secondary shrink-0" />
+                  <span className="truncate">{f.name}</span>
+                  <button
+                    onClick={() =>
+                      setAttachments((prev) => prev.filter((_, j) => j !== i))
+                    }
+                    className="text-secondary hover:text-foreground"
+                    aria-label="Remove attachment"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
           <textarea
             ref={inputRef}
             value={chatInput}
@@ -771,15 +860,87 @@ function ChatPanel({
               }
             }}
             placeholder="Describe a change..."
-            className="w-full min-h-[72px] max-h-[180px] bg-background border border-border rounded-lg p-3 pr-12 text-sm focus:outline-none focus:ring-1 focus:ring-primary resize-none"
+            className="w-full min-h-[60px] max-h-[180px] bg-transparent p-3 text-sm focus:outline-none resize-none"
           />
-          <button
-            onClick={onSend}
-            disabled={!chatInput.trim() || isStreaming}
-            className="absolute right-2 bottom-2 w-8 h-8 rounded bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors"
-          >
-            <Send className="w-4 h-4" />
-          </button>
+
+          {/* Action row: attach + model picker (left), send (right) */}
+          <div className="flex items-center justify-between gap-2 px-2 pb-2">
+            <div className="flex items-center gap-1 min-w-0">
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                hidden
+                onChange={(e) => {
+                  handleFiles(e.target.files);
+                  if (fileInputRef.current) fileInputRef.current.value = "";
+                }}
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="w-7 h-7 rounded-md flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors shrink-0"
+                title="Attach files"
+                aria-label="Attach files"
+              >
+                <Paperclip className="w-4 h-4" />
+              </button>
+
+              <Popover open={modelOpen} onOpenChange={setModelOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    className="h-7 px-2 rounded-md inline-flex items-center gap-1.5 text-[11px] font-mono text-secondary hover:text-foreground hover:bg-surface-raised transition-colors min-w-0"
+                    title="Change model"
+                  >
+                    <Cpu className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">{selectedModel}</span>
+                    <ChevronDown className="w-3 h-3 opacity-60 shrink-0" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent
+                  align="start"
+                  side="top"
+                  className="w-64 p-1 border-border"
+                >
+                  <div className="px-2 pt-1.5 pb-1 text-[10px] uppercase tracking-wider font-mono text-secondary">
+                    Model
+                  </div>
+                  {mockModels.map((m) => {
+                    const active = m.name === selectedModel;
+                    return (
+                      <button
+                        key={m.name}
+                        onClick={() => {
+                          setSelectedModel(m.name);
+                          setModelOpen(false);
+                        }}
+                        className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-xs text-foreground hover:bg-surface-raised transition-colors"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium truncate">{m.name}</div>
+                          <div className="text-[10px] text-secondary font-mono">
+                            {m.costRange}
+                          </div>
+                        </div>
+                        {active && (
+                          <Check className="w-3.5 h-3.5 text-primary shrink-0" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <button
+              onClick={onSend}
+              disabled={!chatInput.trim() || isStreaming}
+              className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors shrink-0"
+              title="Send"
+              aria-label="Send"
+            >
+              <ArrowUp className="w-4 h-4" />
+            </button>
+          </div>
         </div>
         <div className="text-[10px] text-secondary text-center mt-2">
           Enter to send · Shift+Enter for newline
@@ -857,47 +1018,64 @@ function PreviewPane({
         </div>
       </div>
 
-      <div className="h-10 border-t border-border bg-surface flex items-center justify-center px-3 md:px-4 shrink-0 gap-1">
-        <ViewportBtn
-          active={viewport === "desktop"}
-          icon={Monitor}
-          onClick={() => setViewport("desktop")}
-        />
-        <ViewportBtn
-          active={viewport === "tablet"}
-          icon={Tablet}
-          onClick={() => setViewport("tablet")}
-        />
-        <ViewportBtn
-          active={viewport === "mobile"}
-          icon={Smartphone}
-          onClick={() => setViewport("mobile")}
-        />
-      </div>
     </div>
   );
 }
 
-function ViewportBtn({
-  active,
-  icon: Icon,
-  onClick,
+function ViewportPicker({
+  viewport,
+  setViewport,
 }: {
-  active: boolean;
-  icon: any;
-  onClick: () => void;
+  viewport: "desktop" | "tablet" | "mobile";
+  setViewport: (v: "desktop" | "tablet" | "mobile") => void;
 }) {
+  const options: {
+    key: "desktop" | "tablet" | "mobile";
+    label: string;
+    sub: string;
+    icon: any;
+  }[] = [
+    { key: "desktop", label: "Desktop", sub: "Full width", icon: Monitor },
+    { key: "tablet", label: "Tablet", sub: "768 px", icon: Tablet },
+    { key: "mobile", label: "Mobile", sub: "390 × 844", icon: Smartphone },
+  ];
+  const current = options.find((o) => o.key === viewport)!;
+  const CurrentIcon = current.icon;
   return (
-    <button
-      onClick={onClick}
-      className={`w-8 h-8 rounded flex items-center justify-center transition-colors ${
-        active
-          ? "bg-primary text-primary-foreground"
-          : "text-secondary hover:text-foreground hover:bg-surface-raised"
-      }`}
-    >
-      <Icon className="w-4 h-4" />
-    </button>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          className="h-7 px-2 rounded flex items-center gap-1.5 text-xs text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
+          title="Change preview size"
+        >
+          <CurrentIcon className="w-4 h-4" />
+          <span className="hidden sm:inline">{current.label}</span>
+          <ChevronDown className="w-3 h-3 opacity-60" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="border-border w-48 p-1">
+        {options.map((o) => {
+          const Icon = o.icon;
+          const active = o.key === viewport;
+          return (
+            <DropdownMenuItem
+              key={o.key}
+              onClick={() => setViewport(o.key)}
+              className="flex items-center gap-2.5 px-2 py-1.5 cursor-pointer"
+            >
+              <Icon className="w-4 h-4 text-secondary" />
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-medium">{o.label}</div>
+                <div className="text-[10px] text-secondary font-mono">
+                  {o.sub}
+                </div>
+              </div>
+              {active && <Check className="w-3.5 h-3.5 text-primary" />}
+            </DropdownMenuItem>
+          );
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
