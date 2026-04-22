@@ -184,24 +184,37 @@ export default function Landing() {
           </p>
 
           <div className="w-full max-w-2xl mx-auto">
-            <div className="relative rounded-xl border border-border bg-surface focus-within:border-primary/60 transition-colors shadow-2xl shadow-black/10 dark:shadow-black/40">
+            <div className="rounded-xl border border-border bg-background focus-within:ring-1 focus-within:ring-primary focus-within:border-primary transition-shadow shadow-2xl shadow-black/10 dark:shadow-black/40 text-left">
               <textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 onKeyDown={onKeyDown}
                 placeholder="Ask Instancly to create a landing page for my..."
                 rows={3}
-                className="w-full resize-none bg-transparent px-5 py-4 pr-14 text-base text-foreground placeholder:text-muted outline-none rounded-xl"
+                className="w-full min-h-[88px] max-h-[220px] bg-transparent p-4 text-base text-foreground placeholder:text-muted outline-none resize-none"
               />
-              <button
-                type="button"
-                onClick={submit}
-                aria-label="Generate"
-                className="absolute right-3 bottom-3 h-9 w-9 inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
-                disabled={!prompt.trim()}
-              >
-                <ArrowUp className="w-4 h-4" />
-              </button>
+              <div className="flex items-center justify-between gap-2 px-2 pb-2">
+                <div className="flex items-center gap-1 min-w-0">
+                  <button
+                    type="button"
+                    className="h-7 px-2 rounded-md inline-flex items-center gap-1.5 text-[11px] font-mono text-secondary hover:text-foreground hover:bg-surface-raised transition-colors min-w-0"
+                    title="Choose model"
+                  >
+                    <Cpu className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">Claude Sonnet 4.5</span>
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={submit}
+                  aria-label="Generate"
+                  disabled={!prompt.trim()}
+                  className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors shrink-0"
+                  title="Send"
+                >
+                  <ArrowUp className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
@@ -210,7 +223,7 @@ export default function Landing() {
                   key={s}
                   type="button"
                   onClick={() => setPrompt(s)}
-                  className="px-3 py-1.5 rounded-full text-xs text-secondary border border-border bg-surface/60 hover:text-foreground hover:border-primary/40 transition-colors"
+                  className="px-3 py-1.5 rounded-full text-xs text-secondary border border-border bg-surface/60 hover:text-foreground hover:border-primary transition-colors"
                 >
                   {s}
                 </button>

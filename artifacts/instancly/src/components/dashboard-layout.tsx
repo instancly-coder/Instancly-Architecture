@@ -18,7 +18,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { mockUser } from "@/lib/mock-data";
-import { ThemeToggle } from "@/components/theme-toggle";
 
 const NAV = [
   { href: "/dashboard", label: "Projects", icon: LayoutDashboard },
@@ -40,7 +39,6 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
           <span className="font-bold tracking-tight">instancly</span>
         </Link>
         <div className="flex items-center gap-1">
-          <ThemeToggle />
           <button
             onClick={() => setOpen(true)}
             className="w-9 h-9 rounded-md flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised"
@@ -105,7 +103,6 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
         <div className="p-4 border-t border-border space-y-2">
           <div className="hidden md:flex items-center justify-between text-xs text-secondary px-1">
             <span>Theme</span>
-            <ThemeToggle />
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

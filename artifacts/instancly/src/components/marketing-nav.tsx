@@ -2,7 +2,6 @@ import { Link, useLocation } from "wouter";
 import { Box, Menu } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/theme-toggle";
 
 const NAV_LINKS = [
   { label: "How it works", href: "/#how" },
@@ -53,7 +52,6 @@ export function MarketingNav() {
       </div>
 
       <div className="flex items-center gap-2 sm:gap-3">
-        <ThemeToggle />
         <Link
           href="/login"
           className="text-sm font-medium hover:text-foreground text-secondary transition-colors hidden sm:block"

@@ -42,7 +42,6 @@ import {
   TrendingDown,
   Filter,
 } from "lucide-react";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -310,7 +309,6 @@ export default function Builder() {
             £0.03 spend
           </span>
 
-          <ThemeToggle className="hidden sm:inline-flex" />
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -705,7 +703,7 @@ function ChatPanel({
             <div key={b.id} className="space-y-3">
               {/* User prompt */}
               <div className="flex justify-end">
-                <div className="max-w-[88%] px-3.5 py-2 rounded-2xl rounded-br-md bg-primary text-primary-foreground text-sm leading-snug">
+                <div className="max-w-[88%] px-3.5 py-2 rounded-2xl rounded-br-md bg-primary/15 text-primary text-sm leading-snug">
                   {b.prompt}
                 </div>
               </div>

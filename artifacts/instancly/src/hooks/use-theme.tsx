@@ -1,41 +1,20 @@
-import { useEffect, useState, useCallback } from "react";
+import { useCallback } from "react";
 
-type Theme = "light" | "dark";
+type Theme = "dark";
 
-function getInitial(): Theme {
-  if (typeof window === "undefined") return "dark";
-  try {
-    const stored = localStorage.getItem("instancly:theme") as Theme | null;
-    if (stored === "light" || stored === "dark") return stored;
-  } catch {}
-  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-}
-
-function applyTheme(theme: Theme) {
-  const root = document.documentElement;
-  if (theme === "dark") root.classList.add("dark");
-  else root.classList.remove("dark");
+function applyDark() {
+  if (typeof document === "undefined") return;
+  document.documentElement.classList.add("dark");
 }
 
 export function useTheme() {
-  const [theme, setThemeState] = useState<Theme>(() => getInitial());
-
-  useEffect(() => {
-    applyTheme(theme);
-    try {
-      localStorage.setItem("instancly:theme", theme);
-    } catch {}
-  }, [theme]);
-
-  const setTheme = useCallback((t: Theme) => setThemeState(t), []);
-  const toggleTheme = useCallback(
-    () => setThemeState((t) => (t === "dark" ? "light" : "dark")),
-    []
-  );
-
-  return { theme, setTheme, toggleTheme };
+  const noop = useCallback(() => {}, []);
+  return { theme: "dark" as Theme, setTheme: noop, toggleTheme: noop };
 }
 
 export function initThemeOnce() {
-  applyTheme(getInitial());
+  applyDark();
+  try {
+    localStorage.setItem("instancly:theme", "dark");
+  } catch {}
 }

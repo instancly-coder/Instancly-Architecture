@@ -135,7 +135,7 @@
 }
 .hover-elevate:hover {
   transform: translateY(-2px);
-  border-color: hsl(20 92% 50% / 0.45);
+  border-color: hsl(72 100% 50%);
 }
 
 .status-dot {
