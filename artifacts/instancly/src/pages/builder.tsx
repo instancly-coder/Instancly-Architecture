@@ -29,6 +29,7 @@ import {
   ArrowRight,
   RotateCw,
   Search,
+  Check,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -81,9 +82,13 @@ type PastBuild = {
   id: string;
   number: number;
   prompt: string;
+  aiMessage: string;
   durationSec: number;
   cost: number;
   filesChanged: number;
+  tokensIn: number;
+  tokensOut: number;
+  model: string;
   ago: string;
 };
 
@@ -92,27 +97,42 @@ const PAST_BUILDS: PastBuild[] = [
     id: "b3",
     number: 3,
     prompt: "Add a leaderboard sorted by streak length with weekly reset.",
+    aiMessage:
+      "Added a leaderboard sorted by streak length. I created a new `/leaderboard` page, wrote a SQL view that recalculates weekly, and wired up a cron-style reset every Monday at 00:00 UTC. Top 10 users now show with rank badges. Have a look — does the layout feel right?",
     durationSec: 142,
     cost: 0.04,
     filesChanged: 6,
+    tokensIn: 12_840,
+    tokensOut: 4_120,
+    model: "Claude Sonnet 4.5",
     ago: "5 mins ago",
   },
   {
     id: "b2",
     number: 2,
     prompt: "Wire the form to Postgres and add zod validation.",
+    aiMessage:
+      "Wired the signup form to Postgres and added zod validation on both client and server. I also added inline error states under each field and a friendly toast on success. Try submitting an empty email — you should see a clean error.",
     durationSec: 98,
     cost: 0.03,
     filesChanged: 4,
+    tokensIn: 8_310,
+    tokensOut: 2_640,
+    model: "Claude Sonnet 4.5",
     ago: "12 mins ago",
   },
   {
     id: "b1",
     number: 1,
     prompt: "Create a habit tracker with streaks and a weekly chart.",
+    aiMessage:
+      "Done. I built the initial habit tracker — a daily checklist, automatic streak counter, and a weekly bar chart at the top showing completion. There's also a small celebration animation when you hit a 7-day streak. Tell me what to tweak next.",
     durationSec: 217,
     cost: 0.07,
     filesChanged: 11,
+    tokensIn: 24_500,
+    tokensOut: 9_800,
+    model: "Claude Sonnet 4.5",
     ago: "27 mins ago",
   },
 ];
@@ -614,103 +634,128 @@ function ChatPanel({
         </select>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
-        {/* Live status */}
-        <div className="rounded-lg border border-border bg-background p-4">
-          {isStreaming || currentPhase ? (
-            <>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="relative flex h-2 w-2">
-                  {isStreaming && (
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-60" />
-                  )}
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-primary" />
-                </span>
-                <span className="text-[11px] uppercase tracking-wider font-mono text-primary">
-                  {currentPhase ?? "Idle"}
-                </span>
+      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-5">
+        {/* Conversation thread (oldest first, like a chat) */}
+        {[...PAST_BUILDS].reverse().map((b) => {
+          const open = openBuildId === b.id;
+          const mins = Math.floor(b.durationSec / 60);
+          const secs = b.durationSec % 60;
+          const durationLabel =
+            mins < 1
+              ? `${b.durationSec}s`
+              : secs === 0
+              ? `${mins} min`
+              : `${mins} min ${secs}s`;
+          return (
+            <div key={b.id} className="space-y-3">
+              {/* User prompt */}
+              <div className="flex justify-end">
+                <div className="max-w-[88%] px-3.5 py-2 rounded-2xl rounded-br-md bg-primary text-primary-foreground text-sm leading-snug">
+                  {b.prompt}
+                </div>
               </div>
-              <div className="font-mono text-sm text-foreground leading-snug min-h-[1.4em]">
-                {typed}
-                <span className="inline-block w-1.5 h-4 bg-primary ml-0.5 align-text-bottom animate-pulse" />
-              </div>
-            </>
-          ) : (
-            <div className="text-xs text-secondary">
-              Tell the AI what to build. Watch the work happen live.
-            </div>
-          )}
-        </div>
 
-        {/* Past builds accordion */}
-        <div>
-          <div className="text-[10px] uppercase tracking-wider font-mono text-secondary mb-2 px-1">
-            Past builds
-          </div>
-          <div className="space-y-1.5">
-            {PAST_BUILDS.map((b) => {
-              const open = openBuildId === b.id;
-              const mins = Math.round(b.durationSec / 60);
-              return (
-                <div
-                  key={b.id}
-                  className="border border-border bg-background rounded-md overflow-hidden"
-                >
+              {/* AI response */}
+              <div className="space-y-2">
+                <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
+                  {b.aiMessage}
+                </p>
+
+                {/* Footer with clickable price/time */}
+                <div className="flex items-center gap-3 pt-1 text-xs text-secondary">
+                  <Check className="w-3.5 h-3.5 text-success" />
+                  <span className="font-mono">Checkpoint · {b.ago}</span>
+                  <span className="opacity-40">·</span>
                   <button
                     onClick={() => setOpenBuildId(open ? null : b.id)}
-                    className="w-full flex items-center justify-between p-3 text-left hover:bg-surface-raised transition-colors"
+                    className="font-mono inline-flex items-center gap-1 hover:text-primary underline-offset-2 hover:underline transition-colors"
                   >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Play className="w-3 h-3 text-secondary shrink-0" />
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium truncate">
-                          Build #{b.number}
-                        </div>
-                        <div className="text-[11px] text-secondary font-mono">
-                          worked for {mins < 1 ? `${b.durationSec}s` : `${mins} min`} · {b.ago}
-                        </div>
-                      </div>
-                    </div>
+                    Worked for {durationLabel}
                     <ChevronDown
-                      className={`w-4 h-4 text-secondary shrink-0 transition-transform ${
+                      className={`w-3 h-3 transition-transform ${
                         open ? "rotate-180" : ""
                       }`}
                     />
                   </button>
-                  {open && (
-                    <div className="border-t border-border bg-surface px-3 py-3 space-y-3">
-                      <div>
-                        <div className="text-[10px] uppercase tracking-wider font-mono text-secondary mb-1">
-                          Prompt
-                        </div>
-                        <p className="text-xs text-foreground leading-relaxed">
-                          {b.prompt}
-                        </p>
-                      </div>
-                      <div className="grid grid-cols-3 gap-2">
-                        <Stat label="Cost" value={`£${b.cost.toFixed(2)}`} />
-                        <Stat label="Files" value={`${b.filesChanged}`} />
-                        <Stat
-                          label="Time"
-                          value={
-                            mins < 1 ? `${b.durationSec}s` : `${mins}m`
-                          }
-                        />
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="w-full text-xs h-7 border-border"
-                      >
-                        Restore this build
-                      </Button>
-                    </div>
-                  )}
                 </div>
-              );
-            })}
+
+                {/* Expanded price details */}
+                {open && (
+                  <div className="mt-2 rounded-lg border border-border bg-surface p-3 space-y-2.5 text-xs animate-in fade-in slide-in-from-top-1 duration-150">
+                    <div className="flex items-center justify-between">
+                      <span className="text-secondary">Model</span>
+                      <span className="font-mono text-foreground">{b.model}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-secondary">Tokens in</span>
+                      <span className="font-mono text-foreground">
+                        {b.tokensIn.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-secondary">Tokens out</span>
+                      <span className="font-mono text-foreground">
+                        {b.tokensOut.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-secondary">Files changed</span>
+                      <span className="font-mono text-foreground">
+                        {b.filesChanged}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-secondary">Duration</span>
+                      <span className="font-mono text-foreground">
+                        {durationLabel}
+                      </span>
+                    </div>
+                    <div className="border-t border-border pt-2 flex items-center justify-between">
+                      <span className="font-medium text-foreground">Total</span>
+                      <span className="font-mono font-semibold text-primary">
+                        £{b.cost.toFixed(2)}
+                      </span>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full text-xs h-7 border-border mt-1"
+                    >
+                      Restore this checkpoint
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Live streaming status (latest, in-progress turn) */}
+        {(isStreaming || currentPhase) && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2 w-2">
+                {isStreaming && (
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-60" />
+                )}
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-primary" />
+              </span>
+              <span className="text-[11px] uppercase tracking-wider font-mono text-primary">
+                {currentPhase ?? "Working"}
+              </span>
+            </div>
+            <div className="font-mono text-sm text-foreground leading-snug min-h-[1.4em]">
+              {typed}
+              <span className="inline-block w-1.5 h-4 bg-primary ml-0.5 align-text-bottom animate-pulse" />
+            </div>
           </div>
-        </div>
+        )}
+
+        {!isStreaming && !currentPhase && PAST_BUILDS.length === 0 && (
+          <div className="text-xs text-secondary text-center py-8">
+            Tell the AI what to build. Watch the work happen live.
+          </div>
+        )}
       </div>
 
       <div className="p-3 border-t border-border bg-surface shrink-0">
