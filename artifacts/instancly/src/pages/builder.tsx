@@ -1,150 +1,190 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "wouter";
-import { 
-  Flame, ChevronRight, FolderTree, Database, History, Settings as SettingsIcon, MoreVertical,
-  Monitor, Tablet, Smartphone, Copy, ExternalLink, X, Play,
-  Brain, Sparkles, FileText, Loader2, CheckCircle2, Send,
-  FileCode2, FolderClosed, Eye, MessageSquare
+import {
+  Flame,
+  ChevronRight,
+  FolderTree,
+  LayoutDashboard,
+  History,
+  Settings as SettingsIcon,
+  MoreVertical,
+  Monitor,
+  Tablet,
+  Smartphone,
+  Copy,
+  ExternalLink,
+  X,
+  Send,
+  ChevronDown,
+  FileCode2,
+  FolderClosed,
+  Play,
+  Database,
+  CreditCard,
+  BarChart3,
+  MessageSquare,
+  Eye,
+  Save,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { mockUser, mockModels } from "@/lib/mock-data";
 import { toast } from "sonner";
 
+type Tab = "preview" | "files" | "dashboard" | "history" | "settings";
+type DashboardTab = "database" | "payments" | "analytics";
+
+type PastBuild = {
+  id: string;
+  number: number;
+  prompt: string;
+  durationSec: number;
+  cost: number;
+  filesChanged: number;
+  ago: string;
+};
+
+const PAST_BUILDS: PastBuild[] = [
+  {
+    id: "b3",
+    number: 3,
+    prompt: "Add a leaderboard sorted by streak length with weekly reset.",
+    durationSec: 142,
+    cost: 0.04,
+    filesChanged: 6,
+    ago: "5 mins ago",
+  },
+  {
+    id: "b2",
+    number: 2,
+    prompt: "Wire the form to Postgres and add zod validation.",
+    durationSec: 98,
+    cost: 0.03,
+    filesChanged: 4,
+    ago: "12 mins ago",
+  },
+  {
+    id: "b1",
+    number: 1,
+    prompt: "Create a habit tracker with streaks and a weekly chart.",
+    durationSec: 217,
+    cost: 0.07,
+    filesChanged: 11,
+    ago: "27 mins ago",
+  },
+];
+
+const STREAM_STEPS = [
+  { phase: "Planning", text: "Sketching component tree and routes" },
+  { phase: "Reading", text: "Scanning src/components/ui" },
+  { phase: "Writing", text: "Editing src/app/page.tsx" },
+  { phase: "Writing", text: "Updating src/lib/db.ts" },
+  { phase: "Migrating", text: "Applying Postgres schema" },
+  { phase: "Done", text: "Build complete · £0.03 · 4.1s" },
+];
+
 export default function Builder() {
   const params = useParams();
   const { username, slug } = params;
-  
+
+  const [activeTab, setActiveTab] = useState<Tab>("preview");
+  const [dashTab, setDashTab] = useState<DashboardTab>("database");
   const [viewport, setViewport] = useState<"desktop" | "tablet" | "mobile">("desktop");
-  const [isStreaming, setIsStreaming] = useState(false);
+
   const [chatInput, setChatInput] = useState("");
-  const [activities, setActivities] = useState<any[]>([]);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [stepIndex, setStepIndex] = useState<number>(-1);
+  const [typed, setTyped] = useState("");
+  const [activeFile, setActiveFile] = useState<string>("src/app/page.tsx");
+  const [openBuildId, setOpenBuildId] = useState<string | null>(null);
+  const [mobileChatOpen, setMobileChatOpen] = useState(false);
 
-  // Modals / Panels state
-  const [activePanel, setActivePanel] = useState<"none" | "files" | "database" | "history">("none");
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [activeFile, setActiveFile] = useState<string | null>(null);
-  const [mobileView, setMobileView] = useState<"chat" | "preview">("chat");
-
-  const togglePanel = (panel: "files" | "database" | "history") => {
-    setActivePanel(prev => prev === panel ? "none" : panel);
-  };
+  // Typewriter for current step
+  useEffect(() => {
+    if (stepIndex < 0 || stepIndex >= STREAM_STEPS.length) return;
+    const target = STREAM_STEPS[stepIndex].text;
+    setTyped("");
+    let i = 0;
+    const id = window.setInterval(() => {
+      i += 1;
+      setTyped(target.slice(0, i));
+      if (i >= target.length) window.clearInterval(id);
+    }, 22);
+    return () => window.clearInterval(id);
+  }, [stepIndex]);
 
   const handleSend = () => {
     if (!chatInput.trim() || isStreaming) return;
-    
     setChatInput("");
     setIsStreaming(true);
-    setActivities([]);
-
-    // Fake stream
-    const steps = [
-      { id: 1, type: "thinking", text: "Thinking about implementation...", icon: Brain, color: "text-secondary", delay: 0 },
-      { id: 2, type: "planning", text: "Planning architecture...", icon: Sparkles, color: "text-primary", delay: 1000 },
-      { id: 3, type: "reading", text: "Reading src/components/ui...", icon: FileText, color: "text-secondary", delay: 2000 },
-      { id: 4, type: "writing", text: "Writing src/app/page.tsx...", icon: Loader2, color: "text-primary animate-spin", delay: 3000 },
-      { id: 5, type: "done", text: "Done · £0.03 · 4.1s", icon: CheckCircle2, color: "text-success", delay: 4500 },
-    ];
-
-    steps.forEach((step) => {
-      setTimeout(() => {
-        setActivities(prev => [...prev.filter(a => a.type !== "writing" && a.type !== "thinking" && a.type !== "planning"), step]);
-        if (step.type === "done") {
-          setIsStreaming(false);
-        }
-      }, step.delay);
-    });
+    setStepIndex(0);
+    let i = 0;
+    const id = window.setInterval(() => {
+      i += 1;
+      if (i >= STREAM_STEPS.length) {
+        window.clearInterval(id);
+        setIsStreaming(false);
+        return;
+      }
+      setStepIndex(i);
+    }, 1200);
   };
 
   const copyUrl = () => {
     navigator.clipboard.writeText(`${slug}-${username}.instancly.app`);
-    toast.success("URL copied to clipboard");
+    toast.success("URL copied");
   };
 
   const copyDbUrl = () => {
     navigator.clipboard.writeText(`postgres://user:pass@ep-cool-db.neon.tech/main`);
-    toast.success("Connection string copied to clipboard");
+    toast.success("Connection string copied");
   };
+
+  const currentStep = stepIndex >= 0 ? STREAM_STEPS[stepIndex] : null;
 
   return (
     <div className="h-screen w-full bg-background flex flex-col overflow-hidden text-foreground">
       {/* Top Navbar */}
-      <header className="h-12 border-b border-border bg-surface flex items-center justify-between px-4 shrink-0 relative z-50">
-        <div className="flex items-center gap-3">
-          <Link href="/dashboard" className="hover:opacity-80 transition-opacity">
+      <header className="h-12 border-b border-border bg-surface flex items-center justify-between px-3 md:px-4 shrink-0 relative z-50 gap-2">
+        <div className="flex items-center gap-2 md:gap-3 min-w-0">
+          <Link href="/dashboard" className="hover:opacity-80 transition-opacity shrink-0">
             <Flame className="w-5 h-5 text-primary" />
           </Link>
-          <div className="w-px h-4 bg-border mx-1"></div>
+          <div className="w-px h-4 bg-border hidden sm:block"></div>
           <div className="flex items-center text-sm font-mono text-secondary min-w-0">
             <span className="hidden sm:inline">{username}</span>
             <ChevronRight className="w-4 h-4 mx-1 hidden sm:inline" />
             <span className="text-foreground truncate">{slug}</span>
           </div>
-          <div className="status-dot ml-2 shrink-0" title="Live"></div>
+          <div className="w-2 h-2 rounded-full bg-success ml-1 shrink-0" title="Live" />
         </div>
 
-        <div className="hidden md:flex items-center gap-1">
-          <NavIconButton icon={FolderTree} tooltip="Files" active={activePanel === "files"} onClick={() => togglePanel("files")} />
-          <NavIconButton icon={Database} tooltip="Database" active={activePanel === "database"} onClick={() => togglePanel("database")} />
-          <NavIconButton icon={History} tooltip="History" active={activePanel === "history"} onClick={() => togglePanel("history")} />
-          <NavIconButton icon={SettingsIcon} tooltip="Settings" active={isSettingsOpen} onClick={() => setIsSettingsOpen(true)} />
-          
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="w-8 h-8 rounded-md flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors ml-1">
-                <MoreVertical className="w-4 h-4" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="center" className="bg-surface-raised border-border">
-              <DropdownMenuItem>Rules Book</DropdownMenuItem>
-              <DropdownMenuItem>Integrations</DropdownMenuItem>
-              <DropdownMenuSeparator className="bg-border" />
-              <DropdownMenuItem>Export ZIP</DropdownMenuItem>
-              <DropdownMenuItem>Share link</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        <div className="flex items-center gap-2 md:gap-3 shrink-0">
+          <span className="hidden lg:inline text-xs text-secondary font-mono">
+            £0.03 spend
+          </span>
 
-        <div className="flex items-center gap-2 md:gap-4 shrink-0">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="md:hidden w-8 h-8 rounded-md flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors">
-                <MoreVertical className="w-4 h-4" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="bg-surface-raised border-border">
-              <DropdownMenuItem onClick={() => togglePanel("files")}>
-                <FolderTree className="w-4 h-4 mr-2" /> Files
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => togglePanel("database")}>
-                <Database className="w-4 h-4 mr-2" /> Database
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => togglePanel("history")}>
-                <History className="w-4 h-4 mr-2" /> History
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setIsSettingsOpen(true)}>
-                <SettingsIcon className="w-4 h-4 mr-2" /> Settings
-              </DropdownMenuItem>
-              <DropdownMenuSeparator className="bg-border" />
-              <DropdownMenuItem>Rules Book</DropdownMenuItem>
-              <DropdownMenuItem>Integrations</DropdownMenuItem>
-              <DropdownMenuItem>Export ZIP</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <span className="hidden lg:inline text-xs text-secondary font-mono">£0.03 spend</span>
-          
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90 h-8 px-4 font-medium rounded-md">
+              <Button
+                size="sm"
+                className="bg-primary text-primary-foreground hover:bg-primary/90 h-8 px-3 md:px-4 font-medium rounded-md"
+              >
                 Publish
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="bg-surface-raised border-border">
+            <DropdownMenuContent align="end" className="border-border">
               <DropdownMenuItem>Deploy to instancly.app</DropdownMenuItem>
               <DropdownMenuItem>Connect custom domain</DropdownMenuItem>
               <DropdownMenuSeparator className="bg-border" />
@@ -154,349 +194,932 @@ export default function Builder() {
 
           <Popover>
             <PopoverTrigger asChild>
-              <button className="px-3 py-1.5 rounded-full bg-background border border-border text-xs font-mono font-medium hover:bg-surface-raised transition-colors">
+              <button className="hidden sm:inline-flex px-3 py-1.5 rounded-full bg-background border border-border text-xs font-mono font-medium hover:bg-surface-raised transition-colors">
                 £{mockUser.balance.toFixed(2)}
               </button>
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-64 bg-surface-raised border-border p-4">
+            <PopoverContent
+              align="end"
+              className="w-64 border-border p-4"
+            >
               <h4 className="font-medium mb-2">Current Balance</h4>
-              <div className="text-2xl font-mono mb-4">£{mockUser.balance.toFixed(2)}</div>
+              <div className="text-2xl font-mono mb-4">
+                £{mockUser.balance.toFixed(2)}
+              </div>
               <Link href="/dashboard/billing">
-                <Button className="w-full text-xs" variant="outline">Manage Billing</Button>
+                <Button className="w-full text-xs" variant="outline">
+                  Manage Billing
+                </Button>
               </Link>
             </PopoverContent>
           </Popover>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="md:hidden w-8 h-8 rounded-md flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors">
+                <MoreVertical className="w-4 h-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="border-border">
+              <DropdownMenuItem>Rules Book</DropdownMenuItem>
+              <DropdownMenuItem>Integrations</DropdownMenuItem>
+              <DropdownMenuItem>Share link</DropdownMenuItem>
+              <DropdownMenuSeparator className="bg-border" />
+              <DropdownMenuItem>
+                <span className="font-mono text-xs">£{mockUser.balance.toFixed(2)} balance</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 
       {/* Main Area */}
       <div className="flex flex-1 overflow-hidden relative">
-        
-        {/* Left Panel - Chat */}
-        <div className={`w-full md:w-[340px] md:shrink-0 border-r border-border bg-surface flex-col h-full z-10 relative ${mobileView === 'chat' ? 'flex' : 'hidden md:flex'}`}>
-          <div className="p-3 border-b border-border">
-            <select className="w-full bg-background border border-border rounded-md text-xs px-2 py-1.5 text-foreground font-mono focus:ring-1 focus:ring-primary outline-none">
-              {mockModels.map(m => (
-                <option key={m.name} value={m.name}>{m.name} ({m.costRange})</option>
-              ))}
-            </select>
-          </div>
-          
-          <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6">
-            <div className="text-xs text-secondary border border-border bg-background rounded-md p-2 cursor-pointer hover:bg-surface-raised">
-              ▶ Build #3 — 5 mins ago
-            </div>
-            
-            {/* Activities */}
-            <div className="flex flex-col gap-3">
-              {activities.map((act) => {
-                const Icon = act.icon;
-                return (
-                  <div key={act.id} className="flex items-start gap-3 text-sm font-mono">
-                    <Icon className={`w-4 h-4 mt-0.5 ${act.color}`} />
-                    <span className="text-secondary leading-snug">{act.text}</span>
-                  </div>
-                );
-              })}
-            </div>
+        {/* Left Panel - Chat (desktop) */}
+        <aside className="hidden md:flex w-[340px] shrink-0 border-r border-border bg-surface flex-col h-full">
+          <ChatPanel
+            chatInput={chatInput}
+            setChatInput={setChatInput}
+            isStreaming={isStreaming}
+            currentPhase={currentStep?.phase}
+            typed={typed}
+            onSend={handleSend}
+            openBuildId={openBuildId}
+            setOpenBuildId={setOpenBuildId}
+          />
+        </aside>
+
+        {/* Right Panel - Tabbed Workspace */}
+        <section className="flex-1 flex flex-col bg-background overflow-hidden">
+          {/* Tab strip */}
+          <div className="h-11 border-b border-border bg-surface flex items-center px-2 gap-1 overflow-x-auto shrink-0">
+            <TabBtn
+              icon={Eye}
+              label="Preview"
+              active={activeTab === "preview"}
+              onClick={() => setActiveTab("preview")}
+            />
+            <TabBtn
+              icon={FolderTree}
+              label="Files"
+              active={activeTab === "files"}
+              onClick={() => setActiveTab("files")}
+            />
+            <TabBtn
+              icon={LayoutDashboard}
+              label="Dashboard"
+              active={activeTab === "dashboard"}
+              onClick={() => setActiveTab("dashboard")}
+            />
+            <TabBtn
+              icon={History}
+              label="History"
+              active={activeTab === "history"}
+              onClick={() => setActiveTab("history")}
+            />
+            <TabBtn
+              icon={SettingsIcon}
+              label="Settings"
+              active={activeTab === "settings"}
+              onClick={() => setActiveTab("settings")}
+            />
           </div>
 
-          <div className="p-4 border-t border-border bg-surface sticky bottom-0">
-            <div className="relative">
-              <textarea 
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSend();
-                  }
-                }}
-                placeholder="Describe your app..."
-                className="w-full min-h-[80px] max-h-[200px] bg-background border border-border rounded-lg p-3 pr-12 text-sm focus:outline-none focus:ring-1 focus:ring-primary resize-none"
+          <div className="flex-1 overflow-hidden relative">
+            {activeTab === "preview" && (
+              <PreviewPane
+                viewport={viewport}
+                setViewport={setViewport}
+                slug={slug}
+                username={username}
+                copyUrl={copyUrl}
               />
-              <button
-                onClick={() => setMobileView("preview")}
-                className="md:hidden absolute right-12 bottom-2 w-8 h-8 rounded bg-surface-raised text-secondary hover:text-foreground border border-border flex items-center justify-center transition-colors"
-                title="View preview"
-              >
-                <Eye className="w-4 h-4" />
-              </button>
-              <button 
-                onClick={handleSend}
-                disabled={!chatInput.trim() || isStreaming}
-                className="absolute right-2 bottom-2 w-8 h-8 rounded bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors"
-              >
-                <Send className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="text-[10px] text-secondary text-center mt-2 hidden md:block">Enter to send, Shift+Enter for newline</div>
-            <div className="text-[10px] text-secondary text-center mt-2 md:hidden">Tap the eye to view your preview</div>
+            )}
+            {activeTab === "files" && (
+              <FilesPane activeFile={activeFile} setActiveFile={setActiveFile} />
+            )}
+            {activeTab === "dashboard" && (
+              <DashboardPane
+                dashTab={dashTab}
+                setDashTab={setDashTab}
+                copyDbUrl={copyDbUrl}
+              />
+            )}
+            {activeTab === "history" && (
+              <HistoryPane
+                openBuildId={openBuildId}
+                setOpenBuildId={setOpenBuildId}
+              />
+            )}
+            {activeTab === "settings" && <SettingsPane />}
           </div>
-        </div>
-
-        {/* History Sheet */}
-        <div className={`absolute top-0 bottom-0 left-0 md:left-[340px] w-full md:w-80 bg-surface border-r border-border z-20 transition-transform duration-300 ease-in-out ${activePanel === 'history' ? 'translate-x-0 shadow-2xl' : '-translate-x-full pointer-events-none opacity-0'}`}>
-          <div className="h-12 border-b border-border flex items-center justify-between px-4">
-            <h3 className="font-bold text-sm">Build History</h3>
-            <button onClick={() => setActivePanel("none")} className="text-secondary hover:text-foreground">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-          <div className="p-4 space-y-4 overflow-y-auto h-[calc(100%-3rem)]">
-            {[5, 4, 3, 2, 1].map(num => (
-              <div key={num} className="border border-border bg-background rounded-md p-3">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="font-bold text-sm">Build #{num}</div>
-                  <div className="text-xs text-secondary">{num * 10} mins ago</div>
-                </div>
-                <div className="text-xs text-secondary font-mono mb-3">Cost: £0.0{Math.floor(Math.random()*5)+1}</div>
-                <Button size="sm" variant="outline" className="w-full text-xs h-7">Restore</Button>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Right Panel - Preview Area */}
-        <div className={`flex-1 bg-[#000000] flex-col relative overflow-hidden z-0 ${mobileView === 'preview' ? 'flex' : 'hidden md:flex'}`}>
-          <div className="flex-1 p-2 md:p-8 flex items-center justify-center overflow-hidden relative">
-             <div 
-               className="bg-white w-full h-full flex flex-col transition-all duration-200 ease-in-out"
-               style={{ 
-                 maxWidth: viewport === 'desktop' ? '100%' : viewport === 'tablet' ? '768px' : '390px',
-                 maxHeight: viewport === 'mobile' ? '844px' : '100%'
-               }}
-             >
-                {/* Fake App iframe content */}
-                <div className="border-b border-gray-200 px-4 py-2 flex items-center shadow-sm">
-                   <div className="font-bold text-black text-sm">Todo App</div>
-                </div>
-                <div className="flex-1 p-6 bg-gray-50 flex justify-center text-black overflow-y-auto">
-                   <div className="w-full max-w-md bg-white p-6 rounded shadow-sm border border-gray-200 h-fit">
-                      <h2 className="text-xl font-bold mb-4">Tasks</h2>
-                      <div className="flex gap-2 mb-4">
-                        <input type="text" className="flex-1 border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Add task" />
-                        <button className="bg-black text-white px-4 py-2 rounded text-sm hover:bg-gray-800 transition-colors">Add</button>
-                      </div>
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2 p-2 border-b">
-                           <input type="checkbox" defaultChecked />
-                           <span className="line-through text-gray-500 text-sm">Design DB schema</span>
-                        </div>
-                        <div className="flex items-center gap-2 p-2 border-b">
-                           <input type="checkbox" />
-                           <span className="text-sm">Implement auth</span>
-                        </div>
-                      </div>
-                   </div>
-                </div>
-             </div>
-
-             {/* Code Sheet overlay */}
-             <div className={`absolute top-0 bottom-0 right-0 w-[500px] bg-surface border-l border-border transition-transform duration-300 ease-in-out shadow-2xl flex flex-col ${activeFile ? 'translate-x-0' : 'translate-x-full'}`}>
-                <div className="h-10 border-b border-border flex items-center justify-between px-4 bg-surface-raised shrink-0">
-                  <div className="font-mono text-sm text-secondary flex items-center gap-2">
-                    <FileCode2 className="w-4 h-4" /> {activeFile}
-                  </div>
-                  <button onClick={() => setActiveFile(null)} className="text-secondary hover:text-foreground">
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-                <div className="flex-1 p-4 overflow-y-auto">
-                  <pre className="font-mono text-xs text-secondary leading-relaxed">
-{`import { useState } from "react";
-
-export default function Page() {
-  const [tasks, setTasks] = useState([]);
-  
-  return (
-    <div className="p-4">
-      <h1 className="text-xl">Tasks</h1>
-      {/* Implementation */}
-    </div>
-  );
-}`}
-                  </pre>
-                </div>
-             </div>
-          </div>
-
-          {/* Bottom Bar */}
-          <div className="h-10 border-t border-border bg-surface flex items-center justify-between px-4 shrink-0 gap-2">
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setMobileView("chat")}
-                className="md:hidden w-8 h-8 rounded flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
-                title="Back to chat"
-              >
-                <MessageSquare className="w-4 h-4" />
-              </button>
-              <div className="hidden md:flex items-center gap-1">
-                <ViewportBtn active={viewport==='desktop'} icon={Monitor} onClick={()=>setViewport('desktop')} />
-                <ViewportBtn active={viewport==='tablet'} icon={Tablet} onClick={()=>setViewport('tablet')} />
-                <ViewportBtn active={viewport==='mobile'} icon={Smartphone} onClick={()=>setViewport('mobile')} />
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-2 text-xs font-mono text-secondary hover:text-foreground cursor-pointer transition-colors px-2 py-1 rounded hover:bg-surface-raised truncate min-w-0" onClick={copyUrl}>
-              <span className="truncate">{slug}-{username}.instancly.app</span>
-              <Copy className="w-3 h-3 shrink-0" />
-            </div>
-
-            <div className="flex items-center">
-               <a href="#" className="w-8 h-8 rounded flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors">
-                  <ExternalLink className="w-4 h-4" />
-               </a>
-            </div>
-          </div>
-        </div>
-
-        {/* Database Drawer Overlay (Slides down over the main area) */}
-        {activePanel === 'database' && (
-          <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-30 flex flex-col pt-12 animate-in fade-in duration-200">
-            <div className="bg-surface border-b border-border shadow-2xl flex flex-col h-[500px]">
-              <div className="h-12 border-b border-border flex items-center px-6 gap-6">
-                <h2 className="font-bold">Neon Database</h2>
-                <div className="flex items-center gap-4 text-sm font-medium">
-                  <span className="text-primary border-b-2 border-primary py-3">Overview</span>
-                  <span className="text-secondary hover:text-foreground cursor-pointer py-3">Tables</span>
-                  <span className="text-secondary hover:text-foreground cursor-pointer py-3">SQL Runner</span>
-                </div>
-                <button onClick={() => setActivePanel("none")} className="ml-auto text-secondary hover:text-foreground w-8 h-8 flex justify-center items-center rounded hover:bg-surface-raised">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              <div className="p-6 flex-1 flex flex-col">
-                <div className="grid grid-cols-3 gap-6 mb-6">
-                  <div className="p-4 border border-border bg-background rounded-lg">
-                    <div className="text-secondary text-xs mb-1">Tables</div>
-                    <div className="text-2xl font-mono">4</div>
-                  </div>
-                  <div className="p-4 border border-border bg-background rounded-lg">
-                    <div className="text-secondary text-xs mb-1">Total Rows</div>
-                    <div className="text-2xl font-mono">1,042</div>
-                  </div>
-                  <div className="p-4 border border-border bg-background rounded-lg">
-                    <div className="text-secondary text-xs mb-1">Storage</div>
-                    <div className="text-2xl font-mono">2.4 MB</div>
-                  </div>
-                </div>
-                <div className="flex-1">
-                  <div className="text-sm font-medium mb-2">Connection String</div>
-                  <div className="flex gap-2">
-                    <div className="flex-1 bg-background border border-border rounded-md px-3 py-2 font-mono text-sm text-secondary truncate select-all">
-                      postgres://user:••••••••@ep-cool-db.neon.tech/main
-                    </div>
-                    <Button variant="outline" onClick={copyDbUrl} className="border-border hover:bg-surface-raised">
-                      <Copy className="w-4 h-4 mr-2" /> Copy
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
+        </section>
       </div>
 
-      {/* Files Dropdown (Absolute positioned below navbar) */}
-      {activePanel === 'files' && (
-        <div className="absolute top-12 left-1/2 -translate-x-1/2 w-80 bg-surface border border-border rounded-b-lg shadow-2xl z-40 p-2 text-sm font-mono text-secondary animate-in slide-in-from-top-2 duration-200">
-          <div className="font-sans font-bold text-foreground px-2 py-1 mb-2 border-b border-border">Files</div>
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 px-2 py-1.5 hover:bg-surface-raised rounded cursor-pointer text-foreground">
-              <FolderClosed className="w-4 h-4" /> src
-            </div>
-            <div className="ml-4 space-y-1">
-              <div className="flex items-center gap-2 px-2 py-1.5 hover:bg-surface-raised rounded cursor-pointer" onClick={() => { setActiveFile("src/app/page.tsx"); setActivePanel("none"); }}>
-                <FileCode2 className="w-4 h-4" /> app/page.tsx
-              </div>
-              <div className="flex items-center gap-2 px-2 py-1.5 hover:bg-surface-raised rounded cursor-pointer" onClick={() => { setActiveFile("src/components/ui/button.tsx"); setActivePanel("none"); }}>
-                <FileCode2 className="w-4 h-4" /> components/ui/button.tsx
-              </div>
-              <div className="flex items-center gap-2 px-2 py-1.5 hover:bg-surface-raised rounded cursor-pointer" onClick={() => { setActiveFile("src/lib/db.ts"); setActivePanel("none"); }}>
-                <FileCode2 className="w-4 h-4" /> lib/db.ts
-              </div>
-            </div>
-            <div className="flex items-center gap-2 px-2 py-1.5 hover:bg-surface-raised rounded cursor-pointer text-foreground">
-              <FileCode2 className="w-4 h-4" /> package.json
-            </div>
-            <div className="flex items-center gap-2 px-2 py-1.5 hover:bg-surface-raised rounded cursor-pointer text-foreground">
-              <FileCode2 className="w-4 h-4" /> tailwind.config.ts
-            </div>
-          </div>
-        </div>
+      {/* Mobile Chat Sheet */}
+      <button
+        onClick={() => setMobileChatOpen(true)}
+        className="md:hidden fixed bottom-4 right-4 z-30 h-12 w-12 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90"
+        aria-label="Open chat"
+      >
+        <MessageSquare className="w-5 h-5" />
+      </button>
+
+      {mobileChatOpen && (
+        <div
+          className="md:hidden fixed inset-0 z-40 bg-black/60 animate-in fade-in"
+          onClick={() => setMobileChatOpen(false)}
+        />
       )}
-
-      {/* Settings Modal */}
-      <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
-        <DialogContent className="bg-surface border-border sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Project Settings</DialogTitle>
-            <DialogDescription>
-              Configure your project settings and domains.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="name">Project Name</Label>
-              <Input id="name" defaultValue="Todo App" className="bg-background border-border" />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="slug">Slug</Label>
-              <Input id="slug" defaultValue="todo-app" className="bg-background border-border font-mono" />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="domain">Custom Domain</Label>
-              <Input id="domain" placeholder="app.example.com" className="bg-background border-border font-mono" />
-            </div>
-            <div className="flex items-center justify-between pt-4">
-              <Label htmlFor="public" className="flex flex-col gap-1">
-                <span>Public Project</span>
-                <span className="font-normal text-xs text-secondary">Allow others to view and clone.</span>
-              </Label>
-              <Switch id="public" defaultChecked />
-            </div>
-            <div className="border border-error/20 rounded-lg p-4 bg-error/5 mt-4">
-              <h4 className="text-error font-medium text-sm mb-2">Danger Zone</h4>
-              <Button variant="destructive" className="w-full text-xs h-8">Delete Project</Button>
-            </div>
+      <div
+        className={`md:hidden fixed left-0 right-0 bottom-0 z-50 h-[85vh] bg-surface border-t border-border rounded-t-2xl shadow-2xl flex flex-col transition-transform duration-300 ${
+          mobileChatOpen ? "translate-y-0" : "translate-y-full"
+        }`}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+          <div className="flex items-center gap-2">
+            <span className="w-10 h-1 rounded-full bg-border block sm:hidden absolute left-1/2 -translate-x-1/2 top-2" />
+            <h3 className="font-bold text-sm">Build chat</h3>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsSettingsOpen(false)} className="border-border">Cancel</Button>
-            <Button onClick={() => { setIsSettingsOpen(false); toast.success("Settings saved"); }} className="bg-primary text-primary-foreground hover:bg-primary/90">Save changes</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
+          <button
+            onClick={() => setMobileChatOpen(false)}
+            className="text-secondary hover:text-foreground p-1 rounded hover:bg-surface-raised"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <ChatPanel
+          chatInput={chatInput}
+          setChatInput={setChatInput}
+          isStreaming={isStreaming}
+          currentPhase={currentStep?.phase}
+          typed={typed}
+          onSend={handleSend}
+          openBuildId={openBuildId}
+          setOpenBuildId={setOpenBuildId}
+        />
+      </div>
     </div>
   );
 }
 
-function NavIconButton({ icon: Icon, tooltip, active, onClick }: { icon: any, tooltip: string, active?: boolean, onClick?: () => void }) {
+/* ----------------------------- Subcomponents ----------------------------- */
+
+function TabBtn({
+  icon: Icon,
+  label,
+  active,
+  onClick,
+}: {
+  icon: any;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
   return (
-    <button 
+    <button
       onClick={onClick}
-      className={`w-8 h-8 rounded-[6px] flex items-center justify-center transition-colors duration-150 relative group
-        ${active ? 'text-primary bg-primary/15' : 'text-secondary hover:text-[#888] hover:bg-surface-raised'}
-      `}
+      className={`h-8 px-3 rounded-md text-sm flex items-center gap-2 whitespace-nowrap transition-colors ${
+        active
+          ? "bg-primary/15 text-primary"
+          : "text-secondary hover:text-foreground hover:bg-surface-raised"
+      }`}
     >
-      <Icon className="w-5 h-5" />
-      {/* css tooltip */}
-      <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-popover text-popover-foreground text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 delay-500 whitespace-nowrap border border-border">
-        {tooltip}
-      </div>
+      <Icon className="w-4 h-4" />
+      <span>{label}</span>
     </button>
   );
 }
 
-function ViewportBtn({ active, icon: Icon, onClick }: { active: boolean, icon: any, onClick: () => void }) {
+function ChatPanel({
+  chatInput,
+  setChatInput,
+  isStreaming,
+  currentPhase,
+  typed,
+  onSend,
+  openBuildId,
+  setOpenBuildId,
+}: {
+  chatInput: string;
+  setChatInput: (v: string) => void;
+  isStreaming: boolean;
+  currentPhase: string | undefined;
+  typed: string;
+  onSend: () => void;
+  openBuildId: string | null;
+  setOpenBuildId: (id: string | null) => void;
+}) {
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
   return (
-    <button 
+    <>
+      <div className="p-3 border-b border-border shrink-0">
+        <select className="w-full bg-background border border-border rounded-md text-xs px-2 py-1.5 text-foreground font-mono focus:ring-1 focus:ring-primary outline-none">
+          {mockModels.map((m) => (
+            <option key={m.name} value={m.name}>
+              {m.name} ({m.costRange})
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+        {/* Live status */}
+        <div className="rounded-lg border border-border bg-background p-4">
+          {isStreaming || currentPhase ? (
+            <>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="relative flex h-2 w-2">
+                  {isStreaming && (
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-60" />
+                  )}
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-primary" />
+                </span>
+                <span className="text-[11px] uppercase tracking-wider font-mono text-primary">
+                  {currentPhase ?? "Idle"}
+                </span>
+              </div>
+              <div className="font-mono text-sm text-foreground leading-snug min-h-[1.4em]">
+                {typed}
+                <span className="inline-block w-1.5 h-4 bg-primary ml-0.5 align-text-bottom animate-pulse" />
+              </div>
+            </>
+          ) : (
+            <div className="text-xs text-secondary">
+              Tell the AI what to build. Watch the work happen live.
+            </div>
+          )}
+        </div>
+
+        {/* Past builds accordion */}
+        <div>
+          <div className="text-[10px] uppercase tracking-wider font-mono text-secondary mb-2 px-1">
+            Past builds
+          </div>
+          <div className="space-y-1.5">
+            {PAST_BUILDS.map((b) => {
+              const open = openBuildId === b.id;
+              const mins = Math.round(b.durationSec / 60);
+              return (
+                <div
+                  key={b.id}
+                  className="border border-border bg-background rounded-md overflow-hidden"
+                >
+                  <button
+                    onClick={() => setOpenBuildId(open ? null : b.id)}
+                    className="w-full flex items-center justify-between p-3 text-left hover:bg-surface-raised transition-colors"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Play className="w-3 h-3 text-secondary shrink-0" />
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium truncate">
+                          Build #{b.number}
+                        </div>
+                        <div className="text-[11px] text-secondary font-mono">
+                          worked for {mins < 1 ? `${b.durationSec}s` : `${mins} min`} · {b.ago}
+                        </div>
+                      </div>
+                    </div>
+                    <ChevronDown
+                      className={`w-4 h-4 text-secondary shrink-0 transition-transform ${
+                        open ? "rotate-180" : ""
+                      }`}
+                    />
+                  </button>
+                  {open && (
+                    <div className="border-t border-border bg-surface px-3 py-3 space-y-3">
+                      <div>
+                        <div className="text-[10px] uppercase tracking-wider font-mono text-secondary mb-1">
+                          Prompt
+                        </div>
+                        <p className="text-xs text-foreground leading-relaxed">
+                          {b.prompt}
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        <Stat label="Cost" value={`£${b.cost.toFixed(2)}`} />
+                        <Stat label="Files" value={`${b.filesChanged}`} />
+                        <Stat
+                          label="Time"
+                          value={
+                            mins < 1 ? `${b.durationSec}s` : `${mins}m`
+                          }
+                        />
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full text-xs h-7 border-border"
+                      >
+                        Restore this build
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      <div className="p-3 border-t border-border bg-surface shrink-0">
+        <div className="relative">
+          <textarea
+            ref={inputRef}
+            value={chatInput}
+            onChange={(e) => setChatInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                onSend();
+              }
+            }}
+            placeholder="Describe a change..."
+            className="w-full min-h-[72px] max-h-[180px] bg-background border border-border rounded-lg p-3 pr-12 text-sm focus:outline-none focus:ring-1 focus:ring-primary resize-none"
+          />
+          <button
+            onClick={onSend}
+            disabled={!chatInput.trim() || isStreaming}
+            className="absolute right-2 bottom-2 w-8 h-8 rounded bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors"
+          >
+            <Send className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="text-[10px] text-secondary text-center mt-2">
+          Enter to send · Shift+Enter for newline
+        </div>
+      </div>
+    </>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded border border-border bg-background px-2 py-1.5">
+      <div className="text-[9px] uppercase tracking-wider font-mono text-secondary">
+        {label}
+      </div>
+      <div className="font-mono text-xs text-foreground">{value}</div>
+    </div>
+  );
+}
+
+/* -------------------------------- Panels -------------------------------- */
+
+function PreviewPane({
+  viewport,
+  setViewport,
+  slug,
+  username,
+  copyUrl,
+}: {
+  viewport: "desktop" | "tablet" | "mobile";
+  setViewport: (v: "desktop" | "tablet" | "mobile") => void;
+  slug?: string;
+  username?: string;
+  copyUrl: () => void;
+}) {
+  return (
+    <div className="absolute inset-0 flex flex-col bg-black">
+      <div className="flex-1 p-3 md:p-8 flex items-center justify-center overflow-hidden">
+        <div
+          className="bg-white w-full h-full flex flex-col transition-all duration-200 ease-in-out rounded-md overflow-hidden shadow-2xl"
+          style={{
+            maxWidth:
+              viewport === "desktop"
+                ? "100%"
+                : viewport === "tablet"
+                ? "768px"
+                : "390px",
+            maxHeight: viewport === "mobile" ? "844px" : "100%",
+          }}
+        >
+          <div className="border-b border-gray-200 px-4 py-2 flex items-center shadow-sm">
+            <div className="font-bold text-black text-sm">Todo App</div>
+          </div>
+          <div className="flex-1 p-6 bg-gray-50 flex justify-center text-black overflow-y-auto">
+            <div className="w-full max-w-md bg-white p-6 rounded shadow-sm border border-gray-200 h-fit">
+              <h2 className="text-xl font-bold mb-4">Tasks</h2>
+              <div className="flex gap-2 mb-4">
+                <input
+                  type="text"
+                  className="flex-1 border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Add task"
+                />
+                <button className="bg-black text-white px-4 py-2 rounded text-sm hover:bg-gray-800 transition-colors">
+                  Add
+                </button>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 p-2 border-b">
+                  <input type="checkbox" defaultChecked />
+                  <span className="line-through text-gray-500 text-sm">
+                    Design DB schema
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 p-2 border-b">
+                  <input type="checkbox" />
+                  <span className="text-sm">Implement auth</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="h-10 border-t border-border bg-surface flex items-center justify-between px-3 md:px-4 shrink-0 gap-2">
+        <div className="flex items-center gap-1">
+          <ViewportBtn
+            active={viewport === "desktop"}
+            icon={Monitor}
+            onClick={() => setViewport("desktop")}
+          />
+          <ViewportBtn
+            active={viewport === "tablet"}
+            icon={Tablet}
+            onClick={() => setViewport("tablet")}
+          />
+          <ViewportBtn
+            active={viewport === "mobile"}
+            icon={Smartphone}
+            onClick={() => setViewport("mobile")}
+          />
+        </div>
+        <button
+          className="flex items-center gap-2 text-xs font-mono text-secondary hover:text-foreground cursor-pointer transition-colors px-2 py-1 rounded hover:bg-surface-raised truncate min-w-0"
+          onClick={copyUrl}
+        >
+          <span className="truncate">
+            {slug}-{username}.instancly.app
+          </span>
+          <Copy className="w-3 h-3 shrink-0" />
+        </button>
+        <a
+          href="#"
+          className="w-8 h-8 rounded flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
+          title="Open in new tab"
+        >
+          <ExternalLink className="w-4 h-4" />
+        </a>
+      </div>
+    </div>
+  );
+}
+
+function ViewportBtn({
+  active,
+  icon: Icon,
+  onClick,
+}: {
+  active: boolean;
+  icon: any;
+  onClick: () => void;
+}) {
+  return (
+    <button
       onClick={onClick}
-      className={`w-8 h-8 rounded flex items-center justify-center transition-colors ${active ? 'text-primary bg-primary/15' : 'text-secondary hover:text-[#888] hover:bg-surface-raised'}`}
+      className={`w-8 h-8 rounded flex items-center justify-center transition-colors ${
+        active
+          ? "text-primary bg-primary/15"
+          : "text-secondary hover:text-foreground hover:bg-surface-raised"
+      }`}
     >
       <Icon className="w-4 h-4" />
     </button>
-  )
+  );
+}
+
+function FilesPane({
+  activeFile,
+  setActiveFile,
+}: {
+  activeFile: string;
+  setActiveFile: (f: string) => void;
+}) {
+  const files = [
+    { path: "src/app/page.tsx", folder: "src/app" },
+    { path: "src/app/layout.tsx", folder: "src/app" },
+    { path: "src/components/ui/button.tsx", folder: "src/components/ui" },
+    { path: "src/lib/db.ts", folder: "src/lib" },
+    { path: "package.json", folder: "" },
+    { path: "tailwind.config.ts", folder: "" },
+  ];
+
+  return (
+    <div className="absolute inset-0 flex bg-background">
+      <div className="w-60 border-r border-border bg-surface overflow-y-auto p-2 shrink-0">
+        <div className="text-[10px] uppercase tracking-wider font-mono text-secondary px-2 py-1.5">
+          Project
+        </div>
+        {files.map((f) => (
+          <button
+            key={f.path}
+            onClick={() => setActiveFile(f.path)}
+            className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs font-mono text-left transition-colors ${
+              activeFile === f.path
+                ? "bg-primary/15 text-primary"
+                : "text-secondary hover:text-foreground hover:bg-surface-raised"
+            }`}
+          >
+            <FileCode2 className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">{f.path}</span>
+          </button>
+        ))}
+      </div>
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="h-9 border-b border-border bg-surface px-4 flex items-center gap-2">
+          <FileCode2 className="w-4 h-4 text-secondary" />
+          <span className="font-mono text-xs text-secondary truncate">
+            {activeFile}
+          </span>
+        </div>
+        <pre className="flex-1 overflow-auto p-4 font-mono text-xs leading-relaxed text-secondary">
+{`import { useState } from "react";
+import { db } from "@/lib/db";
+
+export default function Page() {
+  const [tasks, setTasks] = useState<Task[]>([]);
+
+  return (
+    <div className="p-6">
+      <h1 className="text-2xl font-bold mb-4">Tasks</h1>
+      {/* implementation */}
+    </div>
+  );
+}`}
+        </pre>
+      </div>
+    </div>
+  );
+}
+
+function DashboardPane({
+  dashTab,
+  setDashTab,
+  copyDbUrl,
+}: {
+  dashTab: DashboardTab;
+  setDashTab: (t: DashboardTab) => void;
+  copyDbUrl: () => void;
+}) {
+  return (
+    <div className="absolute inset-0 flex flex-col bg-background overflow-hidden">
+      <div className="h-10 border-b border-border bg-surface flex items-center px-2 gap-1 shrink-0 overflow-x-auto">
+        <SubTab
+          icon={Database}
+          label="Database"
+          active={dashTab === "database"}
+          onClick={() => setDashTab("database")}
+        />
+        <SubTab
+          icon={CreditCard}
+          label="Payments"
+          active={dashTab === "payments"}
+          onClick={() => setDashTab("payments")}
+        />
+        <SubTab
+          icon={BarChart3}
+          label="Analytics"
+          active={dashTab === "analytics"}
+          onClick={() => setDashTab("analytics")}
+        />
+      </div>
+
+      <div className="flex-1 overflow-auto p-4 md:p-6">
+        {dashTab === "database" && <DatabaseView copyDbUrl={copyDbUrl} />}
+        {dashTab === "payments" && <PaymentsView />}
+        {dashTab === "analytics" && <AnalyticsView />}
+      </div>
+    </div>
+  );
+}
+
+function SubTab({
+  icon: Icon,
+  label,
+  active,
+  onClick,
+}: {
+  icon: any;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`h-7 px-3 rounded text-xs flex items-center gap-2 whitespace-nowrap transition-colors ${
+        active
+          ? "bg-primary/15 text-primary"
+          : "text-secondary hover:text-foreground hover:bg-surface-raised"
+      }`}
+    >
+      <Icon className="w-3.5 h-3.5" />
+      {label}
+    </button>
+  );
+}
+
+function DatabaseView({ copyDbUrl }: { copyDbUrl: () => void }) {
+  return (
+    <div className="space-y-6 max-w-4xl">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <KpiCard label="Tables" value="4" />
+        <KpiCard label="Total Rows" value="1,042" />
+        <KpiCard label="Storage" value="2.4 MB" />
+      </div>
+      <div>
+        <div className="text-xs font-mono uppercase text-secondary mb-2 tracking-wider">
+          Connection
+        </div>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <div className="flex-1 bg-surface border border-border rounded-md px-3 py-2 font-mono text-xs text-secondary truncate">
+            postgres://user:••••••••@ep-cool-db.neon.tech/main
+          </div>
+          <Button variant="outline" onClick={copyDbUrl} className="border-border">
+            <Copy className="w-4 h-4 mr-2" /> Copy
+          </Button>
+        </div>
+      </div>
+      <div>
+        <div className="text-xs font-mono uppercase text-secondary mb-2 tracking-wider">
+          Tables
+        </div>
+        <div className="rounded-lg border border-border overflow-hidden">
+          {[
+            { name: "users", rows: 412 },
+            { name: "tasks", rows: 524 },
+            { name: "sessions", rows: 98 },
+            { name: "audit_logs", rows: 8 },
+          ].map((t, i, arr) => (
+            <div
+              key={t.name}
+              className={`flex items-center justify-between px-4 py-3 bg-surface ${
+                i < arr.length - 1 ? "border-b border-border" : ""
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Database className="w-4 h-4 text-secondary" />
+                <span className="font-mono text-sm">{t.name}</span>
+              </div>
+              <span className="text-xs text-secondary font-mono">
+                {t.rows.toLocaleString()} rows
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PaymentsView() {
+  return (
+    <div className="space-y-6 max-w-4xl">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <KpiCard label="MRR" value="£1,284" />
+        <KpiCard label="Active subs" value="42" />
+        <KpiCard label="Churn (30d)" value="2.1%" />
+      </div>
+      <div>
+        <div className="text-xs font-mono uppercase text-secondary mb-2 tracking-wider">
+          Recent payments
+        </div>
+        <div className="rounded-lg border border-border overflow-hidden">
+          {[
+            { who: "alex@startup.io", amount: "£29.00", when: "2 min ago", ok: true },
+            { who: "sara@design.co", amount: "£29.00", when: "14 min ago", ok: true },
+            { who: "mike@founder.dev", amount: "£99.00", when: "1 hr ago", ok: true },
+            { who: "lily@indie.com", amount: "£29.00", when: "3 hrs ago", ok: false },
+          ].map((p, i, arr) => (
+            <div
+              key={i}
+              className={`flex items-center justify-between px-4 py-3 bg-surface ${
+                i < arr.length - 1 ? "border-b border-border" : ""
+              }`}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <CreditCard className="w-4 h-4 text-secondary shrink-0" />
+                <span className="font-mono text-xs truncate">{p.who}</span>
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <span
+                  className={`text-[10px] font-mono uppercase ${
+                    p.ok ? "text-success" : "text-destructive"
+                  }`}
+                >
+                  {p.ok ? "Paid" : "Failed"}
+                </span>
+                <span className="text-xs text-secondary font-mono">{p.when}</span>
+                <span className="text-sm font-mono">{p.amount}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AnalyticsView() {
+  const bars = [40, 62, 55, 80, 70, 95, 88, 76, 90, 110, 102, 120];
+  const max = Math.max(...bars);
+  return (
+    <div className="space-y-6 max-w-4xl">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <KpiCard label="Visitors (24h)" value="2,431" />
+        <KpiCard label="Signups" value="64" />
+        <KpiCard label="Conversion" value="2.6%" />
+      </div>
+      <div>
+        <div className="text-xs font-mono uppercase text-secondary mb-2 tracking-wider">
+          Visitors · last 12 hours
+        </div>
+        <div className="rounded-lg border border-border bg-surface p-4">
+          <div className="flex items-end gap-1.5 h-40">
+            {bars.map((v, i) => (
+              <div
+                key={i}
+                className="flex-1 bg-primary/70 rounded-sm hover:bg-primary transition-colors"
+                style={{ height: `${(v / max) * 100}%` }}
+                title={`${v}`}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+      <div>
+        <div className="text-xs font-mono uppercase text-secondary mb-2 tracking-wider">
+          Top pages
+        </div>
+        <div className="rounded-lg border border-border overflow-hidden">
+          {[
+            { p: "/", v: 1240 },
+            { p: "/explore", v: 612 },
+            { p: "/login", v: 398 },
+            { p: "/dashboard", v: 181 },
+          ].map((row, i, arr) => (
+            <div
+              key={row.p}
+              className={`flex items-center justify-between px-4 py-3 bg-surface ${
+                i < arr.length - 1 ? "border-b border-border" : ""
+              }`}
+            >
+              <span className="font-mono text-xs">{row.p}</span>
+              <span className="text-xs text-secondary font-mono">{row.v}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function KpiCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-border bg-surface p-4">
+      <div className="text-[10px] uppercase tracking-wider font-mono text-secondary mb-1">
+        {label}
+      </div>
+      <div className="text-2xl font-mono">{value}</div>
+    </div>
+  );
+}
+
+function HistoryPane({
+  openBuildId,
+  setOpenBuildId,
+}: {
+  openBuildId: string | null;
+  setOpenBuildId: (id: string | null) => void;
+}) {
+  return (
+    <div className="absolute inset-0 overflow-auto p-4 md:p-6 bg-background">
+      <div className="max-w-3xl space-y-3">
+        <h2 className="text-lg font-bold">Build history</h2>
+        <p className="text-sm text-secondary mb-4">
+          Every successful build is restorable. Tap one to inspect prompt and cost.
+        </p>
+        {PAST_BUILDS.map((b) => {
+          const open = openBuildId === b.id;
+          const mins = Math.round(b.durationSec / 60);
+          return (
+            <div
+              key={b.id}
+              className="border border-border bg-surface rounded-lg overflow-hidden"
+            >
+              <button
+                onClick={() => setOpenBuildId(open ? null : b.id)}
+                className="w-full flex items-center justify-between p-4 text-left hover:bg-surface-raised transition-colors"
+              >
+                <div>
+                  <div className="font-medium">Build #{b.number}</div>
+                  <div className="text-xs text-secondary font-mono mt-0.5">
+                    worked for {mins < 1 ? `${b.durationSec}s` : `${mins} min`} · {b.ago}
+                  </div>
+                </div>
+                <ChevronDown
+                  className={`w-4 h-4 text-secondary transition-transform ${
+                    open ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+              {open && (
+                <div className="border-t border-border bg-background p-4 space-y-3">
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wider font-mono text-secondary mb-1">
+                      Prompt
+                    </div>
+                    <p className="text-sm">{b.prompt}</p>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <Stat label="Cost" value={`£${b.cost.toFixed(2)}`} />
+                    <Stat label="Files changed" value={`${b.filesChanged}`} />
+                    <Stat
+                      label="Duration"
+                      value={mins < 1 ? `${b.durationSec}s` : `${mins} min`}
+                    />
+                  </div>
+                  <Button size="sm" variant="outline" className="border-border">
+                    Restore this build
+                  </Button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function SettingsPane() {
+  return (
+    <div className="absolute inset-0 overflow-auto p-4 md:p-6 bg-background">
+      <div className="max-w-2xl space-y-6">
+        <div>
+          <h2 className="text-lg font-bold">Project settings</h2>
+          <p className="text-sm text-secondary">
+            Configure routing, visibility, and integrations.
+          </p>
+        </div>
+        <div className="rounded-lg border border-border bg-surface p-5 space-y-4">
+          <div className="grid gap-2">
+            <Label htmlFor="name">Project name</Label>
+            <Input
+              id="name"
+              defaultValue="Todo App"
+              className="bg-background border-border"
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="slug">Slug</Label>
+            <Input
+              id="slug"
+              defaultValue="todo-app"
+              className="bg-background border-border font-mono"
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="domain">Custom domain</Label>
+            <Input
+              id="domain"
+              placeholder="app.example.com"
+              className="bg-background border-border font-mono"
+            />
+          </div>
+          <div className="flex items-center justify-between pt-2">
+            <Label htmlFor="public" className="flex flex-col gap-1">
+              <span>Public project</span>
+              <span className="font-normal text-xs text-secondary">
+                Allow others to view and clone.
+              </span>
+            </Label>
+            <Switch id="public" defaultChecked />
+          </div>
+          <div className="flex justify-end pt-2">
+            <Button
+              size="sm"
+              onClick={() => toast.success("Settings saved")}
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
+            >
+              <Save className="w-4 h-4 mr-2" /> Save changes
+            </Button>
+          </div>
+        </div>
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-5">
+          <h4 className="text-destructive font-medium text-sm mb-2">
+            Danger zone
+          </h4>
+          <p className="text-xs text-secondary mb-3">
+            This will permanently delete the project, its database, and all builds.
+          </p>
+          <Button variant="destructive" size="sm">
+            <Trash2 className="w-4 h-4 mr-2" /> Delete project
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
 }

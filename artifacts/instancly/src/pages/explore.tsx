@@ -10,10 +10,10 @@ export default function Explore() {
   const [filter, setFilter] = useState("All");
   
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col">
+    <div className="min-h-screen bg-background text-foreground flex flex-col overflow-x-hidden">
       <MarketingNav />
 
-      <main className="p-8 max-w-7xl mx-auto">
+      <main className="px-4 sm:px-8 py-8 max-w-7xl mx-auto w-full">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <h1 className="text-3xl font-bold tracking-tight">Explore Projects</h1>
           <div className="relative w-full md:w-64">
