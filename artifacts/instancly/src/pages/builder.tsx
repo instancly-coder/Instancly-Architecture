@@ -17,15 +17,14 @@ import {
   Send,
   ChevronDown,
   FileCode2,
-  FolderClosed,
   Play,
   Database,
   CreditCard,
   BarChart3,
   MessageSquare,
-  Eye,
   Save,
   Trash2,
+  Plug,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -42,8 +41,8 @@ import { Switch } from "@/components/ui/switch";
 import { mockUser, mockModels } from "@/lib/mock-data";
 import { toast } from "sonner";
 
-type Tab = "preview" | "files" | "dashboard" | "history" | "settings";
-type DashboardTab = "database" | "payments" | "analytics";
+type Tab = "preview" | "files" | "project" | "history" | "settings";
+type ProjectTab = "analytics" | "database" | "payments" | "integrations";
 
 type PastBuild = {
   id: string;
@@ -99,7 +98,7 @@ export default function Builder() {
   const { username, slug } = params;
 
   const [activeTab, setActiveTab] = useState<Tab>("preview");
-  const [dashTab, setDashTab] = useState<DashboardTab>("database");
+  const [projectTab, setProjectTab] = useState<ProjectTab>("analytics");
   const [viewport, setViewport] = useState<"desktop" | "tablet" | "mobile">("desktop");
 
   const [chatInput, setChatInput] = useState("");
@@ -254,7 +253,7 @@ export default function Builder() {
           {/* Tab strip */}
           <div className="h-11 border-b border-border bg-surface flex items-center px-2 gap-1 overflow-x-auto shrink-0">
             <TabBtn
-              icon={Eye}
+              icon={Play}
               label="Preview"
               active={activeTab === "preview"}
               onClick={() => setActiveTab("preview")}
@@ -267,9 +266,9 @@ export default function Builder() {
             />
             <TabBtn
               icon={LayoutDashboard}
-              label="Dashboard"
-              active={activeTab === "dashboard"}
-              onClick={() => setActiveTab("dashboard")}
+              label="Project"
+              active={activeTab === "project"}
+              onClick={() => setActiveTab("project")}
             />
             <TabBtn
               icon={History}
@@ -298,10 +297,10 @@ export default function Builder() {
             {activeTab === "files" && (
               <FilesPane activeFile={activeFile} setActiveFile={setActiveFile} />
             )}
-            {activeTab === "dashboard" && (
-              <DashboardPane
-                dashTab={dashTab}
-                setDashTab={setDashTab}
+            {activeTab === "project" && (
+              <ProjectPane
+                projectTab={projectTab}
+                setProjectTab={setProjectTab}
                 copyDbUrl={copyDbUrl}
               />
             )}
@@ -754,42 +753,93 @@ export default function Page() {
   );
 }
 
-function DashboardPane({
-  dashTab,
-  setDashTab,
+function ProjectPane({
+  projectTab,
+  setProjectTab,
   copyDbUrl,
 }: {
-  dashTab: DashboardTab;
-  setDashTab: (t: DashboardTab) => void;
+  projectTab: ProjectTab;
+  setProjectTab: (t: ProjectTab) => void;
   copyDbUrl: () => void;
 }) {
   return (
     <div className="absolute inset-0 flex flex-col bg-background overflow-hidden">
       <div className="h-10 border-b border-border bg-surface flex items-center px-2 gap-1 shrink-0 overflow-x-auto">
         <SubTab
+          icon={BarChart3}
+          label="Analytics"
+          active={projectTab === "analytics"}
+          onClick={() => setProjectTab("analytics")}
+        />
+        <SubTab
           icon={Database}
           label="Database"
-          active={dashTab === "database"}
-          onClick={() => setDashTab("database")}
+          active={projectTab === "database"}
+          onClick={() => setProjectTab("database")}
         />
         <SubTab
           icon={CreditCard}
           label="Payments"
-          active={dashTab === "payments"}
-          onClick={() => setDashTab("payments")}
+          active={projectTab === "payments"}
+          onClick={() => setProjectTab("payments")}
         />
         <SubTab
-          icon={BarChart3}
-          label="Analytics"
-          active={dashTab === "analytics"}
-          onClick={() => setDashTab("analytics")}
+          icon={Plug}
+          label="Integrations"
+          active={projectTab === "integrations"}
+          onClick={() => setProjectTab("integrations")}
         />
       </div>
 
       <div className="flex-1 overflow-auto p-4 md:p-6">
-        {dashTab === "database" && <DatabaseView copyDbUrl={copyDbUrl} />}
-        {dashTab === "payments" && <PaymentsView />}
-        {dashTab === "analytics" && <AnalyticsView />}
+        {projectTab === "analytics" && <AnalyticsView />}
+        {projectTab === "database" && <DatabaseView copyDbUrl={copyDbUrl} />}
+        {projectTab === "payments" && <PaymentsView />}
+        {projectTab === "integrations" && <IntegrationsView />}
+      </div>
+    </div>
+  );
+}
+
+function IntegrationsView() {
+  const items = [
+    { name: "Stripe", desc: "Subscriptions and one-off payments", connected: true },
+    { name: "Postgres", desc: "Primary application database", connected: true },
+    { name: "Resend", desc: "Transactional email", connected: false },
+    { name: "OpenAI", desc: "LLM-powered features", connected: true },
+    { name: "Sentry", desc: "Error tracking and alerts", connected: false },
+    { name: "Slack", desc: "Notifications and webhooks", connected: false },
+  ];
+  return (
+    <div className="space-y-4 max-w-4xl">
+      <div className="text-xs font-mono uppercase text-secondary tracking-wider">
+        Connected services
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {items.map((it) => (
+          <div
+            key={it.name}
+            className="rounded-lg border border-border bg-surface p-4 flex items-center justify-between gap-3"
+          >
+            <div className="min-w-0">
+              <div className="font-medium">{it.name}</div>
+              <div className="text-xs text-secondary truncate">{it.desc}</div>
+            </div>
+            {it.connected ? (
+              <span className="text-[10px] font-mono uppercase px-2 py-1 rounded bg-success/10 text-success">
+                Connected
+              </span>
+            ) : (
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-border h-7 text-xs"
+              >
+                Connect
+              </Button>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );

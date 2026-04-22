@@ -1,10 +1,10 @@
-import { Link } from "wouter";
-import { Flame, LayoutDashboard, CreditCard, Settings, LogOut, Code, AlertTriangle } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { mockUser } from "@/lib/mock-data";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { DashboardLayout } from "@/components/dashboard-layout";
 
 export default function SettingsPage() {
   const save = (e: React.FormEvent) => {
@@ -17,41 +17,18 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex">
-      <aside className="w-64 border-r border-border bg-surface flex flex-col fixed inset-y-0 left-0">
-        <div className="h-14 border-b border-border flex items-center px-6 gap-2">
-          <Link href="/dashboard" className="flex items-center gap-2 hover:opacity-80">
-            <Flame className="w-5 h-5 text-primary" />
-            <span className="font-bold tracking-tight">instancly</span>
-          </Link>
-        </div>
-        <div className="p-4 flex-1">
-          <nav className="space-y-1">
-            <Link href="/dashboard" className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md text-secondary hover:text-foreground hover:bg-surface-raised transition-colors">
-              <LayoutDashboard className="w-4 h-4" /> Projects
-            </Link>
-            <Link href="/explore" className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md text-secondary hover:text-foreground hover:bg-surface-raised transition-colors">
-              <Code className="w-4 h-4" /> Explore
-            </Link>
-            <Link href="/dashboard/billing" className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md text-secondary hover:text-foreground hover:bg-surface-raised transition-colors">
-              <CreditCard className="w-4 h-4" /> Billing
-            </Link>
-            <Link href="/dashboard/settings" className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md bg-primary/10 text-primary">
-              <Settings className="w-4 h-4" /> Settings
-            </Link>
-          </nav>
-        </div>
-      </aside>
-
-      <main className="flex-1 ml-64 p-8 max-w-2xl">
-        <h1 className="text-2xl font-bold tracking-tight mb-8">Account Settings</h1>
+    <DashboardLayout>
+      <div className="p-4 md:p-8 max-w-2xl">
+        <h1 className="text-2xl font-bold tracking-tight mb-6 md:mb-8">
+          Account Settings
+        </h1>
 
         <form onSubmit={save} className="space-y-6 mb-12">
           <div className="space-y-2">
             <Label htmlFor="displayName" className="text-secondary">Display Name</Label>
             <Input id="displayName" defaultValue={mockUser.displayName} className="bg-surface border-border max-w-md" />
           </div>
-          
+
           <div className="space-y-2">
             <Label htmlFor="username" className="text-secondary">Username</Label>
             <Input id="username" defaultValue={mockUser.username} readOnly disabled className="bg-surface border-border text-muted-foreground max-w-md font-mono" />
@@ -73,7 +50,7 @@ export default function SettingsPage() {
           </Button>
         </form>
 
-        <div className="border border-error/30 rounded-xl p-6 bg-error/5">
+        <div className="border border-error/30 rounded-xl p-5 md:p-6 bg-error/5">
           <h2 className="text-error font-bold flex items-center gap-2 mb-2">
             <AlertTriangle className="w-4 h-4" /> Danger Zone
           </h2>
@@ -84,7 +61,7 @@ export default function SettingsPage() {
             Delete Account
           </Button>
         </div>
-      </main>
-    </div>
+      </div>
+    </DashboardLayout>
   );
 }
