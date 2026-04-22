@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Flame, Github } from "lucide-react";
+import { Box, Github } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,7 +25,7 @@ export default function Login() {
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6">
       <Link href="/" className="mb-8 hover:opacity-80 transition-opacity">
-        <Flame className="w-10 h-10 text-primary" />
+        <Box className="w-10 h-10 text-primary" />
       </Link>
       
       <div className="w-full max-w-sm bg-surface border border-border rounded-xl p-8 shadow-2xl">

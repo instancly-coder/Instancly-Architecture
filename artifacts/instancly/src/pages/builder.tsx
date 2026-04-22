@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "wouter";
 import {
-  Flame,
+  Box,
   ChevronRight,
   FolderTree,
   History,
@@ -294,7 +294,7 @@ export default function Builder() {
       <header className="h-12 border-b border-border bg-surface flex items-center justify-between px-3 md:px-4 shrink-0 relative z-50 gap-2">
         <div className="flex items-center gap-2 md:gap-3 min-w-0">
           <Link href="/dashboard" className="hover:opacity-80 transition-opacity shrink-0">
-            <Flame className="w-5 h-5 text-primary" />
+            <Box className="w-5 h-5 text-primary" />
           </Link>
           <div className="w-px h-4 bg-border hidden sm:block"></div>
           <div className="flex items-center text-sm font-mono text-secondary min-w-0">

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { Flame, CheckCircle2, XCircle } from "lucide-react";
+import { Box, CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -66,7 +66,7 @@ export default function SignupUsername() {
   return (
     <div className="min-h-screen bg-background flex flex-col items-center pt-32 p-6">
       <Link href="/" className="mb-12 hover:opacity-80 transition-opacity">
-        <Flame className="w-10 h-10 text-primary" />
+        <Box className="w-10 h-10 text-primary" />
       </Link>
       
       <div className="w-full max-w-md">

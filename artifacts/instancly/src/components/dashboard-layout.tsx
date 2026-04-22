@@ -1,7 +1,7 @@
 import { type ReactNode, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
-  Flame,
+  Box,
   LayoutDashboard,
   Code,
   CreditCard,
@@ -36,7 +36,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
       {/* Mobile top bar */}
       <header className="md:hidden fixed top-0 inset-x-0 h-14 z-30 bg-surface border-b border-border flex items-center justify-between px-4">
         <Link href="/dashboard" className="flex items-center gap-2">
-          <Flame className="w-5 h-5 text-primary" />
+          <Box className="w-5 h-5 text-primary" />
           <span className="font-bold tracking-tight">instancly</span>
         </Link>
         <div className="flex items-center gap-1">
@@ -67,7 +67,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
       >
         <div className="h-14 border-b border-border flex items-center justify-between px-6 gap-2">
           <div className="flex items-center gap-2">
-            <Flame className="w-5 h-5 text-primary" />
+            <Box className="w-5 h-5 text-primary" />
             <span className="font-bold tracking-tight">instancly</span>
           </div>
           <button
