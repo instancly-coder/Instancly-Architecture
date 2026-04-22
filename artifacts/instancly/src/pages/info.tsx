@@ -22,7 +22,8 @@ function Shell({
       <main className="flex-1">
         <section className="px-4 sm:px-6 max-w-4xl mx-auto pt-16 pb-10">
           {eyebrow && (
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary text-primary-foreground text-xs font-mono mb-5">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-mono mb-5 backdrop-blur-md bg-foreground/[0.04] dark:bg-foreground/[0.06] border border-border/80 text-foreground/80 shadow-sm">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary" />
               {eyebrow}
             </div>
           )}

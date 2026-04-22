@@ -765,7 +765,7 @@ function PreviewPane({
   setViewport: (v: "desktop" | "tablet" | "mobile") => void;
 }) {
   return (
-    <div className="absolute inset-0 flex flex-col bg-black">
+    <div className="absolute inset-0 flex flex-col bg-surface-raised">
       <div className="flex-1 p-3 md:p-8 flex items-center justify-center overflow-hidden">
         <div
           className="bg-white w-full h-full flex flex-col transition-all duration-200 ease-in-out rounded-md overflow-hidden shadow-2xl"

@@ -1,4 +1,4 @@
-import { Sparkles, ArrowUp, Lightbulb, Wand2, Rocket, ArrowRight } from "lucide-react";
+import { Sparkles, ArrowUp, Lightbulb, Wand2, Rocket, ArrowRight, Star } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useEffect, useState, type KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
@@ -96,11 +96,36 @@ export default function Landing() {
 
       <main className="flex-1">
         {/* Hero */}
-        <section className="px-4 sm:px-6 max-w-5xl mx-auto text-center flex flex-col items-center justify-center min-h-[88vh] pt-10 pb-16">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary text-primary-foreground text-xs font-mono mb-8">
-            <Sparkles className="w-3 h-3" />
-            <span>Instancly v2.0 — now with one-click publish</span>
+        <section className="relative overflow-hidden">
+          {/* Decorative background */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 -z-10"
+          >
+            <div className="absolute inset-0 bg-[radial-gradient(60%_50%_at_50%_0%,hsl(var(--primary)/0.18)_0%,transparent_70%)]" />
+            <div
+              className="absolute inset-0 opacity-[0.18] dark:opacity-[0.12]"
+              style={{
+                backgroundImage:
+                  "linear-gradient(to right, hsl(var(--border)) 1px, transparent 1px), linear-gradient(to bottom, hsl(var(--border)) 1px, transparent 1px)",
+                backgroundSize: "56px 56px",
+                maskImage:
+                  "radial-gradient(ellipse at center, black 40%, transparent 75%)",
+                WebkitMaskImage:
+                  "radial-gradient(ellipse at center, black 40%, transparent 75%)",
+              }}
+            />
           </div>
+
+          <div className="px-4 sm:px-6 max-w-5xl mx-auto text-center flex flex-col items-center justify-center min-h-[88vh] pt-10 pb-16">
+          <a
+            href="/changelog"
+            className="group inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-mono mb-8 backdrop-blur-md bg-foreground/[0.04] dark:bg-foreground/[0.06] border border-border/80 text-foreground/80 hover:text-foreground hover:border-primary/40 transition-colors shadow-sm"
+          >
+            <Sparkles className="w-3 h-3 text-primary" />
+            <span>Instancly v2.0 — now with one-click publish</span>
+            <ArrowRight className="w-3 h-3 opacity-60 group-hover:translate-x-0.5 transition-transform" />
+          </a>
           <h1 className="text-4xl sm:text-5xl md:text-7xl font-bold tracking-tight mb-6 leading-[1.05]">
             <span className="block">Build your</span>
             <span className="block mt-2">
@@ -153,6 +178,28 @@ export default function Landing() {
                 </button>
               ))}
             </div>
+
+            <div className="mt-10 flex items-center justify-center gap-2 text-xs text-secondary">
+              <div className="flex -space-x-1.5">
+                {["#00ffee", "#7c3aed", "#f59e0b", "#ef4444"].map((c) => (
+                  <span
+                    key={c}
+                    className="w-5 h-5 rounded-full border-2 border-background"
+                    style={{ background: c }}
+                  />
+                ))}
+              </div>
+              <div className="flex items-center gap-1">
+                {[...Array(5)].map((_, i) => (
+                  <Star
+                    key={i}
+                    className="w-3 h-3 fill-primary text-primary"
+                  />
+                ))}
+              </div>
+              <span>Loved by 36M+ builders</span>
+            </div>
+          </div>
           </div>
         </section>
 
@@ -160,7 +207,8 @@ export default function Landing() {
         <section id="how" className="py-20 md:py-28 px-4 sm:px-6 border-t border-border bg-surface/40">
           <div className="max-w-6xl mx-auto">
             <div className="text-center max-w-2xl mx-auto mb-14">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary text-primary-foreground text-xs font-mono mb-4">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-mono mb-4 backdrop-blur-md bg-foreground/[0.04] dark:bg-foreground/[0.06] border border-border/80 text-foreground/80 shadow-sm">
+                <Sparkles className="w-3 h-3 text-primary" />
                 Meet Instancly
               </div>
               <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-4">
@@ -269,8 +317,8 @@ export default function Landing() {
 
         {/* Final CTA */}
         <section className="py-24 md:py-32 px-4 sm:px-6 text-center border-t border-border">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary text-primary-foreground text-xs font-mono mb-6">
-            <Sparkles className="w-3 h-3" />
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-mono mb-6 backdrop-blur-md bg-foreground/[0.04] dark:bg-foreground/[0.06] border border-border/80 text-foreground/80 shadow-sm">
+            <Sparkles className="w-3 h-3 text-primary" />
             AI App Builder
           </div>
           <h2 className="text-4xl md:text-5xl font-bold mb-6 tracking-tight">
