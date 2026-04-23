@@ -65,9 +65,11 @@ router.get("/db/tables", async (_req, res) => {
         n.nspname as schema,
         c.reltuples::bigint as row_estimate,
         pg_size_pretty(pg_total_relation_size(c.oid)) as size,
-        pg_total_relation_size(c.oid) as size_bytes
+        pg_total_relation_size(c.oid) as size_bytes,
+        greatest(coalesce(s.last_autoanalyze, s.last_analyze, s.last_autovacuum, s.last_vacuum), to_timestamp(0)) as last_change
       from pg_class c
       join pg_namespace n on n.oid = c.relnamespace
+      left join pg_stat_user_tables s on s.relid = c.oid
       where c.relkind = 'r'
         and n.nspname not in ('pg_catalog', 'information_schema')
       order by pg_total_relation_size(c.oid) desc
@@ -77,13 +79,42 @@ router.get("/db/tables", async (_req, res) => {
       (result as { rows?: Array<Record<string, unknown>> }).rows ??
       (result as unknown as Array<Record<string, unknown>>);
 
-    const tables = (rows ?? []).map((r) => ({
+    const base = (rows ?? []).map((r) => ({
       name: String(r.name),
       schema: String(r.schema),
-      rows: Number(r.row_estimate ?? 0),
+      rowEstimate: Number(r.row_estimate ?? 0),
       size: String(r.size ?? "0 B"),
       sizeBytes: Number(r.size_bytes ?? 0),
+      lastChange: r.last_change ? new Date(r.last_change as string).toISOString() : null,
     }));
+
+    const tables = await Promise.all(
+      base.map(async (t) => {
+        let exact: number | null = null;
+        if (t.rowEstimate < 0 || (t.sizeBytes < 5_000_000 && t.rowEstimate < 100_000)) {
+          try {
+            const countRes = await db.execute(
+              sql`select count(*)::bigint as n from ${sql.identifier(t.schema)}.${sql.identifier(t.name)}`,
+            );
+            const cRow =
+              ((countRes as { rows?: Array<Record<string, unknown>> }).rows?.[0] ??
+                (countRes as unknown as Array<Record<string, unknown>>)[0]) ?? {};
+            exact = Number(cRow.n ?? 0);
+          } catch {
+            exact = null;
+          }
+        }
+        return {
+          name: t.name,
+          schema: t.schema,
+          rows: exact ?? Math.max(0, t.rowEstimate),
+          exact: exact !== null,
+          size: t.size,
+          sizeBytes: t.sizeBytes,
+          lastChange: t.lastChange,
+        };
+      }),
+    );
 
     res.json({ tables });
   } catch (err) {

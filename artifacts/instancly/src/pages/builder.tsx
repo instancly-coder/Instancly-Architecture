@@ -28,6 +28,7 @@ import {
   ArrowLeft,
   ArrowRight,
   RotateCw,
+  RefreshCw,
   Search,
   Check,
   ArrowUp,
@@ -273,11 +274,6 @@ export default function Builder() {
   const copyUrl = () => {
     navigator.clipboard.writeText(`${slug}-${username}.instancly.app`);
     toast.success("URL copied");
-  };
-
-  const copyDbUrl = () => {
-    navigator.clipboard.writeText(`postgres://user:pass@ep-cool-db.neon.tech/main`);
-    toast.success("Connection string copied");
   };
 
   const currentStep = stepIndex >= 0 ? STREAM_STEPS[stepIndex] : null;
@@ -558,7 +554,7 @@ export default function Builder() {
             {activeTab === "files" && (
               <FilesPane activeFile={activeFile} setActiveFile={setActiveFile} />
             )}
-            {activeTab === "database" && <DatabaseView copyDbUrl={copyDbUrl} />}
+            {activeTab === "database" && <DatabaseView />}
             {activeTab === "analytics" && <AnalyticsView />}
             {activeTab === "payments" && <PaymentsView />}
             {activeTab === "integrations" && <IntegrationsView />}
@@ -1447,42 +1443,146 @@ function IntegrationsView() {
 
 /* ------------------------------- Database ------------------------------- */
 
-function DatabaseView({ copyDbUrl }: { copyDbUrl: () => void }) {
-  const tables = [
-    { name: "users", rows: 412, size: "284 KB", updated: "2 min ago" },
-    { name: "tasks", rows: 524, size: "1.6 MB", updated: "12 sec ago" },
-    { name: "sessions", rows: 98, size: "44 KB", updated: "1 hr ago" },
-    { name: "audit_logs", rows: 8, size: "12 KB", updated: "3 hrs ago" },
-  ];
+type DbTable = {
+  name: string;
+  schema: string;
+  rows: number;
+  exact: boolean;
+  size: string;
+  sizeBytes: number;
+  lastChange: string | null;
+};
+
+type DbInfo = {
+  provider: string;
+  host: string;
+  database: string;
+  size: string;
+  version: string;
+  connectionString: string;
+};
+
+function relativeTime(iso: string | null): string {
+  if (!iso) return "—";
+  const t = new Date(iso).getTime();
+  if (!t) return "—";
+  const diff = Date.now() - t;
+  const s = Math.floor(diff / 1000);
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m} min ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} hr ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
+}
+
+function DatabaseView() {
+  const [info, setInfo] = useState<DbInfo | null>(null);
+  const [tables, setTables] = useState<DbTable[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [infoRes, tablesRes] = await Promise.all([
+        fetch("/api/db/info"),
+        fetch("/api/db/tables"),
+      ]);
+      if (!infoRes.ok) throw new Error(`info: ${infoRes.status}`);
+      if (!tablesRes.ok) throw new Error(`tables: ${tablesRes.status}`);
+      const i = await infoRes.json();
+      const t = await tablesRes.json();
+      setInfo(i);
+      setTables(t.tables ?? []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const copyConnString = async () => {
+    if (!info) return;
+    try {
+      await navigator.clipboard.writeText(info.connectionString);
+      toast.success("Masked URL copied (real password is in your secrets)");
+    } catch {
+      toast.error("Could not copy");
+    }
+  };
+
+  const totalRows = tables?.reduce((s, t) => s + t.rows, 0) ?? 0;
+  const publicTables = tables?.filter((t) => t.schema === "public") ?? [];
+
   return (
     <PaneShell
       title="Database"
-      subtitle="A serverless Postgres instance, branched per project. Snapshots run every hour."
+      subtitle={
+        info
+          ? `Live ${info.provider === "neon" ? "Neon" : "Postgres"} database · ${info.database} · ${info.host}`
+          : "Connecting to your Postgres database…"
+      }
       actions={
         <>
-          <Button size="sm" variant="outline" className="border-border h-8">
-            <Copy className="w-3.5 h-3.5 mr-1.5" /> SQL editor
-          </Button>
-          <Button size="sm" className="h-8 bg-primary text-primary-foreground hover:bg-primary/90">
-            <Plus className="w-3.5 h-3.5 mr-1.5" /> New table
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-border h-8"
+            onClick={load}
+            disabled={loading}
+          >
+            <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${loading ? "animate-spin" : ""}`} />
+            Refresh
           </Button>
         </>
       }
     >
+      {error && (
+        <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive flex items-start gap-2">
+          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+          <div>
+            <div className="font-medium">Could not reach the database</div>
+            <div className="text-xs mt-0.5 opacity-80 font-mono">{error}</div>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiCard label="Tables" value="4" />
-        <KpiCard label="Total Rows" value="1,042" delta="+38" positive />
-        <KpiCard label="Storage" value="2.4 MB" delta="+0.1 MB" positive />
-        <KpiCard label="Region" value="lhr1" />
+        <KpiCard label="Tables" value={tables ? `${tables.length}` : "—"} />
+        <KpiCard
+          label="Total Rows"
+          value={tables ? totalRows.toLocaleString() : "—"}
+        />
+        <KpiCard label="Storage" value={info?.size ?? "—"} />
+        <KpiCard label="Provider" value={info?.provider === "neon" ? "Neon" : info?.provider ?? "—"} />
       </div>
 
       <div>
-        <SectionHeader title="Connection string" hint="Use this URL in your scripts and migrations." />
+        <SectionHeader
+          title="Connection"
+          hint={
+            info
+              ? `Connected · ${info.version?.split(" ").slice(0, 2).join(" ") ?? "PostgreSQL"}`
+              : "Looking up host…"
+          }
+        />
         <div className="flex flex-col sm:flex-row gap-2">
           <div className="flex-1 bg-surface border border-border rounded-lg px-4 py-2.5 font-mono text-xs text-secondary truncate">
-            postgres://user:••••••••@ep-cool-db.neon.tech/main
+            {info?.connectionString ?? "Loading…"}
           </div>
-          <Button variant="outline" onClick={copyDbUrl} className="border-border h-10">
+          <Button
+            variant="outline"
+            onClick={copyConnString}
+            className="border-border h-10"
+            disabled={!info}
+          >
             <Copy className="w-4 h-4 mr-2" /> Copy
           </Button>
         </div>
@@ -1491,11 +1591,10 @@ function DatabaseView({ copyDbUrl }: { copyDbUrl: () => void }) {
       <div>
         <SectionHeader
           title="Tables"
-          hint={`${tables.length} tables · click to inspect schema and rows`}
-          action={
-            <button className="text-xs text-secondary hover:text-foreground inline-flex items-center gap-1">
-              <Filter className="w-3 h-3" /> Filter
-            </button>
+          hint={
+            tables
+              ? `${tables.length} tables across ${new Set(tables.map((t) => t.schema)).size} schemas · ${publicTables.length} in public`
+              : "Loading tables…"
           }
         />
         <div className="rounded-xl border border-border overflow-hidden">
@@ -1505,28 +1604,48 @@ function DatabaseView({ copyDbUrl }: { copyDbUrl: () => void }) {
             <div className="text-right">Size</div>
             <div className="text-right hidden sm:block">Updated</div>
           </div>
-          {tables.map((t, i, arr) => (
-            <div
-              key={t.name}
-              className={`grid grid-cols-[1fr_auto_auto_auto] gap-4 items-center px-4 py-3 bg-surface hover:bg-surface-raised transition-colors cursor-pointer ${
-                i < arr.length - 1 ? "border-b border-border" : ""
-              }`}
-            >
-              <div className="flex items-center gap-2 min-w-0">
-                <Database className="w-4 h-4 text-secondary shrink-0" />
-                <span className="font-mono text-sm truncate">{t.name}</span>
-              </div>
-              <span className="text-xs text-foreground font-mono text-right">
-                {t.rows.toLocaleString()}
-              </span>
-              <span className="text-xs text-secondary font-mono text-right">
-                {t.size}
-              </span>
-              <span className="text-xs text-secondary font-mono text-right hidden sm:block">
-                {t.updated}
-              </span>
+
+          {loading && !tables && (
+            <div className="px-6 py-10 text-center text-sm text-secondary bg-surface flex items-center justify-center gap-2">
+              <RefreshCw className="w-4 h-4 animate-spin" /> Loading tables…
             </div>
-          ))}
+          )}
+
+          {tables &&
+            tables.map((t, i, arr) => (
+              <div
+                key={`${t.schema}.${t.name}`}
+                className={`grid grid-cols-[1fr_auto_auto_auto] gap-4 items-center px-4 py-3 bg-surface hover:bg-surface-raised transition-colors cursor-pointer ${
+                  i < arr.length - 1 ? "border-b border-border" : ""
+                }`}
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <Database className="w-4 h-4 text-secondary shrink-0" />
+                  <span className="font-mono text-sm truncate">{t.name}</span>
+                  {t.schema !== "public" && (
+                    <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-surface-raised text-secondary shrink-0">
+                      {t.schema}
+                    </span>
+                  )}
+                </div>
+                <span className="text-xs text-foreground font-mono text-right">
+                  {t.rows.toLocaleString()}
+                  {!t.exact && <span className="text-secondary">~</span>}
+                </span>
+                <span className="text-xs text-secondary font-mono text-right">
+                  {t.size}
+                </span>
+                <span className="text-xs text-secondary font-mono text-right hidden sm:block">
+                  {relativeTime(t.lastChange)}
+                </span>
+              </div>
+            ))}
+
+          {tables && tables.length === 0 && (
+            <div className="px-6 py-10 text-center text-sm text-secondary bg-surface">
+              No tables yet. Create one and refresh.
+            </div>
+          )}
         </div>
       </div>
     </PaneShell>
