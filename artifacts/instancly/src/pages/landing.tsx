@@ -163,14 +163,29 @@ export default function Landing() {
             />
           </div>
 
+          {/* Bolt-style hero arch — sits above the announcement pill */}
+          <div aria-hidden className="hero-arch" />
+
+          {/* Announcement pill, sits above the arch like Bolt */}
+          <div className="relative z-10 flex justify-center pt-12">
+            <Link
+              href="/explore"
+              className="group inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-medium backdrop-blur-md bg-foreground/[0.04] dark:bg-white/[0.04] border border-border/80 hover:border-primary/60 text-foreground/90 transition-colors"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-primary" />
+              Introducing Instancly v2 — now with live AI builds
+              <ArrowRight className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+            </Link>
+          </div>
+
           <div className="px-4 sm:px-8 max-w-7xl mx-auto w-full text-center flex flex-col items-center justify-center min-h-[88vh] pt-10 pb-16">
           <h1 className="text-4xl sm:text-5xl md:text-7xl font-bold tracking-tight mb-6 leading-[1.02]">
             <span className="block">Ship your</span>
             <span className="block mt-2">
               <span
                 key={nounIndex}
-                className="inline-block text-primary animate-rotate-in"
-                style={{ textShadow: "0 0 40px rgba(204,255,0,0.45)" }}
+                className="inline-block text-primary animate-rotate-in italic"
+                style={{ textShadow: "0 0 40px hsl(215 100% 60% / 0.55)" }}
               >
                 {ROTATING_NOUNS[nounIndex]}
               </span>
@@ -184,7 +199,7 @@ export default function Landing() {
           </p>
 
           <div className="w-full max-w-2xl mx-auto">
-            <div className="rounded-xl border border-border bg-background focus-within:ring-1 focus-within:ring-primary focus-within:border-primary transition-shadow shadow-2xl shadow-black/10 dark:shadow-black/40 text-left">
+            <div className="prompt-glow rounded-[14px] border border-border bg-background text-left focus-within:border-primary focus-within:shadow-[0_0_0_1px_hsl(var(--primary))] transition-shadow">
               <textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
@@ -232,7 +247,7 @@ export default function Landing() {
 
             <div className="mt-10 flex items-center justify-center gap-2 text-xs text-secondary">
               <div className="flex -space-x-1.5">
-                {["#ccff00", "#7c3aed", "#0ea5e9", "#10b981"].map((c) => (
+                {["#3b82f6", "#7c3aed", "#0ea5e9", "#10b981"].map((c) => (
                   <span
                     key={c}
                     className="w-5 h-5 rounded-full border-2 border-background"
