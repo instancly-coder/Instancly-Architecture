@@ -27,7 +27,7 @@ export default function Admin() {
           <StatCard title="Total Users" value={mockAdminStats.totalUsers.toString()} icon={Users} />
           <StatCard title="MRR" value={mockAdminStats.mrr} icon={CreditCard} />
           <StatCard title="Builds Today" value={mockAdminStats.buildsToday.toString()} icon={Activity} />
-          <StatCard title="Active Models" value={mockAdminStats.activeModels.toString()} icon={Box} />
+          <StatCard title="Active Models" value={mockAdminStats.activeModels.toString()} icon={BoxLogo} />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

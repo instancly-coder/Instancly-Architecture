@@ -54,7 +54,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { mockUser, mockModels } from "@/lib/mock-data";
+import { mockModels } from "@/lib/mock-data";
+import { useMe, useProject, useProjectBuilds, useCreateBuild, type ApiBuild } from "@/lib/api";
 import { toast } from "sonner";
 
 type TabKey =
@@ -105,50 +106,32 @@ type PastBuild = {
   ago: string;
 };
 
-const PAST_BUILDS: PastBuild[] = [
-  {
-    id: "b3",
-    number: 3,
-    prompt: "Add a leaderboard sorted by streak length with weekly reset.",
-    aiMessage:
-      "Added a leaderboard sorted by streak length. I created a new `/leaderboard` page, wrote a SQL view that recalculates weekly, and wired up a cron-style reset every Monday at 00:00 UTC. Top 10 users now show with rank badges. Have a look — does the layout feel right?",
-    durationSec: 142,
-    cost: 0.04,
-    filesChanged: 6,
-    tokensIn: 12_840,
-    tokensOut: 4_120,
-    model: "Claude Sonnet 4.5",
-    ago: "5 mins ago",
-  },
-  {
-    id: "b2",
-    number: 2,
-    prompt: "Wire the form to Postgres and add zod validation.",
-    aiMessage:
-      "Wired the signup form to Postgres and added zod validation on both client and server. I also added inline error states under each field and a friendly toast on success. Try submitting an empty email — you should see a clean error.",
-    durationSec: 98,
-    cost: 0.03,
-    filesChanged: 4,
-    tokensIn: 8_310,
-    tokensOut: 2_640,
-    model: "Claude Sonnet 4.5",
-    ago: "12 mins ago",
-  },
-  {
-    id: "b1",
-    number: 1,
-    prompt: "Create a habit tracker with streaks and a weekly chart.",
-    aiMessage:
-      "Done. I built the initial habit tracker — a daily checklist, automatic streak counter, and a weekly bar chart at the top showing completion. There's also a small celebration animation when you hit a 7-day streak. Tell me what to tweak next.",
-    durationSec: 217,
-    cost: 0.07,
-    filesChanged: 11,
-    tokensIn: 24_500,
-    tokensOut: 9_800,
-    model: "Claude Sonnet 4.5",
-    ago: "27 mins ago",
-  },
-];
+function timeAgo(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(ms / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m} mins ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
+}
+
+function toPastBuild(b: ApiBuild): PastBuild {
+  return {
+    id: b.id,
+    number: b.number,
+    prompt: b.prompt,
+    aiMessage: b.aiMessage,
+    durationSec: b.durationSec,
+    cost: b.cost,
+    filesChanged: b.filesChanged,
+    tokensIn: b.tokensIn,
+    tokensOut: b.tokensOut,
+    model: b.model,
+    ago: timeAgo(b.createdAt),
+  };
+}
 
 const STREAM_STEPS = [
   { phase: "Planning", text: "Sketching component tree and routes" },
@@ -162,6 +145,13 @@ const STREAM_STEPS = [
 export default function Builder() {
   const params = useParams();
   const { username, slug } = params;
+
+  const { data: me } = useMe();
+  const { data: project } = useProject(username, slug);
+  const { data: apiBuilds = [] } = useProjectBuilds(username, slug);
+  const createBuild = useCreateBuild(username, slug);
+  const pastBuilds = apiBuilds.map(toPastBuild);
+  const balance = me?.balance ?? 0;
 
   const [openTabs, setOpenTabs] = useState<TabKey[]>(["preview"]);
   const [activeTab, setActiveTab] = useState<TabKey>("preview");
@@ -260,6 +250,7 @@ export default function Builder() {
 
   const handleSend = () => {
     if (!chatInput.trim() || isStreaming) return;
+    const prompt = chatInput.trim();
     setChatInput("");
     setIsStreaming(true);
     setStepIndex(0);
@@ -268,7 +259,11 @@ export default function Builder() {
       i += 1;
       if (i >= STREAM_STEPS.length) {
         window.clearInterval(id);
-        setIsStreaming(false);
+        createBuild
+          .mutateAsync({ prompt })
+          .then(() => toast.success("Build complete"))
+          .catch((err) => toast.error(err instanceof Error ? err.message : "Build failed"))
+          .finally(() => setIsStreaming(false));
         return;
       }
       setStepIndex(i);
@@ -330,7 +325,7 @@ export default function Builder() {
           <Popover>
             <PopoverTrigger asChild>
               <button className="hidden sm:inline-flex px-3 py-1.5 rounded-full bg-background border border-border text-xs font-mono font-medium hover:bg-surface-raised transition-colors">
-                £{mockUser.balance.toFixed(2)}
+                £{balance.toFixed(2)}
               </button>
             </PopoverTrigger>
             <PopoverContent
@@ -339,7 +334,7 @@ export default function Builder() {
             >
               <h4 className="font-medium mb-2">Current Balance</h4>
               <div className="text-2xl font-mono mb-4">
-                £{mockUser.balance.toFixed(2)}
+                £{balance.toFixed(2)}
               </div>
               <Link href="/dashboard/billing">
                 <Button className="w-full text-xs" variant="outline">
@@ -361,7 +356,7 @@ export default function Builder() {
               <DropdownMenuItem>Share link</DropdownMenuItem>
               <DropdownMenuSeparator className="bg-border" />
               <DropdownMenuItem>
-                <span className="font-mono text-xs">£{mockUser.balance.toFixed(2)} balance</span>
+                <span className="font-mono text-xs">£{balance.toFixed(2)} balance</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -384,6 +379,7 @@ export default function Builder() {
             onSend={handleSend}
             openBuildId={openBuildId}
             setOpenBuildId={setOpenBuildId}
+            pastBuilds={pastBuilds}
           />
         </aside>
         {/* Drag handle to resize chat */}
@@ -571,6 +567,7 @@ export default function Builder() {
               <HistoryPane
                 openBuildId={openBuildId}
                 setOpenBuildId={setOpenBuildId}
+                builds={pastBuilds}
               />
             )}
             {activeTab === "settings" && <SettingsPane />}
@@ -619,6 +616,7 @@ export default function Builder() {
           onSend={handleSend}
           openBuildId={openBuildId}
           setOpenBuildId={setOpenBuildId}
+          pastBuilds={pastBuilds}
         />
       </div>
     </div>
@@ -662,6 +660,7 @@ function ChatPanel({
   onSend,
   openBuildId,
   setOpenBuildId,
+  pastBuilds,
 }: {
   chatInput: string;
   setChatInput: (v: string) => void;
@@ -671,6 +670,7 @@ function ChatPanel({
   onSend: () => void;
   openBuildId: string | null;
   setOpenBuildId: (id: string | null) => void;
+  pastBuilds: PastBuild[];
 }) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -689,7 +689,7 @@ function ChatPanel({
     <>
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-5">
         {/* Conversation thread (oldest first, like a chat) */}
-        {[...PAST_BUILDS].reverse().map((b) => {
+        {[...pastBuilds].reverse().map((b) => {
           const open = openBuildId === b.id;
           const mins = Math.floor(b.durationSec / 60);
           const secs = b.durationSec % 60;
@@ -810,7 +810,7 @@ function ChatPanel({
           </div>
         )}
 
-        {!isStreaming && !currentPhase && PAST_BUILDS.length === 0 && (
+        {!isStreaming && !currentPhase && pastBuilds.length === 0 && (
           <div className="text-xs text-secondary text-center py-8">
             Tell the AI what to build. Watch the work happen live.
           </div>
@@ -1975,13 +1975,15 @@ function DnsRow({ type, name, value }: { type: string; name: string; value: stri
 function HistoryPane({
   openBuildId,
   setOpenBuildId,
+  builds,
 }: {
   openBuildId: string | null;
   setOpenBuildId: (id: string | null) => void;
+  builds: PastBuild[];
 }) {
-  const totalCost = PAST_BUILDS.reduce((s, b) => s + b.cost, 0);
-  const totalFiles = PAST_BUILDS.reduce((s, b) => s + b.filesChanged, 0);
-  const totalTime = PAST_BUILDS.reduce((s, b) => s + b.durationSec, 0);
+  const totalCost = builds.reduce((s, b) => s + b.cost, 0);
+  const totalFiles = builds.reduce((s, b) => s + b.filesChanged, 0);
+  const totalTime = builds.reduce((s, b) => s + b.durationSec, 0);
   const fmtTime = (sec: number) => {
     const m = Math.floor(sec / 60);
     const s = sec % 60;
@@ -1998,7 +2000,7 @@ function HistoryPane({
       }
     >
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiCard label="Builds" value={`${PAST_BUILDS.length}`} />
+        <KpiCard label="Builds" value={`${builds.length}`} />
         <KpiCard label="Total spent" value={`£${totalCost.toFixed(2)}`} />
         <KpiCard label="Files changed" value={`${totalFiles}`} />
         <KpiCard label="Total time" value={fmtTime(totalTime)} />
@@ -2007,7 +2009,7 @@ function HistoryPane({
       <div>
         <SectionHeader title="Timeline" hint="Newest first" />
         <div className="space-y-2">
-          {PAST_BUILDS.map((b) => {
+          {builds.map((b) => {
             const open = openBuildId === b.id;
             return (
               <div

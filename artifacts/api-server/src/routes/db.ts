@@ -7,7 +7,7 @@ const router: IRouter = Router();
 router.get("/db/ping", async (_req, res) => {
   try {
     const result = await db.execute(sql`select 1 as ok, now() as now, current_database() as database`);
-    const row = (result as { rows?: unknown[] }).rows?.[0] ?? (result as unknown[])[0];
+    const row = (result as { rows?: unknown[] }).rows?.[0] ?? (result as unknown as unknown[])[0];
     res.json({ status: "ok", row });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
