@@ -5,10 +5,12 @@ import usersRouter from "./users";
 import projectsRouter from "./projects";
 import exploreRouter from "./explore";
 import meRouter from "./me";
+import authRouter from "./auth";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use(authRouter);
 router.use(dbRouter);
 router.use(usersRouter);
 router.use(projectsRouter);

@@ -6,19 +6,34 @@ import {
   projectsTable,
   transactionsTable,
 } from "@workspace/db";
+import { authConfigured, getAuthedUser } from "../middlewares/auth";
 
 const router: IRouter = Router();
 
-const ME = "johndoe";
+const FALLBACK_USERNAME = "johndoe";
 
-async function getMe() {
-  return (await db.select().from(usersTable).where(eq(usersTable.username, ME)).limit(1))[0];
+async function getMe(req: Request) {
+  const authed = getAuthedUser(req);
+  if (authed) {
+    return (await db.select().from(usersTable).where(eq(usersTable.id, authed.id)).limit(1))[0];
+  }
+  // Dev fallback only when auth is not configured at all
+  if (!authConfigured) {
+    return (
+      await db
+        .select()
+        .from(usersTable)
+        .where(eq(usersTable.username, FALLBACK_USERNAME))
+        .limit(1)
+    )[0];
+  }
+  return null;
 }
 
-router.get("/me", async (_req: Request, res: Response): Promise<void> => {
-  const user = await getMe();
+router.get("/me", async (req: Request, res: Response): Promise<void> => {
+  const user = await getMe(req);
   if (!user) {
-    res.status(404).json({ status: "error", message: "User not found" });
+    res.status(401).json({ status: "error", message: "Unauthenticated" });
     return;
   }
   res.json({
@@ -34,8 +49,8 @@ router.get("/me", async (_req: Request, res: Response): Promise<void> => {
   });
 });
 
-router.get("/me/projects", async (_req: Request, res: Response): Promise<void> => {
-  const user = await getMe();
+router.get("/me/projects", async (req: Request, res: Response): Promise<void> => {
+  const user = await getMe(req);
   if (!user) {
     res.json([]);
     return;
@@ -59,8 +74,8 @@ router.get("/me/projects", async (_req: Request, res: Response): Promise<void> =
   res.json(rows.map((r) => ({ ...r, buildsCount: Number(r.buildsCount) })));
 });
 
-router.get("/me/transactions", async (_req: Request, res: Response): Promise<void> => {
-  const user = await getMe();
+router.get("/me/transactions", async (req: Request, res: Response): Promise<void> => {
+  const user = await getMe(req);
   if (!user) {
     res.json([]);
     return;
@@ -74,9 +89,9 @@ router.get("/me/transactions", async (_req: Request, res: Response): Promise<voi
 });
 
 router.post("/me/projects", async (req: Request, res: Response): Promise<void> => {
-  const user = await getMe();
+  const user = await getMe(req);
   if (!user) {
-    res.status(404).json({ status: "error", message: "User not found" });
+    res.status(401).json({ status: "error", message: "Unauthenticated" });
     return;
   }
   const { name, description = "", framework = "React" } = req.body ?? {};
