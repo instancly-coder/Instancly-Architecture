@@ -276,18 +276,20 @@ export default function Landing() {
           </div>
 
           <div className="px-4 sm:px-8 max-w-7xl mx-auto w-full text-center flex flex-col items-center justify-center min-h-[80vh] pt-2 pb-16">
-          <h1 className="text-4xl sm:text-5xl md:text-7xl font-bold tracking-tight mb-6 leading-[1.02]">
-            <span className="block">Ship your</span>
-            <span className="block mt-4 mb-2">
-              <span
-                key={nounIndex}
-                className="inline-block text-primary animate-rotate-in italic font-black text-5xl sm:text-6xl md:text-8xl leading-[0.95] tracking-tight"
-                style={{ textShadow: "0 0 50px hsl(215 100% 60% / 0.6)" }}
-              >
-                {ROTATING_NOUNS[nounIndex]}
-              </span>
+          {/* Flex column with a single `gap` keeps the three lines visibly
+              evenly spaced even though the middle word is much larger and
+              has its own line-height. Mixing block + line-heights produces
+              uneven white-space on either side of the big word. */}
+          <h1 className="flex flex-col items-center text-4xl sm:text-5xl md:text-7xl font-bold tracking-tight mb-6 leading-none gap-3 sm:gap-4 md:gap-5">
+            <span>Ship your</span>
+            <span
+              key={nounIndex}
+              className="inline-block text-primary animate-rotate-in italic font-black text-5xl sm:text-6xl md:text-8xl leading-none tracking-tight"
+              style={{ textShadow: "0 0 50px hsl(215 100% 60% / 0.6)" }}
+            >
+              {ROTATING_NOUNS[nounIndex]}
             </span>
-            <span className="block mt-2">in an afternoon.</span>
+            <span>in an afternoon.</span>
           </h1>
 
           <p className="text-base sm:text-lg text-secondary max-w-xl mx-auto mb-10">
