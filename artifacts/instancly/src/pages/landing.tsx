@@ -278,11 +278,11 @@ export default function Landing() {
           <div className="px-4 sm:px-8 max-w-7xl mx-auto w-full text-center flex flex-col items-center justify-center min-h-[80vh] pt-2 pb-16">
           <h1 className="text-4xl sm:text-5xl md:text-7xl font-bold tracking-tight mb-6 leading-[1.02]">
             <span className="block">Ship your</span>
-            <span className="block mt-2">
+            <span className="block mt-4 mb-2">
               <span
                 key={nounIndex}
-                className="inline-block text-primary animate-rotate-in italic font-extrabold text-[1.15em] leading-[0.95]"
-                style={{ textShadow: "0 0 40px hsl(215 100% 60% / 0.55)" }}
+                className="inline-block text-primary animate-rotate-in italic font-black text-5xl sm:text-6xl md:text-8xl leading-[0.95] tracking-tight"
+                style={{ textShadow: "0 0 50px hsl(215 100% 60% / 0.6)" }}
               >
                 {ROTATING_NOUNS[nounIndex]}
               </span>
@@ -329,17 +329,26 @@ export default function Landing() {
               </div>
             </div>
 
-            <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-              {PROMPT_SUGGESTIONS.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => setPrompt(s)}
-                  className="px-3 py-1.5 rounded-full text-xs text-secondary border border-border bg-surface/60 hover:text-foreground hover:border-primary transition-colors"
-                >
-                  {s}
-                </button>
-              ))}
+            {/* Single-line, horizontally scrollable chip slider. Edge fades
+                hint that more chips exist off-screen; touchpads/trackpads/
+                touchscreens scroll naturally and the bar is hidden. */}
+            <div className="relative mt-5 -mx-4 sm:-mx-8">
+              <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-background to-transparent z-10" />
+              <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-background to-transparent z-10" />
+              <div className="overflow-x-auto no-scrollbar px-4 sm:px-8">
+                <div className="flex flex-nowrap items-center justify-start sm:justify-center gap-2 w-max mx-auto">
+                  {PROMPT_SUGGESTIONS.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setPrompt(s)}
+                      className="shrink-0 px-3 py-1.5 rounded-full text-xs text-secondary border border-border bg-surface/60 hover:text-foreground hover:border-primary transition-colors whitespace-nowrap"
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
             <div className="mt-10 flex items-center justify-center gap-2 text-xs text-secondary">

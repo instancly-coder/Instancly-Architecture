@@ -138,6 +138,10 @@
   border-color: hsl(var(--primary));
 }
 
+/* Hide native scrollbars on horizontally-scrolling chip rows etc. */
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
 /* Streaming-text shimmer: paints the text with a horizontal gradient
    (dim base color with a single brighter band) and slides that gradient
    left → right so a highlight sweeps through the glyphs. The gradient
