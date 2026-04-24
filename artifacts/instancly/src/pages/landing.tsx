@@ -281,7 +281,7 @@ export default function Landing() {
             <span className="block mt-2">
               <span
                 key={nounIndex}
-                className="inline-block text-primary animate-rotate-in italic"
+                className="inline-block text-primary animate-rotate-in italic font-extrabold text-[1.15em] leading-[0.95]"
                 style={{ textShadow: "0 0 40px hsl(215 100% 60% / 0.55)" }}
               >
                 {ROTATING_NOUNS[nounIndex]}
