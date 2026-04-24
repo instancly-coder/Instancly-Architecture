@@ -189,7 +189,7 @@ function emptyHtml(headline = "Your app will appear here"): string {
   <body>
     <div class="card">
       <h1>${headline}</h1>
-      <p>Send a prompt in the chat and Instancly will generate the code, persist the files, and render the result here.</p>
+      <p>Send a prompt in the chat and DeployBro will generate the code, persist the files, and render the result here.</p>
     </div>
   </body>
 </html>`;

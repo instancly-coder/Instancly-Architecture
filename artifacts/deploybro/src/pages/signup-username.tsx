@@ -7,7 +7,7 @@ import logoUrl from "@assets/download_1776989236348.png";
 import { useMe, useUpdateMe } from "@/lib/api";
 import { toast } from "sonner";
 
-const RESERVED = ["admin", "api", "www", "dashboard", "explore", "settings", "billing", "support", "instancly", "help", "handler", "login", "signup"];
+const RESERVED = ["admin", "api", "www", "dashboard", "explore", "settings", "billing", "support", "deploybro", "help", "handler", "login", "signup"];
 
 export default function SignupUsername() {
   const [, setLocation] = useLocation();

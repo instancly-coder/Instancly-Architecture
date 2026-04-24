@@ -224,7 +224,7 @@ export default function Landing() {
     const value = prompt.trim();
     if (value) {
       try {
-        sessionStorage.setItem("instancly:initial-prompt", value);
+        sessionStorage.setItem("deploybro:initial-prompt", value);
       } catch {}
     }
     navigate("/login");

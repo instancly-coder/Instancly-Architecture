@@ -28,7 +28,7 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 
 ## Artifacts
 
-- `artifacts/instancly` — Vite + React frontend (Instancly app, Vercel→Replit migration). Pages use react-query hooks from `src/lib/api.ts` against the API server.
+- `artifacts/deploybro` — Vite + React frontend (DeployBro app, Vercel→Replit migration). Pages use react-query hooks from `src/lib/api.ts` against the API server.
 - `artifacts/api-server` — Express 5 API mounted at `/api`. Routes: `me`, `users`, `projects`, `explore`, `db`, `health`. Handlers are typed `(req, res): Promise<void>` and use explicit `return;` after `res.json/status` (Express 5 strict typing).
 - `artifacts/mockup-sandbox` — Canvas component previews.
 

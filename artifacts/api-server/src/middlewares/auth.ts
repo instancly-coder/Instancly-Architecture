@@ -116,7 +116,7 @@ async function ensureUser(payload: JWTPayload): Promise<AuthedUser> {
  * production never hits this path.
  */
 const DEV_BYPASS_ENABLED = process.env.NODE_ENV !== "production";
-const DEV_BYPASS_EMAIL = "demo@instancly.local";
+const DEV_BYPASS_EMAIL = "demo@deploybro.local";
 
 let devUserCache: AuthedUser | null = null;
 let devUserPromise: Promise<AuthedUser> | null = null;

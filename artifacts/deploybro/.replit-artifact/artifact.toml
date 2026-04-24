@@ -1,6 +1,6 @@
 kind = "web"
 previewPath = "/"
-title = "Instancly"
+title = "DeployBro"
 version = "1.0.0"
 id = "artifacts/instancly"
 router = "path"
@@ -15,11 +15,11 @@ paths = [ "/" ]
 localPort = 18505
 
 [services.development]
-run = "pnpm --filter @workspace/instancly run dev"
+run = "pnpm --filter @workspace/deploybro run dev"
 
 [services.production]
-build = [ "pnpm", "--filter", "@workspace/instancly", "run", "build" ]
-publicDir = "artifacts/instancly/dist/public"
+build = [ "pnpm", "--filter", "@workspace/deploybro", "run", "build" ]
+publicDir = "artifacts/deploybro/dist/public"
 serve = "static"
 
 [[services.production.rewrites]]

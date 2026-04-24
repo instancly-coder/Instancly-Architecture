@@ -15,6 +15,6 @@ export function useTheme() {
 export function initThemeOnce() {
   applyDark();
   try {
-    localStorage.setItem("instancly:theme", "dark");
+    localStorage.setItem("deploybro:theme", "dark");
   } catch {}
 }

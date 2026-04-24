@@ -350,7 +350,7 @@ export default function Builder() {
   // Resizable chat panel (desktop)
   const [chatWidth, setChatWidth] = useState<number>(() => {
     if (typeof window === "undefined") return 400;
-    const saved = Number(localStorage.getItem("instancly:chatWidth"));
+    const saved = Number(localStorage.getItem("deploybro:chatWidth"));
     return saved >= 280 && saved <= 720 ? saved : 400;
   });
   const draggingRef = useRef(false);
@@ -366,7 +366,7 @@ export default function Builder() {
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
       try {
-        localStorage.setItem("instancly:chatWidth", String(chatWidth));
+        localStorage.setItem("deploybro:chatWidth", String(chatWidth));
       } catch {}
     };
     window.addEventListener("mousemove", onMove);

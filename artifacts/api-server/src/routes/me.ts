@@ -10,7 +10,7 @@ import { authConfigured, getAuthedUser } from "../middlewares/auth";
 
 const RESERVED_USERNAMES = new Set([
   "admin", "api", "www", "dashboard", "explore", "settings", "billing",
-  "support", "instancly", "help", "handler", "login", "signup", "logout",
+  "support", "deploybro", "help", "handler", "login", "signup", "logout",
   "signin", "auth", "me", "static", "public",
 ]);
 

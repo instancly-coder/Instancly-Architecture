@@ -20,7 +20,7 @@ function AuthGateInner({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (user === null) {
       try {
-        sessionStorage.setItem("instancly:after-login", window.location.pathname);
+        sessionStorage.setItem("deploybro:after-login", window.location.pathname);
       } catch {}
       navigate("/login");
     }

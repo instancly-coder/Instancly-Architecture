@@ -1,4 +1,4 @@
-// Mirror of artifacts/instancly/src/lib/components-catalog.ts — the AI's known
+// Mirror of artifacts/deploybro/src/lib/components-catalog.ts — the AI's known
 // building blocks. Keep these two files in sync.
 
 export type LibraryComponent = {
@@ -66,7 +66,7 @@ export const COMPONENT_LIBRARY: LibraryComponent[] = [
 ];
 
 export function buildSystemPrompt(projectName: string, framework: string): string {
-  return `You are Instancly, a friendly AI app builder helping a user iterate on the project "${projectName}" (${framework}).
+  return `You are DeployBro, a friendly AI app builder helping a user iterate on the project "${projectName}" (${framework}).
 
 # How you communicate
 
