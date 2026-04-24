@@ -7,7 +7,7 @@ export function MarketingFooter() {
       <div className="max-w-6xl mx-auto px-6 py-12 grid grid-cols-2 md:grid-cols-5 gap-8">
         <div className="col-span-2 md:col-span-1">
           <Link href="/" className="inline-flex items-center mb-3">
-            <img src={logoUrl} alt="Instancly" className="h-6 w-auto object-contain" />
+            <img src={logoUrl} alt="DeployBro" className="h-6 w-auto object-contain" />
           </Link>
           <p className="text-xs text-secondary leading-relaxed">
             Ship apps from a single prompt. Real Postgres, real URLs, no DevOps.
@@ -56,8 +56,8 @@ export function MarketingFooter() {
       </div>
       <div className="border-t border-border">
         <div className="max-w-6xl mx-auto px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <p className="text-xs text-secondary">© {new Date().getFullYear()} Instancly. All rights reserved.</p>
-          <p className="text-xs text-secondary font-mono">v2.0 · Built with Instancly</p>
+          <p className="text-xs text-secondary">© {new Date().getFullYear()} DeployBro. All rights reserved.</p>
+          <p className="text-xs text-secondary font-mono">v2.0 · Built with DeployBro</p>
         </div>
       </div>
     </footer>

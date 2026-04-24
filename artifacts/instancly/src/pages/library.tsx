@@ -41,7 +41,7 @@ export default function Library() {
     <div className="min-h-screen bg-background text-foreground flex flex-col">
       <nav className="border-b border-border bg-surface h-14 flex items-center px-6 sticky top-0 z-10">
         <Link href="/" className="flex items-center gap-2 hover:opacity-80 mr-8">
-          <img src={logoUrl} alt="Instancly" className="h-5 w-auto" />
+          <img src={logoUrl} alt="DeployBro" className="h-5 w-auto" />
           <span className="font-bold tracking-tight text-secondary">/ library</span>
         </Link>
         <div className="ml-auto flex items-center gap-3">
@@ -64,7 +64,7 @@ export default function Library() {
             Component Library
           </h1>
           <p className="text-secondary max-w-2xl">
-            Every block here is part of Instancly's design system. The AI builder
+            Every block here is part of DeployBro's design system. The AI builder
             knows about each one and will reach for them first when generating
             your app — keeping things consistent, accessible, and on-brand.
           </p>

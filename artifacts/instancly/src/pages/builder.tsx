@@ -269,7 +269,7 @@ export default function Builder() {
   const [tabSearch, setTabSearch] = useState("");
   const [addOpen, setAddOpen] = useState(false);
 
-  const liveUrl = `https://${slug}-${username}.instancly.app`;
+  const liveUrl = `https://${slug}-${username}.deploybro.app`;
   const [urlValue, setUrlValue] = useState(liveUrl);
   const [iframeKey, setIframeKey] = useState(0);
 
@@ -494,7 +494,7 @@ export default function Builder() {
   });
 
   const copyUrl = () => {
-    navigator.clipboard.writeText(`${slug}-${username}.instancly.app`);
+    navigator.clipboard.writeText(`${slug}-${username}.deploybro.app`);
     toast.success("URL copied");
   };
 
@@ -533,7 +533,7 @@ export default function Builder() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="border-border">
-              <DropdownMenuItem>Deploy to instancly.app</DropdownMenuItem>
+              <DropdownMenuItem>Deploy to deploybro.app</DropdownMenuItem>
               <DropdownMenuItem>Connect custom domain</DropdownMenuItem>
               <DropdownMenuSeparator className="bg-border" />
               <DropdownMenuItem>Export as ZIP</DropdownMenuItem>
@@ -2107,7 +2107,7 @@ function DomainsView() {
   const [domains, setDomains] = useState<
     { host: string; primary: boolean; status: DomainStatus; ssl: boolean; addedAgo: string }[]
   >([
-    { host: "todo-app-johndoe.instancly.app", primary: true, status: "active", ssl: true, addedAgo: "27 mins ago" },
+    { host: "todo-app-johndoe.deploybro.app", primary: true, status: "active", ssl: true, addedAgo: "27 mins ago" },
     { host: "todoapp.com", primary: false, status: "active", ssl: true, addedAgo: "3 days ago" },
     { host: "www.todoapp.com", primary: false, status: "pending", ssl: false, addedAgo: "12 mins ago" },
   ]);
@@ -2192,9 +2192,9 @@ function DomainsView() {
             <DnsRow
               type="CNAME"
               name="@ (or your subdomain)"
-              value="cname.instancly.app"
+              value="cname.deploybro.app"
             />
-            <DnsRow type="TXT" name="_instancly" value="verify=ab12-cd34-ef56" />
+            <DnsRow type="TXT" name="_deploybro" value="verify=ab12-cd34-ef56" />
           </div>
         </div>
       </div>
@@ -2259,7 +2259,7 @@ function DomainsView() {
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
                   </a>
-                  {!d.host.endsWith(".instancly.app") && (
+                  {!d.host.endsWith(".deploybro.app") && (
                     <button
                       onClick={() => removeDomain(d.host)}
                       className="w-7 h-7 rounded flex items-center justify-center text-secondary hover:text-destructive hover:bg-destructive/10"

@@ -59,7 +59,7 @@ const STEPS = [
     step: "03",
     title: "Refine and ship",
     body: "Tweak it with simple feedback — \"make the hero bigger\", \"add login\". When it's right, hit Publish. You get a real URL in seconds.",
-    url: "recipes.instancly.app",
+    url: "recipes.deploybro.app",
   },
 ];
 
@@ -179,7 +179,7 @@ const TESTIMONIALS = [
     role: "Yoga teacher · maya-flow.app",
   },
   {
-    quote: "Replaced six contractors with Instancly. We ship 3x faster and the code is actually nice.",
+    quote: "Replaced six contractors with DeployBro. We ship 3x faster and the code is actually nice.",
     name: "Daniel K.",
     role: "Founder, Plotly Studio",
   },
@@ -202,9 +202,9 @@ const TEMPLATES = [
 ];
 
 const STATS = [
-  { value: "36M+", label: "projects built on Instancly" },
+  { value: "36M+", label: "projects built on DeployBro" },
   { value: "200K+", label: "projects shipped per day" },
-  { value: "300M", label: "daily visits to Instancly apps" },
+  { value: "300M", label: "daily visits to DeployBro apps" },
 ];
 
 export default function Landing() {
@@ -270,7 +270,7 @@ export default function Landing() {
               href="/explore"
               className="glass-pill group inline-flex items-center gap-2 px-5 py-2 rounded-full text-xs font-medium text-foreground/90 transition-transform hover:-translate-y-px"
             >
-              Introducing Instancly v2
+              Introducing DeployBro v2
               <ArrowRight className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
             </Link>
           </div>
@@ -293,7 +293,7 @@ export default function Landing() {
           </h1>
 
           <p className="text-base sm:text-lg text-secondary max-w-xl mx-auto mb-10">
-            Describe it. Watch Instancly build it live. Publish to a real URL —
+            Describe it. Watch DeployBro build it live. Publish to a real URL —
             no code, no DevOps, no excuses.
           </p>
 
@@ -303,7 +303,7 @@ export default function Landing() {
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 onKeyDown={onKeyDown}
-                placeholder="Ask Instancly to create a landing page for my..."
+                placeholder="Ask DeployBro to create a landing page for my..."
                 rows={3}
                 className="w-full min-h-[88px] max-h-[220px] bg-transparent p-4 text-base text-foreground placeholder:text-muted outline-none resize-none"
               />
@@ -413,7 +413,7 @@ export default function Landing() {
                 </span>
               </h2>
               <p className="text-base text-secondary leading-relaxed">
-                No SDK juggling. No env-var scavenger hunts. Every Instancly app
+                No SDK juggling. No env-var scavenger hunts. Every DeployBro app
                 ships with the tools the pros use — pre-configured, on day one.
               </p>
             </div>

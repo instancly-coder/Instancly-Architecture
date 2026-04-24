@@ -63,7 +63,7 @@ export default function Billing() {
             </div>
             <p className="text-sm text-secondary mb-6 flex-1">
               {user?.plan === "free"
-                ? "Free plan: enough credit to try Instancly out. Upgrade for higher limits and custom domains."
+                ? "Free plan: enough credit to try DeployBro out. Upgrade for higher limits and custom domains."
                 : "Includes custom domains, priority support, and higher compute limits."}
             </p>
             <Button

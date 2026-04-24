@@ -62,8 +62,8 @@ export default function SignupUsername() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center pt-32 p-6">
-      <Link href="/" className="mb-12 hover:opacity-80 transition-opacity" aria-label="Instancly home">
-        <img src={logoUrl} alt="Instancly" className="h-8 w-auto" />
+      <Link href="/" className="mb-12 hover:opacity-80 transition-opacity" aria-label="DeployBro home">
+        <img src={logoUrl} alt="DeployBro" className="h-8 w-auto" />
       </Link>
 
       <div className="w-full max-w-md">

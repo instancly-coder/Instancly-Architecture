@@ -9,7 +9,7 @@ export function BoxLogo({ className = "w-5 h-5", title }: Props) {
   return (
     <img
       src={logoSrc}
-      alt={title ?? "Instancly"}
+      alt={title ?? "DeployBro"}
       className={`${className} object-contain select-none`}
       draggable={false}
     />

@@ -36,6 +36,9 @@ import {
   Privacy,
   Terms,
   Community,
+  AcceptableUse,
+  CookiePolicy,
+  DPA,
 } from "@/pages/info";
 
 const queryClient = new QueryClient();
@@ -75,6 +78,9 @@ function Router() {
       <Route path="/careers" component={Careers} />
       <Route path="/privacy" component={Privacy} />
       <Route path="/terms" component={Terms} />
+      <Route path="/aup" component={AcceptableUse} />
+      <Route path="/cookies" component={CookiePolicy} />
+      <Route path="/dpa" component={DPA} />
       <Route path="/community" component={Community} />
       <Route path="/:username" component={Profile} />
       <Route path="/:username/:slug" component={Project} />

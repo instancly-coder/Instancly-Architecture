@@ -23,8 +23,8 @@ export function MarketingNav() {
 
   return (
     <nav className="sticky top-0 z-50 bg-surface/80 backdrop-blur-md border-b border-border h-14 flex items-center justify-between px-6">
-      <Link href="/" className="flex items-center hover:opacity-80 transition-opacity" aria-label="Instancly">
-        <img src={logoUrl} alt="Instancly" className="h-5 w-auto object-contain" />
+      <Link href="/" className="flex items-center hover:opacity-80 transition-opacity" aria-label="DeployBro">
+        <img src={logoUrl} alt="DeployBro" className="h-5 w-auto object-contain" />
       </Link>
 
       <div className="hidden md:flex items-center gap-6 text-sm text-secondary">
