@@ -1,6 +1,18 @@
 import { Link } from "wouter";
-import { Plus, MoreVertical, AlertTriangle } from "lucide-react";
+import { useState, type FormEvent } from "react";
+import { Plus, MoreVertical, AlertTriangle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,6 +31,14 @@ import {
 } from "@/lib/api";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
+
+const PROJECT_TEMPLATES: Array<{ label: string; prompt: string }> = [
+  { label: "Landing page", prompt: "A modern marketing landing page for " },
+  { label: "SaaS dashboard", prompt: "A SaaS dashboard with charts and tables for " },
+  { label: "E-commerce store", prompt: "An online store that sells " },
+  { label: "Internal tool", prompt: "An internal admin tool that lets the team " },
+  { label: "Blog", prompt: "A blog about " },
+];
 
 function timeAgo(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
@@ -42,15 +62,40 @@ export default function Dashboard() {
   const balance = me?.balance ?? 0;
   const hasLowBalance = balance < 20.0;
 
-  const handleNew = async () => {
-    const name = window.prompt("Project name?");
-    if (!name) return;
+  const [newOpen, setNewOpen] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newPrompt, setNewPrompt] = useState("");
+
+  const openNewDialog = () => {
+    setNewName("");
+    setNewPrompt("");
+    setNewOpen(true);
+  };
+
+  const handleCreate = async (e?: FormEvent) => {
+    e?.preventDefault();
+    const name = newName.trim();
+    if (!name) {
+      toast.error("Give your project a name");
+      return;
+    }
+    if (!me?.username) {
+      toast.error("Still signing you in — try again in a sec");
+      return;
+    }
     try {
       const created = await createProject.mutateAsync({ name });
       toast.success("Project created");
-      navigate(`/${me?.username}/${created.slug}/build`);
+      setNewOpen(false);
+      const initialPrompt = newPrompt.trim();
+      const target = `/${me?.username}/${created.slug}/build${
+        initialPrompt
+          ? `?prompt=${encodeURIComponent(initialPrompt)}`
+          : ""
+      }`;
+      navigate(target);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed");
+      toast.error(err instanceof Error ? err.message : "Failed to create project");
     }
   };
 
@@ -88,20 +133,121 @@ export default function Dashboard() {
             £{balance.toFixed(2)}
           </Link>
           <Button
-            onClick={handleNew}
-            disabled={createProject.isPending}
+            onClick={openNewDialog}
             className="bg-primary text-primary-foreground hover:bg-primary/90 font-medium"
+            data-testid="button-new-project"
           >
             <Plus className="w-4 h-4 mr-2" /> New project
           </Button>
         </div>
       </header>
 
+      <Dialog open={newOpen} onOpenChange={setNewOpen}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>Create a new project</DialogTitle>
+            <DialogDescription>
+              Give it a name and (optionally) a one-line idea. We'll spin up a
+              fresh database branch and drop you straight into the builder.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleCreate} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="new-project-name">Project name</Label>
+              <Input
+                id="new-project-name"
+                autoFocus
+                placeholder="e.g. recipe-vault"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                maxLength={50}
+                data-testid="input-new-project-name"
+              />
+              <p className="text-[11px] text-secondary">
+                Letters, numbers, dashes. We'll slug-ify it for the URL.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="new-project-prompt">
+                What should it do? <span className="text-secondary font-normal">(optional)</span>
+              </Label>
+              <Textarea
+                id="new-project-prompt"
+                placeholder="A recipe site where I can save meals and rate them…"
+                value={newPrompt}
+                onChange={(e) => setNewPrompt(e.target.value)}
+                rows={3}
+                className="resize-none"
+                data-testid="input-new-project-prompt"
+              />
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {PROJECT_TEMPLATES.map((t) => (
+                  <button
+                    key={t.label}
+                    type="button"
+                    onClick={() => setNewPrompt(t.prompt)}
+                    className="text-[11px] px-2.5 py-1 rounded-full border border-border bg-surface hover:bg-surface-raised text-secondary hover:text-foreground transition-colors"
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setNewOpen(false)}
+                disabled={createProject.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={createProject.isPending || !newName.trim() || !me?.username}
+                className="bg-primary text-primary-foreground hover:bg-primary/90 font-medium"
+                data-testid="button-create-project"
+              >
+                {createProject.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Creating…
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Create project
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       <div className="p-4 md:p-8">
         {isLoading ? (
           <div className="text-secondary text-sm">Loading projects…</div>
         ) : projects.length === 0 ? (
-          <div className="text-secondary text-sm">No projects yet — create your first one.</div>
+          <div className="border border-dashed border-border rounded-xl p-10 text-center">
+            <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center mb-4">
+              <Plus className="w-5 h-5 text-primary" />
+            </div>
+            <h3 className="font-bold text-lg mb-1">No projects yet</h3>
+            <p className="text-secondary text-sm mb-5 max-w-sm mx-auto">
+              Spin up your first app. Tell the AI what you want, watch it build,
+              then publish to a real URL.
+            </p>
+            <Button
+              onClick={openNewDialog}
+              className="bg-primary text-primary-foreground hover:bg-primary/90 font-medium"
+            >
+              <Plus className="w-4 h-4 mr-2" /> New project
+            </Button>
+          </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
             {projects.map((project) => (

@@ -225,6 +225,7 @@ export default function Builder() {
   const [phase, setPhase] = useState<string | undefined>(undefined);
   const [typed, setTyped] = useState("");
   const abortRef = useRef<AbortController | null>(null);
+  const autoSentRef = useRef(false);
 
   // Cancel any in-flight build stream when this component unmounts so the
   // server can close the upstream Claude connection and stop billing.
@@ -233,6 +234,34 @@ export default function Builder() {
       abortRef.current?.abort();
     };
   }, []);
+
+  // If the user landed here from "New project" with a `?prompt=` query
+  // param, pre-fill and auto-send it once the project is loaded. We only
+  // run this a single time per mount so user edits aren't clobbered.
+  useEffect(() => {
+    if (autoSentRef.current) return;
+    if (!username || !slug) return;
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const initial = params.get("prompt");
+    if (!initial) return;
+    autoSentRef.current = true;
+    // Strip the param from the URL so refresh doesn't re-trigger.
+    const cleanUrl = window.location.pathname;
+    window.history.replaceState({}, "", cleanUrl);
+    // Pass the prompt directly so we don't depend on chatInput state being
+    // flushed before send reads it.
+    const id = window.setTimeout(() => {
+      handleSendRef.current?.(initial);
+    }, 0);
+    return () => window.clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [username, slug]);
+
+  // We need a stable ref to handleSend so the auto-prompt effect can call
+  // the latest version without listing every dependency it transitively
+  // touches.
+  const handleSendRef = useRef<((overridePrompt?: string) => void) | null>(null);
   const [activeFile, setActiveFile] = useState<string>("src/app/page.tsx");
   const [openBuildId, setOpenBuildId] = useState<string | null>(null);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
@@ -272,9 +301,10 @@ export default function Builder() {
     document.body.style.userSelect = "none";
   };
 
-  const handleSend = async () => {
-    if (!chatInput.trim() || isStreaming || !username || !slug) return;
-    const prompt = chatInput.trim();
+  const handleSend = async (overridePrompt?: string) => {
+    const raw = overridePrompt ?? chatInput;
+    if (!raw.trim() || isStreaming || !username || !slug) return;
+    const prompt = raw.trim();
     setChatInput("");
     setIsStreaming(true);
     setPhase("Thinking");
@@ -327,6 +357,12 @@ export default function Builder() {
       }, 600);
     }
   };
+
+  // Keep the ref pointing at the latest handleSend so the auto-prompt
+  // effect (defined earlier in the component) can fire it.
+  useEffect(() => {
+    handleSendRef.current = handleSend;
+  });
 
   const copyUrl = () => {
     navigator.clipboard.writeText(`${slug}-${username}.instancly.app`);
