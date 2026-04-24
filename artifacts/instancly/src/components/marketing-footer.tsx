@@ -1,15 +1,14 @@
 import { Link } from "wouter";
-import { BoxLogo } from "@/components/box-logo";
+import logoUrl from "@assets/download_1776989236348.png";
 
 export function MarketingFooter() {
   return (
     <footer className="border-t border-border bg-surface">
       <div className="max-w-6xl mx-auto px-6 py-12 grid grid-cols-2 md:grid-cols-5 gap-8">
         <div className="col-span-2 md:col-span-1">
-          <div className="flex items-center gap-2 mb-3">
-            <BoxLogo className="w-4 h-4 text-primary" />
-            <span className="font-bold tracking-tight">instancly</span>
-          </div>
+          <Link href="/" className="inline-flex items-center mb-3">
+            <img src={logoUrl} alt="Instancly" className="h-6 w-auto object-contain" />
+          </Link>
           <p className="text-xs text-secondary leading-relaxed">
             Ship apps from a single prompt. Real Postgres, real URLs, no DevOps.
           </p>

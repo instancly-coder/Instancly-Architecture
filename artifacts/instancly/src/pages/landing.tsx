@@ -13,7 +13,7 @@ import {
   Check,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
-import { useEffect, useState, type KeyboardEvent } from "react";
+import React, { useEffect, useState, type KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { MarketingNav } from "@/components/marketing-nav";
 import { MarketingFooter } from "@/components/marketing-footer";
@@ -60,6 +60,106 @@ const STEPS = [
     title: "Refine and ship",
     body: "Tweak it with simple feedback — \"make the hero bigger\", \"add login\". When it's right, hit Publish. You get a real URL in seconds.",
     url: "recipes.instancly.app",
+  },
+];
+
+// Brand-themed integration marks. Inline SVGs so we don't depend on an
+// external icon set; each picks up `currentColor` from its themed wrapper.
+const INTEGRATIONS: Array<{
+  name: string;
+  tag: string;
+  desc: string;
+  color: string;
+  Logo: () => React.ReactElement;
+}> = [
+  {
+    name: "Neon",
+    tag: "Database",
+    desc: "Serverless Postgres. A fresh branch for every project, instantly.",
+    color: "#00E599",
+    Logo: () => (
+      <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+        <path d="M0 4.8C0 2.149 2.149 0 4.8 0h14.4C21.851 0 24 2.149 24 4.8v10.62c0 2.985-3.81 4.227-5.567 1.815L13.6 10.5v8.7A4.8 4.8 0 0 1 8.8 24H4.8A4.8 4.8 0 0 1 0 19.2V4.8Zm4.8-1.2A1.2 1.2 0 0 0 3.6 4.8v14.4a1.2 1.2 0 0 0 1.2 1.2h4a1.2 1.2 0 0 0 1.2-1.2V8.4a1.2 1.2 0 0 1 2.16-.72l6.96 9.28c.293.4.88.176.88-.32V4.8a1.2 1.2 0 0 0-1.2-1.2H4.8Z" />
+      </svg>
+    ),
+  },
+  {
+    name: "Stripe",
+    tag: "Payments",
+    desc: "Take payments in any currency, day one. Subscriptions, one-offs, marketplaces.",
+    color: "#635BFF",
+    Logo: () => (
+      <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+        <path d="M13.479 9.883c-1.626-.604-2.512-1.067-2.512-1.803 0-.622.511-.977 1.42-.977 1.661 0 3.385.708 4.567 1.302l.671-4.119C16.687 3.83 15.064 3.4 12.972 3.4c-1.738 0-3.184.45-4.215 1.297-1.073.886-1.629 2.165-1.629 3.703 0 2.789 1.706 3.978 4.485 4.989 1.79.636 2.39 1.087 2.39 1.793 0 .682-.586 1.067-1.652 1.067-1.355 0-3.585-.659-5.043-1.51l-.692 4.182c1.246.71 3.557 1.421 5.957 1.421 1.834 0 3.366-.435 4.398-1.252 1.155-.911 1.749-2.252 1.749-3.948 0-2.86-1.749-4.05-4.241-4.959z" />
+      </svg>
+    ),
+  },
+  {
+    name: "Vercel",
+    tag: "Hosting",
+    desc: "Edge-deployed, every push. Custom domains and TLS in two clicks.",
+    color: "#FFFFFF",
+    Logo: () => (
+      <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+        <path d="M12 2 24 22H0L12 2Z" />
+      </svg>
+    ),
+  },
+  {
+    name: "Anthropic",
+    tag: "AI · Claude",
+    desc: "Sonnet 4.5 powers the builder. Long-context reasoning, on tap.",
+    color: "#D97757",
+    Logo: () => (
+      <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+        <path d="M14.5 3h3.8L24 21h-3.8l-1.2-3.4h-6.5L11.3 21H7.5L14.5 3Zm-1.4 11.4h4.5L15.3 7.6l-2.2 6.8ZM0 21l7-18h3.6L3.7 21H0Z" />
+      </svg>
+    ),
+  },
+  {
+    name: "OpenAI",
+    tag: "AI · GPT",
+    desc: "Swap to GPT-4o or 4o-mini for cheaper iterations. One toggle, zero rewiring.",
+    color: "#10A37F",
+    Logo: () => (
+      <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+        <path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.676l5.815 3.355-2.02 1.168a.076.076 0 0 1-.071 0l-4.83-2.786A4.504 4.504 0 0 1 2.34 7.872zm16.597 3.855-5.833-3.387L15.119 7.2a.076.076 0 0 1 .071 0l4.83 2.791a4.494 4.494 0 0 1-.676 8.105v-5.678a.79.79 0 0 0-.407-.667zm2.01-3.023-.141-.085-4.774-2.782a.776.776 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.83-2.787a4.5 4.5 0 0 1 6.68 4.66zm-12.64 4.135-2.02-1.164a.08.08 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08L8.704 5.46a.795.795 0 0 0-.393.681zm1.097-2.365 2.602-1.5 2.607 1.5v2.999l-2.597 1.5-2.607-1.5z" />
+      </svg>
+    ),
+  },
+  {
+    name: "Google",
+    tag: "AI · Gemini",
+    desc: "Gemini 2.5 Pro and Flash for fast, multimodal generations.",
+    color: "#4285F4",
+    Logo: () => (
+      <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+        <path d="M12 2 9.5 8.5 3 11l6.5 2.5L12 20l2.5-6.5L21 11l-6.5-2.5L12 2Z" />
+      </svg>
+    ),
+  },
+  {
+    name: "Postgres",
+    tag: "SQL",
+    desc: "Battle-tested SQL with full-text search, JSONB, and pgvector built in.",
+    color: "#4169E1",
+    Logo: () => (
+      <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+        <path d="M16.808 0c-1.371 0-2.69.279-3.857.732l.027.018c.86.331 1.53.79 2.044 1.343 1.027-.371 2.181-.59 3.413-.59C23.146 1.503 24 5.06 24 8.07c0 4.014-1.78 8.106-3.42 8.106-.522 0-.99-.302-1.376-.842l.244-.072c.328-.097.687-.39.687-1.296 0-.737-.13-1.927-.13-3.05 0-2.61.45-3.704.45-5.18 0-1.43-.598-2.63-1.832-3.16C17.93.255 17.346.165 16.808.165 14.27.165 12.41 1.94 12 4.4c-.41-2.46-2.27-4.235-4.808-4.235-.538 0-1.122.09-1.815.412C4.143 1.107 3.545 2.307 3.545 3.737c0 1.476.45 2.57.45 5.18 0 1.123-.13 2.313-.13 3.05 0 .906.36 1.2.687 1.296l.244.072c-.386.54-.854.842-1.376.842C1.78 14.176 0 10.084 0 6.07 0 3.06.854-.497 5.565.503c1.232 0 2.386.219 3.413.59C9.493.539 10.163.08 11.022-.25l.027-.018C9.882-.721 8.563-1 7.192-1z" />
+      </svg>
+    ),
+  },
+  {
+    name: "shadcn/ui",
+    tag: "Components",
+    desc: "54 polished, accessible primitives — the same set the AI builds with.",
+    color: "#A1A1AA",
+    Logo: () => (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+        <path d="M22 12 12 22" />
+        <path d="M19 4 4 19" />
+      </svg>
+    ),
   },
 ];
 
@@ -169,7 +269,6 @@ export default function Landing() {
               href="/explore"
               className="glass-pill group inline-flex items-center gap-2 px-5 py-2 rounded-full text-xs font-medium text-foreground/90 transition-transform hover:-translate-y-px"
             >
-              <Sparkles className="w-3.5 h-3.5 text-primary" />
               Introducing Instancly v2
               <ArrowRight className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
             </Link>
@@ -284,6 +383,69 @@ export default function Landing() {
                 ))}
               </div>
               <div className="text-xs text-secondary">4.9/5 · 12K reviews</div>
+            </div>
+          </div>
+        </section>
+
+        {/* Integrations — every project gets these wired in */}
+        <section id="integrations" className="py-20 md:py-28 px-4 sm:px-6 border-t border-border">
+          <div className="max-w-7xl mx-auto">
+            <div className="text-center max-w-2xl mx-auto mb-12 md:mb-16">
+              <p className="text-xs font-mono uppercase tracking-[0.2em] text-secondary mb-3">
+                The stack, included
+              </p>
+              <h2 className="text-3xl md:text-5xl font-bold tracking-tight mb-4 text-balance">
+                <span className="block sm:inline">Best-in-class tools,</span>{" "}
+                <span className="block sm:inline">
+                  <span className="text-primary">already wired up.</span>
+                </span>
+              </h2>
+              <p className="text-base text-secondary leading-relaxed">
+                No SDK juggling. No env-var scavenger hunts. Every Instancly app
+                ships with the tools the pros use — pre-configured, on day one.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {INTEGRATIONS.map((it) => (
+                <div
+                  key={it.name}
+                  className="group relative rounded-xl border border-border bg-surface/40 p-5 overflow-hidden transition-all hover:-translate-y-0.5"
+                  style={{
+                    boxShadow: `inset 0 1px 0 0 ${it.color}10`,
+                  }}
+                >
+                  {/* Themed glow */}
+                  <div
+                    className="absolute -top-12 -right-12 w-32 h-32 rounded-full blur-3xl opacity-30 group-hover:opacity-60 transition-opacity pointer-events-none"
+                    style={{ background: it.color }}
+                  />
+                  <div
+                    className="relative w-10 h-10 rounded-lg flex items-center justify-center mb-4 border"
+                    style={{
+                      background: `${it.color}18`,
+                      borderColor: `${it.color}40`,
+                      color: it.color,
+                    }}
+                  >
+                    <it.Logo />
+                  </div>
+                  <div className="relative flex items-baseline justify-between gap-2 mb-1">
+                    <h3 className="font-bold tracking-tight text-foreground">
+                      {it.name}
+                    </h3>
+                    <span
+                      className="text-[10px] font-mono uppercase tracking-wider"
+                      style={{ color: it.color }}
+                    >
+                      {it.tag}
+                    </span>
+                  </div>
+                  <p className="relative text-xs text-secondary leading-relaxed">
+                    {it.desc}
+                  </p>
+                </div>
+              ))}
             </div>
           </div>
         </section>

@@ -871,7 +871,7 @@ function ChatPanel({
       </div>
 
       <div className="p-3 border-t border-border bg-surface shrink-0">
-        <div className="rounded-xl border border-border bg-background focus-within:ring-1 focus-within:ring-primary transition-shadow">
+        <div className="prompt-glow rounded-xl border border-border bg-background focus-within:border-primary focus-within:shadow-[0_0_0_1px_hsl(var(--primary))] transition-shadow">
           {/* Attachment chips */}
           {attachments.length > 0 && (
             <div className="flex flex-wrap gap-1.5 p-2 pb-0">
