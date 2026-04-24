@@ -428,26 +428,28 @@ export default function Landing() {
                       className="absolute -top-12 -right-12 w-32 h-32 rounded-full blur-3xl opacity-30 group-hover:opacity-60 transition-opacity pointer-events-none"
                       style={{ background: it.color }}
                     />
-                    <div
-                      className="relative w-10 h-10 rounded-lg flex items-center justify-center mb-4 border"
-                      style={{
-                        background: `${it.color}18`,
-                        borderColor: `${it.color}40`,
-                        color: it.color,
-                      }}
-                    >
-                      <it.Logo />
-                    </div>
-                    <div className="relative flex items-baseline justify-between gap-2 mb-1">
-                      <h3 className="font-bold tracking-tight text-foreground">
-                        {it.name}
-                      </h3>
-                      <span
-                        className="text-[10px] font-mono uppercase tracking-wider"
-                        style={{ color: it.color }}
+                    <div className="relative flex items-start gap-3 mb-2">
+                      <div
+                        className="w-10 h-10 rounded-lg flex items-center justify-center border shrink-0"
+                        style={{
+                          background: `${it.color}18`,
+                          borderColor: `${it.color}40`,
+                          color: it.color,
+                        }}
                       >
-                        {it.tag}
-                      </span>
+                        <it.Logo />
+                      </div>
+                      <div className="flex items-center gap-2 min-w-0 flex-wrap pt-1.5">
+                        <h3 className="font-bold tracking-tight text-foreground leading-none">
+                          {it.name}
+                        </h3>
+                        <span
+                          className="text-[10px] font-mono uppercase tracking-wider leading-none"
+                          style={{ color: it.color }}
+                        >
+                          {it.tag}
+                        </span>
+                      </div>
                     </div>
                     <p className="relative text-xs text-secondary leading-relaxed">
                       {it.desc}
