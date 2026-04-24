@@ -8,6 +8,7 @@ import meRouter from "./me";
 import authRouter from "./auth";
 import adminRouter from "./admin";
 import aiRouter from "./ai";
+import filesRouter from "./files";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use(exploreRouter);
 router.use(meRouter);
 router.use(adminRouter);
 router.use(aiRouter);
+router.use(filesRouter);
 
 export default router;

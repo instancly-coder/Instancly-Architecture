@@ -1,8 +1,18 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import Anthropic from "@anthropic-ai/sdk";
-import { db, projectsTable, usersTable, buildsTable } from "@workspace/db";
-import { and, desc, eq, max } from "drizzle-orm";
-import { buildSystemPrompt } from "../lib/components-catalog";
+import {
+  db,
+  projectsTable,
+  usersTable,
+  buildsTable,
+  projectFilesTable,
+} from "@workspace/db";
+import { and, asc, desc, eq, max, sql } from "drizzle-orm";
+import {
+  buildFilesContext,
+  buildSystemPrompt,
+} from "../lib/components-catalog";
+import { parseFileBlocks, stripFileBlocks } from "../lib/file-blocks";
 
 const router: IRouter = Router();
 
@@ -82,6 +92,16 @@ router.post(
     let aborted = clientGone;
     let stream: ReturnType<typeof anthropic.messages.stream> | null = null;
 
+    // Pull existing project files so the model can reason about prior code.
+    const existingFiles = await db
+      .select({
+        path: projectFilesTable.path,
+        content: projectFilesTable.content,
+      })
+      .from(projectFilesTable)
+      .where(eq(projectFilesTable.projectId, project.id))
+      .orderBy(asc(projectFilesTable.path));
+
     // Now that the stream variable exists, upgrade the "close" handler to also
     // abort the upstream Claude request so we stop billing immediately.
     req.on("close", () => {
@@ -95,8 +115,41 @@ router.post(
       }
     });
 
+    // Parse out any complete file blocks from the streamed text and write
+    // them to the database. All writes for a single build are wrapped in
+    // a transaction so partial failures don't leave the project half-updated.
+    const persistFiles = async (): Promise<string[]> => {
+      const parsed = parseFileBlocks(fullText);
+      if (parsed.length === 0) return [];
+      await db.transaction(async (tx) => {
+        for (const f of parsed) {
+          await tx
+            .insert(projectFilesTable)
+            .values({
+              projectId: project.id,
+              path: f.path,
+              content: f.content,
+              size: f.content.length,
+            })
+            .onConflictDoUpdate({
+              target: [projectFilesTable.projectId, projectFilesTable.path],
+              set: {
+                content: f.content,
+                size: f.content.length,
+                updatedAt: sql`now()`,
+              },
+            });
+        }
+      });
+      return parsed.map((f) => f.path);
+    };
+
     // Persist a build row for any terminal outcome so history/audit is complete.
-    const persistBuild = async (status: "success" | "failed" | "aborted", errorMessage?: string) => {
+    const persistBuild = async (
+      status: "success" | "failed" | "aborted",
+      filesChanged: number,
+      errorMessage?: string,
+    ) => {
       const durationSec = Math.max(1, Math.round((Date.now() - startedAt) / 1000));
       // Sonnet pricing: $3 in / $15 out per 1M tokens; ~£0.78 / £3.94 per 1M GBP.
       // Store full precision (4dp) — only round for display.
@@ -110,9 +163,12 @@ router.post(
         .where(eq(buildsTable.projectId, project.id));
       const nextNumber = (maxNumber ?? 0) + 1;
 
+      // Store the human-readable transcript with file payloads stripped so
+      // the build history stays compact and readable.
+      const visible = stripFileBlocks(fullText);
       const aiMessage = errorMessage
-        ? `${fullText}\n\n[${status}] ${errorMessage}`.slice(0, 4000)
-        : fullText.slice(0, 4000);
+        ? `${visible}\n\n[${status}] ${errorMessage}`.slice(0, 4000)
+        : visible.slice(0, 4000);
 
       const [created] = await db
         .insert(buildsTable)
@@ -123,7 +179,7 @@ router.post(
           aiMessage,
           durationSec,
           cost,
-          filesChanged: 0,
+          filesChanged,
           tokensIn: inputTokens,
           tokensOut: outputTokens,
           model: MODEL_DISPLAY,
@@ -141,11 +197,17 @@ router.post(
     };
 
     try {
+      const filesContext = buildFilesContext(existingFiles);
       stream = anthropic.messages.stream({
         model: MODEL,
-        max_tokens: 8192,
+        max_tokens: 16_384,
         system: buildSystemPrompt(project.name, project.framework),
-        messages: [{ role: "user", content: prompt }],
+        messages: [
+          {
+            role: "user",
+            content: `${filesContext}\n\n---\n\nUser request:\n${prompt}`,
+          },
+        ],
       });
 
       send("start", { model: MODEL_DISPLAY });
@@ -166,11 +228,19 @@ router.post(
       }
 
       if (aborted) {
-        await persistBuild("aborted", "Client disconnected before completion");
+        // Even an aborted stream may have produced complete file blocks worth
+        // saving — persist whatever parsed cleanly.
+        const written = await persistFiles().catch(() => [] as string[]);
+        await persistBuild(
+          "aborted",
+          written.length,
+          "Client disconnected before completion",
+        );
         return;
       }
 
-      const created = await persistBuild("success");
+      const written = await persistFiles();
+      const created = await persistBuild("success", written.length);
       send("done", {
         ok: true,
         build: {
@@ -180,12 +250,19 @@ router.post(
           durationSec: created.durationSec,
           tokensIn: created.tokensIn,
           tokensOut: created.tokensOut,
+          filesChanged: written.length,
+          files: written,
         },
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : "AI request failed";
       try {
-        await persistBuild(aborted ? "aborted" : "failed", message);
+        const written = await persistFiles().catch(() => [] as string[]);
+        await persistBuild(
+          aborted ? "aborted" : "failed",
+          written.length,
+          message,
+        );
       } catch {
         /* swallow secondary error so we still close the response */
       }

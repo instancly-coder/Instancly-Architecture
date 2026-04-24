@@ -63,7 +63,14 @@ const AVAILABLE_MODELS = [
   { name: "Gemini 2.5 Pro", provider: "Google", costRange: "£0.01 - £0.04" },
   { name: "Gemini Flash", provider: "Google", costRange: "£0.002 - £0.01" },
 ];
-import { useMe, useProject, useProjectBuilds, type ApiBuild } from "@/lib/api";
+import {
+  useMe,
+  useProject,
+  useProjectBuilds,
+  useProjectFile,
+  useProjectFiles,
+  type ApiBuild,
+} from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -340,12 +347,21 @@ export default function Builder() {
         } else if (evt.event === "done") {
           if (evt.data?.ok) {
             setPhase("Done");
-            toast.success("Build complete");
+            const n = evt.data?.build?.filesChanged ?? 0;
+            toast.success(
+              n > 0
+                ? `Build complete — ${n} file${n === 1 ? "" : "s"} updated`
+                : "Build complete",
+            );
           }
         }
       }
       await queryClient.invalidateQueries({ queryKey: ["projects", username, slug, "builds"] });
       await queryClient.invalidateQueries({ queryKey: ["projects", username, slug] });
+      await queryClient.invalidateQueries({ queryKey: ["projects", username, slug, "files"] });
+      await queryClient.invalidateQueries({ queryKey: ["projects", username, slug, "file"] });
+      // Force the preview iframe to reload with the freshly-written files.
+      setIframeKey((k) => k + 1);
     } catch (err) {
       if ((err as { name?: string })?.name !== "AbortError") {
         toast.error(err instanceof Error ? err.message : "Build failed");
@@ -643,12 +659,19 @@ export default function Builder() {
             {activeTab === "preview" && (
               <PreviewPane
                 key={iframeKey}
+                username={username}
+                slug={slug}
                 viewport={viewport}
                 setViewport={setViewport}
               />
             )}
             {activeTab === "files" && (
-              <FilesPane activeFile={activeFile} setActiveFile={setActiveFile} />
+              <FilesPane
+                username={username}
+                slug={slug}
+                activeFile={activeFile}
+                setActiveFile={setActiveFile}
+              />
             )}
             {activeTab === "database" && <DatabaseView />}
             {activeTab === "analytics" && <AnalyticsView />}
@@ -1050,12 +1073,22 @@ function Stat({ label, value }: { label: string; value: string }) {
 /* -------------------------------- Panels -------------------------------- */
 
 function PreviewPane({
+  username,
+  slug,
   viewport,
-  setViewport,
 }: {
+  username: string;
+  slug: string;
   viewport: "desktop" | "tablet" | "mobile";
   setViewport: (v: "desktop" | "tablet" | "mobile") => void;
 }) {
+  const { data: files } = useProjectFiles(username, slug);
+  const hasIndex = !!files?.some((f) => f.path === "index.html");
+  // The api-server's preview endpoint sits behind the same Express app the
+  // frontend talks to via VITE_API_BASE_URL. Build the iframe src off that.
+  const apiBase =
+    (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "/api";
+  const previewSrc = `${apiBase.replace(/\/+$/, "")}/preview/${username}/${slug}/`;
   return (
     <div className="absolute inset-0 flex flex-col bg-surface-raised">
       <div className="flex-1 p-3 md:p-8 flex items-center justify-center overflow-hidden">
@@ -1071,39 +1104,31 @@ function PreviewPane({
             maxHeight: viewport === "mobile" ? "844px" : "100%",
           }}
         >
-          <div className="border-b border-gray-200 px-4 py-2 flex items-center shadow-sm">
-            <div className="font-bold text-black text-sm">Todo App</div>
-          </div>
-          <div className="flex-1 p-6 bg-gray-50 flex justify-center text-black overflow-y-auto">
-            <div className="w-full max-w-md bg-white p-6 rounded shadow-sm border border-gray-200 h-fit">
-              <h2 className="text-xl font-bold mb-4">Tasks</h2>
-              <div className="flex gap-2 mb-4">
-                <input
-                  type="text"
-                  className="flex-1 border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Add task"
-                />
-                <button className="bg-black text-white px-4 py-2 rounded text-sm hover:bg-gray-800 transition-colors">
-                  Add
-                </button>
+          {files === undefined ? (
+            <div className="flex-1 flex items-center justify-center text-sm text-gray-500">
+              Loading preview…
+            </div>
+          ) : !hasIndex ? (
+            <div className="flex-1 flex flex-col items-center justify-center text-center px-6 gap-2 text-gray-600">
+              <div className="text-base font-semibold text-gray-800">
+                No preview yet
               </div>
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 p-2 border-b">
-                  <input type="checkbox" defaultChecked />
-                  <span className="line-through text-gray-500 text-sm">
-                    Design DB schema
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 p-2 border-b">
-                  <input type="checkbox" />
-                  <span className="text-sm">Implement auth</span>
-                </div>
+              <div className="text-sm max-w-sm">
+                Send a prompt in the chat to have the AI generate your app.
+                Your preview will appear here as soon as it builds.
               </div>
             </div>
-          </div>
+          ) : (
+            <iframe
+              key={previewSrc}
+              src={previewSrc}
+              title="App preview"
+              className="flex-1 w-full bg-white"
+              sandbox="allow-scripts allow-forms allow-popups allow-modals"
+            />
+          )}
         </div>
       </div>
-
     </div>
   );
 }
@@ -1166,51 +1191,57 @@ function ViewportPicker({
 }
 
 function FilesPane({
+  username,
+  slug,
   activeFile,
   setActiveFile,
 }: {
+  username: string;
+  slug: string;
   activeFile: string;
   setActiveFile: (f: string) => void;
 }) {
-  const tree: { path: string; group: string; size: string; status?: "M" | "A" }[] = [
-    { path: "src/app/page.tsx", group: "src/app", size: "1.4 KB", status: "M" },
-    { path: "src/app/layout.tsx", group: "src/app", size: "612 B" },
-    { path: "src/app/api/tasks/route.ts", group: "src/app/api/tasks", size: "987 B", status: "A" },
-    { path: "src/components/ui/button.tsx", group: "src/components/ui", size: "1.1 KB" },
-    { path: "src/components/ui/input.tsx", group: "src/components/ui", size: "740 B" },
-    { path: "src/components/task-list.tsx", group: "src/components", size: "2.1 KB", status: "A" },
-    { path: "src/lib/db.ts", group: "src/lib", size: "488 B" },
-    { path: "src/lib/utils.ts", group: "src/lib", size: "212 B" },
-    { path: "package.json", group: "", size: "1.6 KB" },
-    { path: "tailwind.config.ts", group: "", size: "894 B" },
-    { path: "tsconfig.json", group: "", size: "401 B" },
-  ];
+  const { data: files = [] } = useProjectFiles(username, slug);
+  const tree = files.map((f) => {
+    const segments = f.path.split("/");
+    const group = segments.length > 1 ? segments.slice(0, -1).join("/") : "";
+    const size =
+      f.size < 1024
+        ? `${f.size} B`
+        : f.size < 1024 * 1024
+        ? `${(f.size / 1024).toFixed(1)} KB`
+        : `${(f.size / 1024 / 1024).toFixed(1)} MB`;
+    return { path: f.path, group, size };
+  });
+
+  // Pick a sensible default file the moment the project actually has files.
+  useEffect(() => {
+    if (tree.length === 0) return;
+    if (tree.some((t) => t.path === activeFile)) return;
+    const indexHtml = tree.find((t) => t.path === "index.html");
+    setActiveFile((indexHtml ?? tree[0]).path);
+    // We intentionally only react to file list changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [files]);
+
+  const { data: fileData, isLoading: codeLoading } = useProjectFile(
+    username,
+    slug,
+    tree.some((t) => t.path === activeFile) ? activeFile : undefined,
+  );
+
   const grouped = tree.reduce<Record<string, typeof tree>>((acc, f) => {
     const k = f.group || "/";
     (acc[k] ||= []).push(f);
     return acc;
   }, {});
-  const codeByFile: Record<string, string> = {
-    "src/app/page.tsx": `import { useState } from "react";
-import { db } from "@/lib/db";
-import { TaskList } from "@/components/task-list";
-
-export default function Page() {
-  const [tasks, setTasks] = useState<Task[]>([]);
-
-  return (
-    <main className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Tasks</h1>
-      <TaskList items={tasks} onChange={setTasks} />
-    </main>
-  );
-}`,
-  };
-  const code = codeByFile[activeFile] ?? `// ${activeFile}\n\nexport default function Module() {\n  return null;\n}\n`;
+  const code =
+    fileData?.content ??
+    (codeLoading ? "// loading…" : tree.length === 0 ? "" : `// ${activeFile}\n`);
   const lines = code.split("\n");
   const ext = activeFile.split(".").pop() ?? "txt";
   const [mobileTreeOpen, setMobileTreeOpen] = useState(false);
-  const activeName = activeFile.split("/").pop()!;
+  const activeName = activeFile.split("/").pop() || "—";
   const activeMeta = tree.find((t) => t.path === activeFile);
 
   const TreeBody = (

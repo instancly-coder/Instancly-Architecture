@@ -146,6 +146,39 @@ export function useUserProjects(username: string | undefined) {
   });
 }
 
+export type ApiProjectFile = {
+  path: string;
+  size: number;
+  updatedAt: string;
+};
+
+export function useProjectFiles(
+  username: string | undefined,
+  slug: string | undefined,
+) {
+  return useQuery({
+    queryKey: ["projects", username, slug, "files"],
+    queryFn: () =>
+      request<ApiProjectFile[]>(`/projects/${username}/${slug}/files`),
+    enabled: !!username && !!slug,
+  });
+}
+
+export function useProjectFile(
+  username: string | undefined,
+  slug: string | undefined,
+  path: string | undefined,
+) {
+  return useQuery({
+    queryKey: ["projects", username, slug, "file", path],
+    queryFn: () =>
+      request<{ path: string; content: string }>(
+        `/projects/${username}/${slug}/files/${path}`,
+      ),
+    enabled: !!username && !!slug && !!path,
+  });
+}
+
 export function useProject(username: string | undefined, slug: string | undefined) {
   return useQuery({
     queryKey: ["projects", username, slug],
