@@ -138,32 +138,34 @@
   border-color: hsl(var(--primary));
 }
 
-/* Streaming-text shimmer: the text glyphs themselves are painted with a
-   gradient (dim base + a bright band) and that gradient slides left → right,
-   so a highlight visibly sweeps through the working text. background-clip
-   only shows through when the text fill is transparent — that's the key. */
+/* Streaming-text shimmer: paints the text with a horizontal gradient
+   (dim base color with a single brighter band) and slides that gradient
+   left → right so a highlight sweeps through the glyphs. The gradient
+   image is sized at 300% of the text width so even at the extremes of
+   the animation the text is fully covered (otherwise the no-repeat
+   gradient slides off and the glyphs vanish, since their fill is
+   transparent for the background-clip trick to work). */
 @keyframes shimmer-sweep {
-  0%   { background-position: 200% 0; }
-  100% { background-position: -100% 0; }
+  0%   { background-position: -200% 0; }
+  100% { background-position:    0% 0; }
 }
 
 .shimmer-text {
   background-image: linear-gradient(
-    100deg,
+    90deg,
     hsl(var(--muted-foreground)) 0%,
     hsl(var(--muted-foreground)) 40%,
     hsl(var(--foreground)) 50%,
     hsl(var(--muted-foreground)) 60%,
     hsl(var(--muted-foreground)) 100%
   );
-  background-size: 250% 100%;
+  background-size: 300% 100%;
   background-repeat: no-repeat;
-  background-position: 200% 0;
   -webkit-background-clip: text;
           background-clip: text;
   -webkit-text-fill-color: transparent;
   color: transparent;
-  animation: shimmer-sweep 2.2s linear infinite;
+  animation: shimmer-sweep 1.8s linear infinite;
 }
 
 /* --- iOS-style glass pill (matches bolt.new announcement chip) --- */

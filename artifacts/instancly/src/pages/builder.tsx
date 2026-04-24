@@ -1017,27 +1017,26 @@ function ChatPanel({
         {/* Live streaming status (latest, in-progress turn) */}
         {(isStreaming || currentPhase) && (
           <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="relative flex h-2 w-2">
-                {isStreaming && (
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-60" />
-                )}
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-primary" />
-              </span>
-              <span className="text-[11px] uppercase tracking-wider font-mono text-primary">
-                {currentPhase ?? "Working"}
-              </span>
-            </div>
-            <div
-              className={`text-sm leading-relaxed min-h-[1.4em] whitespace-pre-wrap break-words ${
-                isStreaming
-                  ? "shimmer-text"
-                  : "text-muted-foreground"
-              }`}
-            >
+            {/* The AI's prose — calm, muted, no animation. This is where
+                the model tells the user what it is about to do. */}
+            <div className="text-sm leading-relaxed min-h-[1.4em] whitespace-pre-wrap break-words text-muted-foreground">
               <FileNoticeText text={typed} />
-              <span className="inline-block w-[2px] h-[1.05em] bg-primary/80 ml-0.5 align-text-bottom animate-pulse" />
             </div>
+
+            {/* A tiny status line underneath. Only this part shimmers,
+                so the activity indicator is obvious without making the
+                whole message hard to read. */}
+            {isStreaming && (
+              <div className="flex items-center gap-2 pt-0.5">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-60" />
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary" />
+                </span>
+                <span className="shimmer-text text-[11px] uppercase tracking-wider font-mono">
+                  {currentPhase ?? "Working"}…
+                </span>
+              </div>
+            )}
           </div>
         )}
 
