@@ -439,12 +439,12 @@ export default function Landing() {
                       >
                         <it.Logo />
                       </div>
-                      <div className="flex items-center gap-2 min-w-0 flex-wrap pt-1.5">
-                        <h3 className="font-bold tracking-tight text-foreground leading-none">
+                      <div className="flex items-center justify-between gap-2 min-w-0 flex-1 pt-1.5">
+                        <h3 className="font-bold tracking-tight text-foreground leading-none truncate">
                           {it.name}
                         </h3>
                         <span
-                          className="text-[10px] font-mono uppercase tracking-wider leading-none"
+                          className="text-[10px] font-mono uppercase tracking-wider leading-none shrink-0"
                           style={{ color: it.color }}
                         >
                           {it.tag}
