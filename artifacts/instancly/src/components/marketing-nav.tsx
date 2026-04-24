@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
-import { BoxLogo } from "@/components/box-logo";
 import { Menu } from "lucide-react";
+import logoUrl from "@assets/download_1776989236348.png";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 
@@ -23,9 +23,8 @@ export function MarketingNav() {
 
   return (
     <nav className="sticky top-0 z-50 bg-surface/80 backdrop-blur-md border-b border-border h-14 flex items-center justify-between px-6">
-      <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-        <BoxLogo className="w-5 h-5 text-primary" />
-        <span className="font-bold text-lg tracking-tight">instancly</span>
+      <Link href="/" className="flex items-center hover:opacity-80 transition-opacity" aria-label="Instancly">
+        <img src={logoUrl} alt="Instancly" className="h-7 w-auto object-contain" />
       </Link>
 
       <div className="hidden md:flex items-center gap-6 text-sm text-secondary">
