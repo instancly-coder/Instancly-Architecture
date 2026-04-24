@@ -33,6 +33,9 @@ import {
   Check,
   ArrowUp,
   Paperclip,
+  Image as ImageIcon,
+  Link2,
+  ListTodo,
   Cpu,
   Globe,
   ShieldCheck,
@@ -328,6 +331,13 @@ export default function Builder() {
   const [selectedModel, setSelectedModel] = useState<string>(
     "Claude Sonnet 4.5",
   );
+  // Plan mode: when ON, the AI prepends a numbered plan before any code, so
+  // big changes don't scroll past unexplained.
+  const [planMode, setPlanMode] = useState<boolean>(false);
+  // Attachments + reference URLs are lifted here (rather than living inside
+  // ChatPanel) so handleSend can include them in the build request body.
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const [refUrls, setRefUrls] = useState<string[]>([]);
   const abortRef = useRef<AbortController | null>(null);
   const autoSentRef = useRef(false);
 
@@ -342,6 +352,8 @@ export default function Builder() {
   // If the user landed here from "New project" with a `?prompt=` query
   // param, pre-fill and auto-send it once the project is loaded. We only
   // run this a single time per mount so user edits aren't clobbered.
+  // Also rehydrates any composer settings the homepage saved (model,
+  // plan mode, reference URLs, attached images).
   useEffect(() => {
     if (autoSentRef.current) return;
     if (!username || !slug) return;
@@ -353,10 +365,76 @@ export default function Builder() {
     // Strip the param from the URL so refresh doesn't re-trigger.
     const cleanUrl = window.location.pathname;
     window.history.replaceState({}, "", cleanUrl);
-    // Pass the prompt directly so we don't depend on chatInput state being
-    // flushed before send reads it.
+
+    // Parse any composer settings stashed by the landing page (model,
+    // plan mode, reference URLs, attached images). We pass these directly
+    // into handleSend so it never depends on React state setters flushing
+    // before the send fires — that was a real timing race.
+    let overrides:
+      | {
+          modelKey?: "haiku" | "sonnet" | "opus";
+          planMode?: boolean;
+          urls?: string[];
+          files?: File[];
+        }
+      | undefined;
+    try {
+      const raw = sessionStorage.getItem("deploybro:initial-settings");
+      if (raw) {
+        sessionStorage.removeItem("deploybro:initial-settings");
+        const s = JSON.parse(raw) as {
+          model?: string;
+          planMode?: boolean;
+          urls?: string[];
+          images?: { name: string; type: string; dataUrl: string }[];
+        };
+        overrides = {};
+        const modelEntry = AVAILABLE_MODELS.find((m) => m.key === s.model);
+        if (modelEntry) {
+          setSelectedModel(modelEntry.name);
+          overrides.modelKey = modelEntry.key as "haiku" | "sonnet" | "opus";
+        }
+        if (s.planMode) {
+          setPlanMode(true);
+          overrides.planMode = true;
+        }
+        if (Array.isArray(s.urls)) {
+          const urls = s.urls.slice(0, 5);
+          setRefUrls(urls);
+          overrides.urls = urls;
+        }
+        if (Array.isArray(s.images)) {
+          const reconstructed: File[] = [];
+          for (const img of s.images.slice(0, 5)) {
+            try {
+              const comma = img.dataUrl.indexOf(",");
+              if (comma < 0) continue;
+              const bin = atob(img.dataUrl.slice(comma + 1));
+              const bytes = new Uint8Array(bin.length);
+              for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+              reconstructed.push(new File([bytes], img.name, { type: img.type }));
+            } catch { /* skip bad image */ }
+          }
+          if (reconstructed.length) {
+            setAttachments(reconstructed);
+            overrides.files = reconstructed;
+          }
+        }
+      }
+      // Surface any "your images were too big" warning the landing page
+      // left behind before navigating away. One-shot — clear after read.
+      const warn = sessionStorage.getItem("deploybro:attach-warning");
+      if (warn) {
+        sessionStorage.removeItem("deploybro:attach-warning");
+        toast.warning(warn);
+      }
+    } catch { /* ignore */ }
+
+    // Fire on next tick so React commits the setStates above before the
+    // chips render — the request payload comes from `overrides`, not state,
+    // so the actual send is unaffected by render timing.
     const id = window.setTimeout(() => {
-      handleSendRef.current?.(initial);
+      handleSendRef.current?.(initial, overrides);
     }, 0);
     return () => window.clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -405,7 +483,18 @@ export default function Builder() {
     document.body.style.userSelect = "none";
   };
 
-  const handleSend = async (overridePrompt?: string) => {
+  // Optional `overrides` lets callers (specifically the rehydration effect)
+  // pass freshly-parsed composer settings without waiting for React state
+  // setters to flush — eliminates the timing race on first auto-send.
+  const handleSend = async (
+    overridePrompt?: string,
+    overrides?: {
+      modelKey?: "haiku" | "sonnet" | "opus";
+      planMode?: boolean;
+      urls?: string[];
+      files?: File[];
+    },
+  ) => {
     // Defensive: callers like `<button onClick={handleSend}>` pass a
     // React event in the first slot, so guard against non-string args.
     const raw =
@@ -423,14 +512,68 @@ export default function Builder() {
 
     // Map the picker's display name to the backend model key. Falsy `key`
     // (e.g. an OpenAI/Gemini option) means "let the server use its default".
-    const modelKey = AVAILABLE_MODELS.find((m) => m.name === selectedModel)?.key;
+    const modelKey =
+      overrides?.modelKey ??
+      AVAILABLE_MODELS.find((m) => m.name === selectedModel)?.key;
+    const effectivePlanMode = overrides?.planMode ?? planMode;
+
+    // Snapshot + clear the per-prompt attachments and URLs now that we're
+    // about to send them — the chips disappear from the prompt box at the
+    // same moment the request goes out, which matches user expectation.
+    const sendingFiles = overrides?.files ?? attachments;
+    const sendingUrls = overrides?.urls ?? refUrls;
+    setAttachments([]);
+    setRefUrls([]);
+
+    // Read any image attachments as raw base64 (no data: prefix). We only
+    // forward image MIME types; non-image files would be ignored by the
+    // model anyway, so we silently drop them rather than confuse the user.
+    const ALLOWED = new Set([
+      "image/png",
+      "image/jpeg",
+      "image/webp",
+      "image/gif",
+    ]);
+    const fileToBase64 = (file: File) =>
+      new Promise<{ name: string; mediaType: string; base64: string }>(
+        (resolve, reject) => {
+          const r = new FileReader();
+          r.onerror = () => reject(r.error ?? new Error("read failed"));
+          r.onload = () => {
+            const result = String(r.result ?? "");
+            const comma = result.indexOf(",");
+            resolve({
+              name: file.name,
+              mediaType: file.type,
+              base64: comma >= 0 ? result.slice(comma + 1) : result,
+            });
+          };
+          r.readAsDataURL(file);
+        },
+      );
+    const images = (
+      await Promise.all(
+        sendingFiles
+          .filter((f) => ALLOWED.has(f.type))
+          .slice(0, 5)
+          .map((f) => fileToBase64(f).catch(() => null)),
+      )
+    ).filter(
+      (x): x is { name: string; mediaType: string; base64: string } => x != null,
+    );
+
+    const body: Record<string, unknown> = { prompt };
+    if (modelKey) body.model = modelKey;
+    if (effectivePlanMode) body.planMode = true;
+    if (sendingUrls.length > 0) body.urls = sendingUrls;
+    if (images.length > 0) body.images = images;
 
     try {
       const res = await fetch(`/api/ai/build/${username}/${slug}`, {
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(modelKey ? { prompt, model: modelKey } : { prompt }),
+        body: JSON.stringify(body),
         signal: controller.signal,
       });
       if (!res.ok && res.headers.get("content-type")?.includes("application/json")) {
@@ -645,6 +788,12 @@ export default function Builder() {
             selectedModel={selectedModel}
             setSelectedModel={setSelectedModel}
             lastUsage={lastUsage}
+            planMode={planMode}
+            setPlanMode={setPlanMode}
+            attachments={attachments}
+            setAttachments={setAttachments}
+            refUrls={refUrls}
+            setRefUrls={setRefUrls}
           />
         </aside>
         {/* Drag handle to resize chat */}
@@ -892,6 +1041,12 @@ export default function Builder() {
           selectedModel={selectedModel}
           setSelectedModel={setSelectedModel}
           lastUsage={lastUsage}
+          planMode={planMode}
+          setPlanMode={setPlanMode}
+          attachments={attachments}
+          setAttachments={setAttachments}
+          refUrls={refUrls}
+          setRefUrls={setRefUrls}
         />
       </div>
     </div>
@@ -939,6 +1094,12 @@ function ChatPanel({
   selectedModel,
   setSelectedModel,
   lastUsage,
+  planMode,
+  setPlanMode,
+  attachments,
+  setAttachments,
+  refUrls,
+  setRefUrls,
 }: {
   chatInput: string;
   setChatInput: (v: string) => void;
@@ -952,15 +1113,44 @@ function ChatPanel({
   selectedModel: string;
   setSelectedModel: (v: string) => void;
   lastUsage: { cost: number; balance: number | null; model: string } | null;
+  planMode: boolean;
+  setPlanMode: (v: boolean) => void;
+  attachments: File[];
+  setAttachments: React.Dispatch<React.SetStateAction<File[]>>;
+  refUrls: string[];
+  setRefUrls: React.Dispatch<React.SetStateAction<string[]>>;
 }) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [attachments, setAttachments] = useState<File[]>([]);
   const [modelOpen, setModelOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [urlDraft, setUrlDraft] = useState("");
+  const [urlError, setUrlError] = useState("");
 
   const handleFiles = (files: FileList | null) => {
     if (!files) return;
     setAttachments((prev) => [...prev, ...Array.from(files)].slice(0, 6));
+  };
+
+  const addUrl = () => {
+    const raw = urlDraft.trim();
+    if (!raw) return;
+    // Auto-prepend https:// for the common case where users type "stripe.com".
+    const candidate = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+    try {
+      const u = new URL(candidate);
+      if (u.protocol !== "http:" && u.protocol !== "https:") {
+        throw new Error("scheme");
+      }
+      setRefUrls((prev) =>
+        prev.includes(u.toString()) ? prev : [...prev, u.toString()].slice(0, 5),
+      );
+      setUrlDraft("");
+      setUrlError("");
+      setAddOpen(false);
+    } catch {
+      setUrlError("Please enter a valid http(s) URL");
+    }
   };
 
   return (
@@ -1122,27 +1312,57 @@ function ChatPanel({
 
       <div className="p-3 border-t border-border bg-surface shrink-0">
         <div className="prompt-glow rounded-xl border border-border bg-background focus-within:border-primary focus-within:shadow-[0_0_0_1px_hsl(var(--primary))] transition-shadow">
-          {/* Attachment chips */}
-          {attachments.length > 0 && (
+          {/* Attachment + URL chips */}
+          {(attachments.length > 0 || refUrls.length > 0) && (
             <div className="flex flex-wrap gap-1.5 p-2 pb-0">
-              {attachments.map((f, i) => (
-                <span
-                  key={i}
-                  className="inline-flex items-center gap-1.5 max-w-[180px] px-2 py-1 rounded-md bg-surface-raised border border-border text-[11px] text-foreground"
-                >
-                  <Paperclip className="w-3 h-3 text-secondary shrink-0" />
-                  <span className="truncate">{f.name}</span>
-                  <button
-                    onClick={() =>
-                      setAttachments((prev) => prev.filter((_, j) => j !== i))
-                    }
-                    className="text-secondary hover:text-foreground"
-                    aria-label="Remove attachment"
+              {attachments.map((f, i) => {
+                const isImg = f.type.startsWith("image/");
+                return (
+                  <span
+                    key={`f-${i}`}
+                    className="inline-flex items-center gap-1.5 max-w-[180px] px-2 py-1 rounded-md bg-surface-raised border border-border text-[11px] text-foreground"
                   >
-                    <X className="w-3 h-3" />
-                  </button>
-                </span>
-              ))}
+                    {isImg ? (
+                      <ImageIcon className="w-3 h-3 text-secondary shrink-0" />
+                    ) : (
+                      <Paperclip className="w-3 h-3 text-secondary shrink-0" />
+                    )}
+                    <span className="truncate">{f.name}</span>
+                    <button
+                      onClick={() =>
+                        setAttachments((prev) => prev.filter((_, j) => j !== i))
+                      }
+                      className="text-secondary hover:text-foreground"
+                      aria-label="Remove attachment"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                );
+              })}
+              {refUrls.map((u, i) => {
+                let host = u;
+                try { host = new URL(u).host; } catch {}
+                return (
+                  <span
+                    key={`u-${i}`}
+                    className="inline-flex items-center gap-1.5 max-w-[200px] px-2 py-1 rounded-md bg-primary/10 border border-primary/30 text-[11px] text-foreground"
+                    title={u}
+                  >
+                    <Link2 className="w-3 h-3 text-primary shrink-0" />
+                    <span className="truncate">{host}</span>
+                    <button
+                      onClick={() =>
+                        setRefUrls((prev) => prev.filter((_, j) => j !== i))
+                      }
+                      className="text-secondary hover:text-foreground"
+                      aria-label="Remove URL"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                );
+              })}
             </div>
           )}
 
@@ -1156,30 +1376,113 @@ function ChatPanel({
                 onSend();
               }
             }}
-            placeholder="Describe a change..."
+            placeholder={
+              planMode
+                ? "Plan first, then build... describe the change"
+                : refUrls.length > 0
+                ? "Tell the AI how to redesign these references..."
+                : "Describe a change..."
+            }
             className="w-full min-h-[60px] max-h-[180px] bg-transparent p-3 text-sm focus:outline-none resize-none"
           />
 
-          {/* Action row: attach + model picker (left), send (right) */}
+          {/* Action row: + menu, plan toggle, model picker (left), send (right) */}
           <div className="flex items-center justify-between gap-2 px-2 pb-2">
             <div className="flex items-center gap-1 min-w-0">
               <input
                 ref={fileInputRef}
                 type="file"
                 multiple
+                accept="image/png,image/jpeg,image/webp,image/gif"
                 hidden
                 onChange={(e) => {
                   handleFiles(e.target.files);
                   if (fileInputRef.current) fileInputRef.current.value = "";
                 }}
               />
+
+              {/* "+" menu — image upload or reference URL for redesigns */}
+              <Popover open={addOpen} onOpenChange={(o) => { setAddOpen(o); if (!o) setUrlError(""); }}>
+                <PopoverTrigger asChild>
+                  <button
+                    className="w-7 h-7 rounded-md flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors shrink-0"
+                    title="Attach image or add a URL"
+                    aria-label="Attach image or add a URL"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent
+                  align="start"
+                  side="top"
+                  className="w-72 p-1 border-border"
+                >
+                  <button
+                    onClick={() => {
+                      setAddOpen(false);
+                      fileInputRef.current?.click();
+                    }}
+                    className="w-full flex items-center gap-2 px-2 py-2 rounded text-left text-xs text-foreground hover:bg-surface-raised transition-colors"
+                  >
+                    <ImageIcon className="w-3.5 h-3.5 text-secondary shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium">Upload image</div>
+                      <div className="text-[10px] text-secondary">
+                        PNG, JPG, WEBP or GIF — up to 5 images
+                      </div>
+                    </div>
+                  </button>
+                  <div className="h-px bg-border my-1" />
+                  <div className="px-2 py-1.5">
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <Link2 className="w-3.5 h-3.5 text-secondary" />
+                      <span className="text-[11px] font-medium text-foreground">
+                        Add a website to redesign
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-secondary mb-2 leading-snug">
+                      Paste any public site — the AI fetches it and uses it as a starting point.
+                    </div>
+                    <div className="flex gap-1">
+                      <input
+                        type="url"
+                        value={urlDraft}
+                        onChange={(e) => { setUrlDraft(e.target.value); setUrlError(""); }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") { e.preventDefault(); addUrl(); }
+                        }}
+                        placeholder="stripe.com"
+                        className="flex-1 min-w-0 h-7 px-2 rounded-md border border-border bg-background text-[11px] focus:outline-none focus:border-primary"
+                        autoFocus
+                      />
+                      <button
+                        onClick={addUrl}
+                        disabled={!urlDraft.trim()}
+                        className="h-7 px-2 rounded-md text-[11px] font-medium bg-primary text-primary-foreground disabled:opacity-40 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors"
+                      >
+                        Add
+                      </button>
+                    </div>
+                    {urlError && (
+                      <div className="mt-1 text-[10px] text-red-500">{urlError}</div>
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
+
+              {/* Plan-mode toggle */}
               <button
-                onClick={() => fileInputRef.current?.click()}
-                className="w-7 h-7 rounded-md flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors shrink-0"
-                title="Attach files"
-                aria-label="Attach files"
+                onClick={() => setPlanMode(!planMode)}
+                className={`h-7 px-2 rounded-md inline-flex items-center gap-1.5 text-[11px] font-mono transition-colors min-w-0 ${
+                  planMode
+                    ? "bg-primary/15 text-primary border border-primary/30"
+                    : "text-secondary hover:text-foreground hover:bg-surface-raised"
+                }`}
+                title={planMode ? "Plan mode is on — AI plans before coding" : "Turn on plan mode"}
+                aria-pressed={planMode}
               >
-                <Paperclip className="w-4 h-4" />
+                <ListTodo className="w-3.5 h-3.5 shrink-0" />
+                <span>Plan</span>
               </button>
 
               <Popover open={modelOpen} onOpenChange={setModelOpen}>

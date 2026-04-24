@@ -29,7 +29,10 @@ app.use(
 );
 app.use(cors({ origin: true, credentials: true }));
 app.use(cookieParser());
-app.use(express.json());
+// Image attachments for AI builds arrive as base64 inside the JSON body —
+// up to 5 images of ~5MB each, plus headroom for the prompt and URL list.
+// 30MB is comfortably above that ceiling without inviting abuse.
+app.use(express.json({ limit: "30mb" }));
 app.use(express.urlencoded({ extended: true }));
 
 app.use(tryAuth);

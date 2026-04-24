@@ -11,12 +11,31 @@ import {
   Cpu,
   Quote,
   Check,
+  Plus,
+  Image as ImageIcon,
+  Link2,
+  ListTodo,
+  ChevronDown,
+  X,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
-import React, { useEffect, useState, type KeyboardEvent } from "react";
+import React, { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { MarketingNav } from "@/components/marketing-nav";
 import { MarketingFooter } from "@/components/marketing-footer";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+
+// Mirror the builder's model list so the homepage picker shows the same
+// options. Free plan is server-side locked to Haiku regardless of choice.
+const HOME_MODELS: { name: string; key?: "haiku" | "sonnet" | "opus"; note: string }[] = [
+  { name: "Claude Haiku 4.5",  key: "haiku",  note: "Fast & cheap"           },
+  { name: "Claude Sonnet 4.5", key: "sonnet", note: "Balanced (recommended)" },
+  { name: "Claude Opus",       key: "opus",   note: "Most capable"           },
+];
 
 const PROMPT_SUGGESTIONS = [
   "Ecommerce",
@@ -213,6 +232,19 @@ export default function Landing() {
   const [nounIndex, setNounIndex] = useState(0);
   const [integrationsExpanded, setIntegrationsExpanded] = useState(false);
 
+  // Prompt-box composer state — mirrors the builder so the experience is
+  // continuous when the user lands in the editor.
+  const [selectedModel, setSelectedModel] = useState<string>("Claude Sonnet 4.5");
+  const [planMode, setPlanMode] = useState<boolean>(false);
+  const [refUrls, setRefUrls] = useState<string[]>([]);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [modelOpen, setModelOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [urlDraft, setUrlDraft] = useState("");
+  const [urlError, setUrlError] = useState("");
+  const [attachNotice, setAttachNotice] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     const id = window.setInterval(() => {
       setNounIndex((i) => (i + 1) % ROTATING_NOUNS.length);
@@ -220,20 +252,106 @@ export default function Landing() {
     return () => window.clearInterval(id);
   }, []);
 
-  const submit = () => {
-    const value = prompt.trim();
-    if (value) {
-      try {
-        sessionStorage.setItem("deploybro:initial-prompt", value);
-      } catch {}
+  const onPickFiles = (files: FileList | null) => {
+    if (!files) return;
+    const ALLOWED = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
+    const valid = Array.from(files).filter((f) => ALLOWED.has(f.type));
+    setImageFiles((prev) => [...prev, ...valid].slice(0, 5));
+  };
+
+  const addUrl = () => {
+    const raw = urlDraft.trim();
+    if (!raw) return;
+    const candidate = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+    try {
+      const u = new URL(candidate);
+      if (u.protocol !== "http:" && u.protocol !== "https:") throw new Error();
+      setRefUrls((prev) =>
+        prev.includes(u.toString()) ? prev : [...prev, u.toString()].slice(0, 5),
+      );
+      setUrlDraft("");
+      setUrlError("");
+      setAddOpen(false);
+    } catch {
+      setUrlError("Please enter a valid http(s) URL");
     }
+  };
+
+  const fileToDataUrl = (file: File) =>
+    new Promise<{ name: string; type: string; dataUrl: string }>((resolve, reject) => {
+      const r = new FileReader();
+      r.onerror = () => reject(r.error ?? new Error("read failed"));
+      r.onload = () => resolve({ name: file.name, type: file.type, dataUrl: String(r.result ?? "") });
+      r.readAsDataURL(file);
+    });
+
+  const submit = async () => {
+    const value = prompt.trim();
+    // The user's typed prompt is the single most important thing to carry
+    // over — persist it on its own so a later quota error in the settings
+    // block can't take it down with it.
+    if (value) {
+      try { sessionStorage.setItem("deploybro:initial-prompt", value); }
+      catch { /* private mode / quota — fall through, builder will show empty input */ }
+    }
+    // Persist the entire composer state so the builder can rehydrate it.
+    // sessionStorage caps around 5–10MB across browsers, so attaching
+    // several multi-MB images via base64 will reliably blow the quota.
+    // Strategy: try with images first; if it throws, retry without images
+    // and tell the user (in the editor) that they need to re-attach.
+    try {
+      const modelKey = HOME_MODELS.find((m) => m.name === selectedModel)?.key ?? "sonnet";
+      const baseSettings: Record<string, unknown> = { model: modelKey, planMode };
+      if (refUrls.length > 0) baseSettings.urls = refUrls;
+
+      let imagesPayload:
+        | { name: string; type: string; dataUrl: string }[]
+        | null = null;
+      if (imageFiles.length > 0) {
+        const imgs = await Promise.all(
+          imageFiles.slice(0, 5).map((f) => fileToDataUrl(f).catch(() => null)),
+        );
+        imagesPayload = imgs.filter(
+          (x): x is { name: string; type: string; dataUrl: string } => x != null,
+        );
+      }
+
+      const tryStore = (payload: Record<string, unknown>) => {
+        sessionStorage.setItem("deploybro:initial-settings", JSON.stringify(payload));
+      };
+
+      if (imagesPayload && imagesPayload.length > 0) {
+        try {
+          tryStore({ ...baseSettings, images: imagesPayload });
+        } catch {
+          // Most likely QuotaExceededError. Persist everything except images
+          // and leave a one-shot notice for the builder to surface.
+          try { tryStore(baseSettings); } catch { /* shrug */ }
+          try {
+            sessionStorage.setItem(
+              "deploybro:attach-warning",
+              `${imagesPayload.length} image${imagesPayload.length === 1 ? "" : "s"} were too large to carry over. Please re-attach them in the editor.`,
+            );
+          } catch { /* shrug */ }
+          setAttachNotice(
+            "Images are too large to carry into the editor — please re-attach them once you're in.",
+          );
+          // Give the user a real beat to read the inline notice before
+          // navigating — 1.2s blew by too fast to register as a warning.
+          setTimeout(() => navigate("/login"), 2500);
+          return;
+        }
+      } else {
+        try { tryStore(baseSettings); } catch { /* shrug */ }
+      }
+    } catch { /* sessionStorage may be unavailable in private mode — ignore */ }
     navigate("/login");
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      submit();
+      void submit();
     }
   };
 
@@ -298,29 +416,231 @@ export default function Landing() {
           </p>
 
           <div className="w-full max-w-2xl mx-auto">
+            {attachNotice && (
+              <div
+                role="status"
+                className="mb-2 text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-md px-3 py-2 text-left"
+              >
+                {attachNotice}
+              </div>
+            )}
             <div className="prompt-glow rounded-[14px] border border-border bg-background text-left focus-within:border-primary focus-within:shadow-[0_0_0_1px_hsl(var(--primary))] transition-shadow">
+              {/* Image + URL chips */}
+              {(imageFiles.length > 0 || refUrls.length > 0) && (
+                <div className="flex flex-wrap gap-1.5 p-3 pb-0">
+                  {imageFiles.map((f, i) => (
+                    <span
+                      key={`img-${i}`}
+                      className="inline-flex items-center gap-1.5 max-w-[200px] px-2 py-1 rounded-md bg-surface-raised border border-border text-xs text-foreground"
+                    >
+                      <ImageIcon className="w-3 h-3 text-secondary shrink-0" />
+                      <span className="truncate">{f.name}</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setImageFiles((prev) => prev.filter((_, j) => j !== i))
+                        }
+                        className="text-secondary hover:text-foreground"
+                        aria-label="Remove image"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+                  {refUrls.map((u, i) => {
+                    let host = u;
+                    try { host = new URL(u).host; } catch {}
+                    return (
+                      <span
+                        key={`url-${i}`}
+                        className="inline-flex items-center gap-1.5 max-w-[220px] px-2 py-1 rounded-md bg-primary/10 border border-primary/30 text-xs text-foreground"
+                        title={u}
+                      >
+                        <Link2 className="w-3 h-3 text-primary shrink-0" />
+                        <span className="truncate">{host}</span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setRefUrls((prev) => prev.filter((_, j) => j !== i))
+                          }
+                          className="text-secondary hover:text-foreground"
+                          aria-label="Remove URL"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+
               <textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 onKeyDown={onKeyDown}
-                placeholder="Ask DeployBro to create a landing page for my..."
+                placeholder={
+                  refUrls.length > 0
+                    ? "Tell DeployBro how to redesign these references..."
+                    : planMode
+                    ? "Plan first, then build... describe your idea"
+                    : "Ask DeployBro to create a landing page for my..."
+                }
                 rows={3}
                 className="w-full min-h-[88px] max-h-[220px] bg-transparent p-4 text-base text-foreground placeholder:text-muted outline-none resize-none"
               />
+
               <div className="flex items-center justify-between gap-2 px-2 pb-2">
-                <div className="flex items-center gap-1 min-w-0">
+                <div className="flex items-center gap-1 min-w-0 flex-wrap">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    hidden
+                    onChange={(e) => {
+                      onPickFiles(e.target.files);
+                      if (fileInputRef.current) fileInputRef.current.value = "";
+                    }}
+                  />
+
+                  {/* "+" menu — image upload or reference URL */}
+                  <Popover open={addOpen} onOpenChange={(o) => { setAddOpen(o); if (!o) setUrlError(""); }}>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        className="w-8 h-8 rounded-md flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors shrink-0"
+                        title="Attach image or add a URL"
+                        aria-label="Attach image or add a URL"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      align="start"
+                      side="top"
+                      className="w-72 p-1 border-border"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAddOpen(false);
+                          fileInputRef.current?.click();
+                        }}
+                        className="w-full flex items-center gap-2 px-2 py-2 rounded text-left text-xs text-foreground hover:bg-surface-raised transition-colors"
+                      >
+                        <ImageIcon className="w-3.5 h-3.5 text-secondary shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium">Upload image</div>
+                          <div className="text-[10px] text-secondary">
+                            PNG, JPG, WEBP or GIF — up to 5
+                          </div>
+                        </div>
+                      </button>
+                      <div className="h-px bg-border my-1" />
+                      <div className="px-2 py-1.5">
+                        <div className="flex items-center gap-1.5 mb-1.5">
+                          <Link2 className="w-3.5 h-3.5 text-secondary" />
+                          <span className="text-[11px] font-medium text-foreground">
+                            Redesign a website
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-secondary mb-2 leading-snug">
+                          Paste any public URL — the AI fetches it as a starting point.
+                        </div>
+                        <div className="flex gap-1">
+                          <input
+                            type="url"
+                            value={urlDraft}
+                            onChange={(e) => { setUrlDraft(e.target.value); setUrlError(""); }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") { e.preventDefault(); addUrl(); }
+                            }}
+                            placeholder="stripe.com"
+                            className="flex-1 min-w-0 h-7 px-2 rounded-md border border-border bg-background text-[11px] focus:outline-none focus:border-primary"
+                            autoFocus
+                          />
+                          <button
+                            type="button"
+                            onClick={addUrl}
+                            disabled={!urlDraft.trim()}
+                            className="h-7 px-2 rounded-md text-[11px] font-medium bg-primary text-primary-foreground disabled:opacity-40 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors"
+                          >
+                            Add
+                          </button>
+                        </div>
+                        {urlError && (
+                          <div className="mt-1 text-[10px] text-red-500">{urlError}</div>
+                        )}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+
+                  {/* Plan-mode toggle */}
                   <button
                     type="button"
-                    className="h-7 px-2 rounded-md inline-flex items-center gap-1.5 text-[11px] font-mono text-secondary hover:text-foreground hover:bg-surface-raised transition-colors min-w-0"
-                    title="Choose model"
+                    onClick={() => setPlanMode(!planMode)}
+                    className={`h-8 px-2.5 rounded-md inline-flex items-center gap-1.5 text-xs transition-colors min-w-0 ${
+                      planMode
+                        ? "bg-primary/15 text-primary border border-primary/30"
+                        : "text-secondary hover:text-foreground hover:bg-surface-raised"
+                    }`}
+                    title={planMode ? "Plan mode is on" : "Turn on plan mode"}
+                    aria-pressed={planMode}
                   >
-                    <Cpu className="w-3.5 h-3.5 shrink-0" />
-                    <span className="truncate">Claude Sonnet 4.5</span>
+                    <ListTodo className="w-3.5 h-3.5 shrink-0" />
+                    <span>Plan</span>
                   </button>
+
+                  {/* Model picker */}
+                  <Popover open={modelOpen} onOpenChange={setModelOpen}>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        className="h-8 px-2.5 rounded-md inline-flex items-center gap-1.5 text-xs font-mono text-secondary hover:text-foreground hover:bg-surface-raised transition-colors min-w-0"
+                        title="Choose model"
+                      >
+                        <Cpu className="w-3.5 h-3.5 shrink-0" />
+                        <span className="truncate">{selectedModel}</span>
+                        <ChevronDown className="w-3 h-3 opacity-60 shrink-0" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      align="start"
+                      side="top"
+                      className="w-64 p-1 border-border"
+                    >
+                      <div className="px-2 pt-1.5 pb-1 text-[10px] uppercase tracking-wider font-mono text-secondary">
+                        Model
+                      </div>
+                      {HOME_MODELS.map((m) => {
+                        const active = m.name === selectedModel;
+                        return (
+                          <button
+                            key={m.name}
+                            type="button"
+                            onClick={() => {
+                              setSelectedModel(m.name);
+                              setModelOpen(false);
+                            }}
+                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-xs text-foreground hover:bg-surface-raised transition-colors"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium truncate">{m.name}</div>
+                              <div className="text-[10px] text-secondary font-mono">
+                                {m.note}
+                              </div>
+                            </div>
+                            {active && <Check className="w-3.5 h-3.5 text-primary shrink-0" />}
+                          </button>
+                        );
+                      })}
+                    </PopoverContent>
+                  </Popover>
                 </div>
+
                 <button
                   type="button"
-                  onClick={submit}
+                  onClick={() => void submit()}
                   aria-label="Generate"
                   disabled={!prompt.trim()}
                   className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors shrink-0"
