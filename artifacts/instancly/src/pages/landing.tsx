@@ -211,6 +211,7 @@ export default function Landing() {
   const [, navigate] = useLocation();
   const [prompt, setPrompt] = useState("");
   const [nounIndex, setNounIndex] = useState(0);
+  const [integrationsExpanded, setIntegrationsExpanded] = useState(false);
 
   useEffect(() => {
     const id = window.setInterval(() => {
@@ -406,47 +407,77 @@ export default function Landing() {
               </p>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {INTEGRATIONS.map((it) => (
-                <div
-                  key={it.name}
-                  className="group relative rounded-xl border border-border bg-surface/40 p-5 overflow-hidden transition-all hover:-translate-y-0.5"
-                  style={{
-                    boxShadow: `inset 0 1px 0 0 ${it.color}10`,
-                  }}
-                >
-                  {/* Themed glow */}
+            <div className="relative">
+              <div
+                className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 ${
+                  integrationsExpanded
+                    ? ""
+                    : "[&>*:nth-child(n+4)]:hidden sm:[&>*:nth-child(n+4)]:grid"
+                }`}
+              >
+                {INTEGRATIONS.map((it) => (
                   <div
-                    className="absolute -top-12 -right-12 w-32 h-32 rounded-full blur-3xl opacity-30 group-hover:opacity-60 transition-opacity pointer-events-none"
-                    style={{ background: it.color }}
-                  />
-                  <div
-                    className="relative w-10 h-10 rounded-lg flex items-center justify-center mb-4 border"
+                    key={it.name}
+                    className="group relative rounded-xl border border-border bg-surface/40 p-5 overflow-hidden transition-all hover:-translate-y-0.5"
                     style={{
-                      background: `${it.color}18`,
-                      borderColor: `${it.color}40`,
-                      color: it.color,
+                      boxShadow: `inset 0 1px 0 0 ${it.color}10`,
                     }}
                   >
-                    <it.Logo />
-                  </div>
-                  <div className="relative flex items-baseline justify-between gap-2 mb-1">
-                    <h3 className="font-bold tracking-tight text-foreground">
-                      {it.name}
-                    </h3>
-                    <span
-                      className="text-[10px] font-mono uppercase tracking-wider"
-                      style={{ color: it.color }}
+                    {/* Themed glow */}
+                    <div
+                      className="absolute -top-12 -right-12 w-32 h-32 rounded-full blur-3xl opacity-30 group-hover:opacity-60 transition-opacity pointer-events-none"
+                      style={{ background: it.color }}
+                    />
+                    <div
+                      className="relative w-10 h-10 rounded-lg flex items-center justify-center mb-4 border"
+                      style={{
+                        background: `${it.color}18`,
+                        borderColor: `${it.color}40`,
+                        color: it.color,
+                      }}
                     >
-                      {it.tag}
-                    </span>
+                      <it.Logo />
+                    </div>
+                    <div className="relative flex items-baseline justify-between gap-2 mb-1">
+                      <h3 className="font-bold tracking-tight text-foreground">
+                        {it.name}
+                      </h3>
+                      <span
+                        className="text-[10px] font-mono uppercase tracking-wider"
+                        style={{ color: it.color }}
+                      >
+                        {it.tag}
+                      </span>
+                    </div>
+                    <p className="relative text-xs text-secondary leading-relaxed">
+                      {it.desc}
+                    </p>
                   </div>
-                  <p className="relative text-xs text-secondary leading-relaxed">
-                    {it.desc}
-                  </p>
-                </div>
-              ))}
+                ))}
+              </div>
+
+              {/* Mobile-only fade + reveal control. Hidden once expanded
+                  and on sm+ where we already show the full grid. */}
+              {!integrationsExpanded && (
+                <div
+                  aria-hidden="true"
+                  className="sm:hidden pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-background via-background/80 to-transparent"
+                />
+              )}
             </div>
+
+            {!integrationsExpanded && (
+              <div className="sm:hidden mt-6 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => setIntegrationsExpanded(true)}
+                  className="glass-pill inline-flex items-center gap-2 px-5 py-2 rounded-full text-xs font-medium text-foreground/90 transition-transform active:translate-y-px"
+                >
+                  Show all {INTEGRATIONS.length}
+                  <ArrowRight className="w-3.5 h-3.5 opacity-60 rotate-90" />
+                </button>
+              </div>
+            )}
           </div>
         </section>
 
