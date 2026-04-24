@@ -302,7 +302,10 @@ export default function Builder() {
   };
 
   const handleSend = async (overridePrompt?: string) => {
-    const raw = overridePrompt ?? chatInput;
+    // Defensive: callers like `<button onClick={handleSend}>` pass a
+    // React event in the first slot, so guard against non-string args.
+    const raw =
+      typeof overridePrompt === "string" ? overridePrompt : chatInput;
     if (!raw.trim() || isStreaming || !username || !slug) return;
     const prompt = raw.trim();
     setChatInput("");
@@ -1015,7 +1018,7 @@ function ChatPanel({
             </div>
 
             <button
-              onClick={onSend}
+              onClick={() => onSend()}
               disabled={!chatInput.trim() || isStreaming}
               className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors shrink-0"
               title="Send"
