@@ -6,6 +6,7 @@ import {
   usersTable,
   buildsTable,
   projectFilesTable,
+  transactionsTable,
 } from "@workspace/db";
 import { and, asc, desc, eq, max, sql } from "drizzle-orm";
 import {
@@ -13,6 +14,7 @@ import {
   buildSystemPrompt,
 } from "../lib/components-catalog";
 import { parseFileBlocks, stripFileBlocks } from "../lib/file-blocks";
+import { requireAuth, getAuthedUser } from "../middlewares/auth";
 
 const router: IRouter = Router();
 
@@ -24,11 +26,32 @@ const anthropic = aiConfigured
   ? new Anthropic({ baseURL, apiKey })
   : null;
 
-const MODEL = "claude-sonnet-4-6";
-const MODEL_DISPLAY = "Claude Sonnet 4.5";
+// Per-million-token pricing in USD. These are the marked-up rates the user
+// pays — model cost + platform margin baked in. Update one place to reprice.
+type ModelKey = "haiku" | "sonnet" | "opus";
+const MODELS: Record<
+  ModelKey,
+  { id: string; display: string; rates: { input: number; output: number } }
+> = {
+  haiku:  { id: "claude-haiku-4-5",  display: "Claude Haiku 4.5",  rates: { input: 5,  output: 25 } },
+  sonnet: { id: "claude-sonnet-4-6", display: "Claude Sonnet 4.5", rates: { input: 12, output: 60 } },
+  opus:   { id: "claude-opus-4-5",   display: "Claude Opus",       rates: { input: 20, output: 100 } },
+};
+const DEFAULT_MODEL: ModelKey = "sonnet";
+
+// Free plan is locked to Haiku regardless of what the client requests.
+function pickModel(requested: unknown, plan: string | null | undefined): ModelKey {
+  const k =
+    typeof requested === "string" && requested in MODELS
+      ? (requested as ModelKey)
+      : DEFAULT_MODEL;
+  if ((plan ?? "Free").toLowerCase() === "free") return "haiku";
+  return k;
+}
 
 router.post(
   "/ai/build/:username/:slug",
+  requireAuth,
   async (req: Request, res: Response): Promise<void> => {
     const username = String(req.params.username);
     const slug = String(req.params.slug);
@@ -47,16 +70,33 @@ router.post(
     }
 
     const rows = await db
-      .select({ project: projectsTable })
+      .select({
+        project: projectsTable,
+        ownerId: usersTable.id,
+        ownerPlan: usersTable.plan,
+      })
       .from(projectsTable)
       .innerJoin(usersTable, eq(usersTable.id, projectsTable.userId))
       .where(and(eq(usersTable.username, username), eq(projectsTable.slug, slug)))
       .limit(1);
 
     const project = rows[0]?.project;
+    const ownerId = rows[0]?.ownerId;
+    const ownerPlan = rows[0]?.ownerPlan;
     if (!project) {
       if (!clientGone) {
         res.status(404).json({ status: "error", message: "Project not found" });
+      }
+      return;
+    }
+
+    // Only the project owner can run a build against their project — without
+    // this check, anyone who knows /:username/:slug could drain another
+    // user's balance via the cost-deduction logic below.
+    const authedUser = getAuthedUser(req);
+    if (!authedUser || authedUser.id !== ownerId) {
+      if (!clientGone) {
+        res.status(403).json({ status: "error", message: "Forbidden" });
       }
       return;
     }
@@ -91,6 +131,12 @@ router.post(
     let outputTokens = 0;
     let aborted = clientGone;
     let stream: ReturnType<typeof anthropic.messages.stream> | null = null;
+
+    // Resolve which Claude model to run. Free plan is forced to Haiku; paid
+    // tiers honour the client's choice. The chosen model also determines the
+    // per-token rates used to bill the user's balance after the build.
+    const modelKey = pickModel(req.body?.model, ownerPlan);
+    const modelInfo = MODELS[modelKey];
 
     // Pull existing project files so the model can reason about prior code.
     const existingFiles = await db
@@ -151,11 +197,16 @@ router.post(
       errorMessage?: string,
     ) => {
       const durationSec = Math.max(1, Math.round((Date.now() - startedAt) / 1000));
-      // Sonnet pricing: $3 in / $15 out per 1M tokens; ~£0.78 / £3.94 per 1M GBP.
-      // Store full precision (4dp) — only round for display.
-      const costNum =
-        (inputTokens / 1_000_000) * 0.78 + (outputTokens / 1_000_000) * 3.94;
-      const cost = Math.max(0, costNum).toFixed(4);
+      // Bill at the chosen model's marked-up rates (USD per 1M tokens).
+      // Round to whole cents so the build row, the transaction ledger, and
+      // the deduction from the user's balance all show the same number —
+      // otherwise builds.cost (4dp) and balance/transactions (2dp) drift.
+      const rawCost = Math.max(
+        0,
+        (inputTokens / 1_000_000) * modelInfo.rates.input +
+          (outputTokens / 1_000_000) * modelInfo.rates.output,
+      );
+      const cost = (Math.round(rawCost * 100) / 100).toFixed(2);
 
       const [{ maxNumber }] = await db
         .select({ maxNumber: max(buildsTable.number) })
@@ -182,7 +233,7 @@ router.post(
           filesChanged,
           tokensIn: inputTokens,
           tokensOut: outputTokens,
-          model: MODEL_DISPLAY,
+          model: modelInfo.display,
           status,
         })
         .returning();
@@ -193,13 +244,38 @@ router.post(
           .set({ lastBuiltAt: new Date() })
           .where(eq(projectsTable.id, project.id));
       }
-      return created;
+
+      // Deduct from the project owner's balance for any tokens consumed —
+      // even on aborted/failed builds, the upstream API still charged us.
+      // Skipped when there's no owner row or no measurable cost.
+      // Wrapped in a DB transaction so balance and ledger never diverge.
+      let postBalance: number | null = null;
+      if (ownerId && Number(cost) > 0) {
+        postBalance = await db.transaction(async (tx) => {
+          const [updated] = await tx
+            .update(usersTable)
+            .set({ balance: sql`${usersTable.balance} - ${cost}` })
+            .where(eq(usersTable.id, ownerId))
+            .returning({ balance: usersTable.balance });
+
+          await tx.insert(transactionsTable).values({
+            userId: ownerId,
+            amount: `-${cost}`,
+            method: `${modelInfo.display} generation`,
+            status: "Success",
+          });
+
+          return updated ? Number(updated.balance) : null;
+        });
+      }
+
+      return { build: created, postBalance };
     };
 
     try {
       const filesContext = buildFilesContext(existingFiles);
       stream = anthropic.messages.stream({
-        model: MODEL,
+        model: modelInfo.id,
         max_tokens: 16_384,
         system: buildSystemPrompt(project.name, project.framework),
         messages: [
@@ -210,7 +286,7 @@ router.post(
         ],
       });
 
-      send("start", { model: MODEL_DISPLAY });
+      send("start", { model: modelInfo.display });
 
       for await (const event of stream) {
         if (aborted) break;
@@ -240,7 +316,17 @@ router.post(
       }
 
       const written = await persistFiles();
-      const created = await persistBuild("success", written.length);
+      const { build: created, postBalance } = await persistBuild(
+        "success",
+        written.length,
+      );
+      // Tell the client what this generation cost and what's left in the
+      // balance so the chat can show "Used $X · Remaining: $Y" inline.
+      send("usage", {
+        cost: Number(created.cost),
+        balance: postBalance,
+        model: modelInfo.display,
+      });
       send("done", {
         ok: true,
         build: {
@@ -256,9 +342,10 @@ router.post(
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : "AI request failed";
+      let failedResult: Awaited<ReturnType<typeof persistBuild>> | null = null;
       try {
         const written = await persistFiles().catch(() => [] as string[]);
-        await persistBuild(
+        failedResult = await persistBuild(
           aborted ? "aborted" : "failed",
           written.length,
           message,
@@ -267,6 +354,15 @@ router.post(
         /* swallow secondary error so we still close the response */
       }
       if (!res.writableEnded) {
+        // Even on a failed build the user got billed for tokens already
+        // consumed, so surface that to the chat the same way success does.
+        if (failedResult && Number(failedResult.build.cost) > 0) {
+          send("usage", {
+            cost: Number(failedResult.build.cost),
+            balance: failedResult.postBalance,
+            model: modelInfo.display,
+          });
+        }
         send("error", { message });
         send("done", { ok: false });
       }

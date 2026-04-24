@@ -57,13 +57,22 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-const AVAILABLE_MODELS = [
-  { name: "Claude Sonnet 4.5", provider: "Anthropic", costRange: "£0.01 - £0.05" },
-  { name: "Claude Opus", provider: "Anthropic", costRange: "£0.05 - £0.20" },
-  { name: "GPT-4o", provider: "OpenAI", costRange: "£0.02 - £0.10" },
-  { name: "GPT-4o mini", provider: "OpenAI", costRange: "£0.005 - £0.02" },
-  { name: "Gemini 2.5 Pro", provider: "Google", costRange: "£0.01 - £0.04" },
-  { name: "Gemini Flash", provider: "Google", costRange: "£0.002 - £0.01" },
+// `key` maps to a backend model registry entry. Models without a key still
+// render in the picker but currently fall back to the default Sonnet model
+// on the server until those providers are wired up.
+const AVAILABLE_MODELS: {
+  name: string;
+  provider: string;
+  costRange: string;
+  key?: "haiku" | "sonnet" | "opus";
+}[] = [
+  { name: "Claude Haiku 4.5", provider: "Anthropic", costRange: "$0.005 - $0.025", key: "haiku" },
+  { name: "Claude Sonnet 4.5", provider: "Anthropic", costRange: "$0.012 - $0.06", key: "sonnet" },
+  { name: "Claude Opus", provider: "Anthropic", costRange: "$0.02 - $0.10", key: "opus" },
+  { name: "GPT-4o", provider: "OpenAI", costRange: "$0.02 - $0.10" },
+  { name: "GPT-4o mini", provider: "OpenAI", costRange: "$0.005 - $0.02" },
+  { name: "Gemini 2.5 Pro", provider: "Google", costRange: "$0.01 - $0.04" },
+  { name: "Gemini Flash", provider: "Google", costRange: "$0.002 - $0.01" },
 ];
 import {
   useMe,
@@ -305,6 +314,20 @@ export default function Builder() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [phase, setPhase] = useState<string | undefined>(undefined);
   const [typed, setTyped] = useState("");
+  // The "Used $X · Remaining: $Y" line shown after a generation finishes.
+  // Cleared when the user fires the next prompt so it always reflects the
+  // most recent build.
+  const [lastUsage, setLastUsage] = useState<
+    { cost: number; balance: number | null; model: string } | null
+  >(null);
+  // Lifted from ChatPanel so handleSend (declared here) can read which model
+  // the user picked and pass its key to the backend. Both desktop and mobile
+  // ChatPanel instances share this single state, which is the right UX too.
+  // Default to Sonnet by name (not by list index) so reordering the picker
+  // never silently downgrades the default model for paid users.
+  const [selectedModel, setSelectedModel] = useState<string>(
+    "Claude Sonnet 4.5",
+  );
   const abortRef = useRef<AbortController | null>(null);
   const autoSentRef = useRef(false);
 
@@ -393,16 +416,21 @@ export default function Builder() {
     setIsStreaming(true);
     setPhase("Thinking");
     setTyped("");
+    setLastUsage(null);
 
     const controller = new AbortController();
     abortRef.current = controller;
+
+    // Map the picker's display name to the backend model key. Falsy `key`
+    // (e.g. an OpenAI/Gemini option) means "let the server use its default".
+    const modelKey = AVAILABLE_MODELS.find((m) => m.name === selectedModel)?.key;
 
     try {
       const res = await fetch(`/api/ai/build/${username}/${slug}`, {
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify(modelKey ? { prompt, model: modelKey } : { prompt }),
         signal: controller.signal,
       });
       if (!res.ok && res.headers.get("content-type")?.includes("application/json")) {
@@ -448,6 +476,18 @@ export default function Builder() {
           raw += evt.data.text;
           target = stripIncompleteFileBlocks(raw);
           schedule();
+        } else if (evt.event === "usage") {
+          // The server tells us exactly what this generation cost and what's
+          // left in the balance, so we can show "Used $X · Remaining: $Y"
+          // without re-fetching just to render that line.
+          setLastUsage({
+            cost: Number(evt.data?.cost ?? 0),
+            balance:
+              evt.data?.balance != null && Number.isFinite(Number(evt.data.balance))
+                ? Number(evt.data.balance)
+                : null,
+            model: String(evt.data?.model ?? selectedModel),
+          });
         } else if (evt.event === "error") {
           throw new Error(evt.data?.message || "AI error");
         } else if (evt.event === "done") {
@@ -470,6 +510,10 @@ export default function Builder() {
       await queryClient.invalidateQueries({ queryKey: ["projects", username, slug] });
       await queryClient.invalidateQueries({ queryKey: ["projects", username, slug, "files"] });
       await queryClient.invalidateQueries({ queryKey: ["projects", username, slug, "file"] });
+      // Refresh the header balance and the billing/transactions pages so the
+      // post-deduction amounts show up immediately.
+      await queryClient.invalidateQueries({ queryKey: ["me"] });
+      await queryClient.invalidateQueries({ queryKey: ["me", "transactions"] });
       // Force the preview iframe to reload with the freshly-written files.
       setIframeKey((k) => k + 1);
     } catch (err) {
@@ -519,7 +563,7 @@ export default function Builder() {
 
         <div className="flex items-center gap-2 md:gap-3 shrink-0">
           <span className="hidden lg:inline text-xs text-secondary font-mono">
-            £{apiBuilds.reduce((s, b) => s + b.cost, 0).toFixed(2)} spend
+            ${apiBuilds.reduce((s, b) => s + b.cost, 0).toFixed(2)} spend
           </span>
 
 
@@ -543,7 +587,7 @@ export default function Builder() {
           <Popover>
             <PopoverTrigger asChild>
               <button className="hidden sm:inline-flex px-3 py-1.5 rounded-full bg-background border border-border text-xs font-mono font-medium hover:bg-surface-raised transition-colors">
-                £{balance.toFixed(2)}
+                ${balance.toFixed(2)}
               </button>
             </PopoverTrigger>
             <PopoverContent
@@ -552,7 +596,7 @@ export default function Builder() {
             >
               <h4 className="font-medium mb-2">Current Balance</h4>
               <div className="text-2xl font-mono mb-4">
-                £{balance.toFixed(2)}
+                ${balance.toFixed(2)}
               </div>
               <Link href="/dashboard/billing">
                 <Button className="w-full text-xs" variant="outline">
@@ -574,7 +618,7 @@ export default function Builder() {
               <DropdownMenuItem>Share link</DropdownMenuItem>
               <DropdownMenuSeparator className="bg-border" />
               <DropdownMenuItem>
-                <span className="font-mono text-xs">£{balance.toFixed(2)} balance</span>
+                <span className="font-mono text-xs">${balance.toFixed(2)} balance</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -598,6 +642,9 @@ export default function Builder() {
             openBuildId={openBuildId}
             setOpenBuildId={setOpenBuildId}
             pastBuilds={pastBuilds}
+            selectedModel={selectedModel}
+            setSelectedModel={setSelectedModel}
+            lastUsage={lastUsage}
           />
         </aside>
         {/* Drag handle to resize chat */}
@@ -842,6 +889,9 @@ export default function Builder() {
           openBuildId={openBuildId}
           setOpenBuildId={setOpenBuildId}
           pastBuilds={pastBuilds}
+          selectedModel={selectedModel}
+          setSelectedModel={setSelectedModel}
+          lastUsage={lastUsage}
         />
       </div>
     </div>
@@ -886,6 +936,9 @@ function ChatPanel({
   openBuildId,
   setOpenBuildId,
   pastBuilds,
+  selectedModel,
+  setSelectedModel,
+  lastUsage,
 }: {
   chatInput: string;
   setChatInput: (v: string) => void;
@@ -896,13 +949,13 @@ function ChatPanel({
   openBuildId: string | null;
   setOpenBuildId: (id: string | null) => void;
   pastBuilds: PastBuild[];
+  selectedModel: string;
+  setSelectedModel: (v: string) => void;
+  lastUsage: { cost: number; balance: number | null; model: string } | null;
 }) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [attachments, setAttachments] = useState<File[]>([]);
-  const [selectedModel, setSelectedModel] = useState<string>(
-    AVAILABLE_MODELS[0].name
-  );
   const [modelOpen, setModelOpen] = useState(false);
 
   const handleFiles = (files: FileList | null) => {
@@ -997,7 +1050,7 @@ function ChatPanel({
                     <div className="border-t border-border pt-2 flex items-center justify-between">
                       <span className="font-medium text-foreground">Total</span>
                       <span className="font-mono font-semibold text-primary">
-                        £{b.cost.toFixed(2)}
+                        ${b.cost.toFixed(2)}
                       </span>
                     </div>
                     <Button
@@ -1036,6 +1089,26 @@ function ChatPanel({
                   {currentPhase ?? "Working"}…
                 </span>
               </div>
+            )}
+          </div>
+        )}
+
+        {/* Post-generation usage line. Persistent until the next prompt
+            so the user has time to read what the build cost. */}
+        {!isStreaming && lastUsage && (
+          <div className="text-[11px] text-secondary leading-relaxed border-l-2 border-border pl-2">
+            This generation used{" "}
+            <span className="text-foreground font-medium">
+              ${lastUsage.cost.toFixed(2)}
+            </span>{" "}
+            from your balance.
+            {lastUsage.balance != null && (
+              <>
+                {" "}Remaining:{" "}
+                <span className="text-foreground font-medium">
+                  ${lastUsage.balance.toFixed(2)}
+                </span>
+              </>
             )}
           </div>
         )}
@@ -2362,7 +2435,7 @@ function HistoryPane({
     >
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard label="Builds" value={`${builds.length}`} />
-        <KpiCard label="Total spent" value={`£${totalCost.toFixed(2)}`} />
+        <KpiCard label="Total spent" value={`$${totalCost.toFixed(2)}`} />
         <KpiCard label="Files changed" value={`${totalFiles}`} />
         <KpiCard label="Total time" value={fmtTime(totalTime)} />
       </div>
@@ -2388,7 +2461,7 @@ function HistoryPane({
                     <div className="min-w-0">
                       <div className="font-medium text-sm truncate">{b.prompt}</div>
                       <div className="text-[11px] text-secondary font-mono mt-0.5">
-                        {b.ago} · {fmtTime(b.durationSec)} · £{b.cost.toFixed(2)} · {b.filesChanged} files
+                        {b.ago} · {fmtTime(b.durationSec)} · ${b.cost.toFixed(2)} · {b.filesChanged} files
                       </div>
                     </div>
                   </div>
@@ -2410,7 +2483,7 @@ function HistoryPane({
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       <Stat label="Model" value={b.model} />
-                      <Stat label="Cost" value={`£${b.cost.toFixed(2)}`} />
+                      <Stat label="Cost" value={`$${b.cost.toFixed(2)}`} />
                       <Stat label="Files" value={`${b.filesChanged}`} />
                       <Stat label="Duration" value={fmtTime(b.durationSec)} />
                     </div>
