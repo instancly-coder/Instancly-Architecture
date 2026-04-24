@@ -48,12 +48,13 @@ export function stripFileBlocks(text: string): string {
     const closeIdx = text.indexOf(CLOSE, OPEN_RE.lastIndex);
     if (closeIdx < 0) {
       // Open tag with no close yet — drop everything from this point on
-      // so the chat doesn't briefly show raw file bodies.
+      // so the chat doesn't briefly show raw file bodies. The marker is
+      // rendered by the client as an inline icon (see FileNoticeText).
       cursor = text.length;
-      out += `\n_(writing ${match[1]}…)_`;
+      out += `\n[[FILE_PENDING:${match[1]}]]`;
       break;
     }
-    out += `\n_(updated **${match[1]}**)_\n`;
+    out += `\n[[FILE_DONE:${match[1]}]]\n`;
     cursor = closeIdx + CLOSE.length;
     OPEN_RE.lastIndex = cursor;
   }

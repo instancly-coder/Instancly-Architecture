@@ -42,6 +42,8 @@ import {
   TrendingUp,
   TrendingDown,
   Filter,
+  FileCheck,
+  FilePen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -98,9 +100,10 @@ const TAB_META: Record<TabKey, { label: string; icon: any }> = {
 };
 
 // Hide model-emitted file payloads from the live chat stream. Complete
-// blocks become a friendly "Updated `path`" line; an unfinished block at
-// the tail (still streaming) becomes a "Writing `path`…" indicator and
-// everything after the open tag is dropped from view.
+// blocks become an "updated" marker; an unfinished block at the tail
+// (still streaming) becomes a "pending" marker and everything after the
+// open tag is dropped from view. Marker tokens are rendered as inline
+// Lucide icons by <FileNotice/>.
 function stripIncompleteFileBlocks(text: string): string {
   let out = "";
   let cursor = 0;
@@ -112,16 +115,60 @@ function stripIncompleteFileBlocks(text: string): string {
     const closeIdx = text.indexOf("</file>", OPEN.lastIndex);
     const path = m[1] || "file";
     if (closeIdx === -1) {
-      out += `\n\n✏️ Writing \`${path}\`…`;
+      out += `\n\n[[FILE_PENDING:${path}]]`;
       cursor = text.length;
       break;
     }
-    out += `\n\n✓ Updated \`${path}\``;
+    out += `\n\n[[FILE_DONE:${path}]]`;
     cursor = closeIdx + "</file>".length;
     OPEN.lastIndex = cursor;
   }
   out += text.slice(cursor);
   return out.replace(/\n{3,}/g, "\n\n").replace(/^\s+/, "");
+}
+
+// Renders a chat message string, swapping our [[FILE_DONE:path]] /
+// [[FILE_PENDING:path]] markers for inline Lucide icons. Also accepts
+// the legacy server format `_(updated **path**)_` / `_(writing path…)_`
+// so historical builds in the DB render with icons too.
+function FileNoticeText({ text }: { text: string }) {
+  // Normalize legacy markers to the new ones up front so we have a
+  // single split below.
+  const normalized = text
+    .replace(/_\(updated \*\*([^*]+)\*\*\)_/g, "[[FILE_DONE:$1]]")
+    .replace(/_\(writing ([^)]+?)…\)_/g, "[[FILE_PENDING:$1]]");
+  const parts = normalized.split(/(\[\[FILE_(?:DONE|PENDING):[^\]]+\]\])/g);
+  return (
+    <>
+      {parts.map((part, i) => {
+        const done = part.match(/^\[\[FILE_DONE:(.+)\]\]$/);
+        if (done) {
+          return (
+            <span
+              key={i}
+              className="inline-flex items-center gap-1.5 text-secondary/90 mr-1"
+            >
+              <FileCheck className="w-3.5 h-3.5 shrink-0 opacity-70" />
+              <span className="font-mono text-[11px]">{done[1]}</span>
+            </span>
+          );
+        }
+        const pending = part.match(/^\[\[FILE_PENDING:(.+)\]\]$/);
+        if (pending) {
+          return (
+            <span
+              key={i}
+              className="inline-flex items-center gap-1.5 text-secondary/90 mr-1"
+            >
+              <FilePen className="w-3.5 h-3.5 shrink-0 opacity-70 animate-pulse" />
+              <span className="font-mono text-[11px]">{pending[1]}</span>
+            </span>
+          );
+        }
+        return <span key={i}>{part}</span>;
+      })}
+    </>
+  );
 }
 
 const ADDABLE_TABS: TabKey[] = [
@@ -889,7 +936,7 @@ function ChatPanel({
               {/* AI response */}
               <div className="space-y-2">
                 <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap break-words">
-                  {b.aiMessage}
+                  <FileNoticeText text={b.aiMessage} />
                 </p>
 
                 {/* Footer: Checkpoint on its own line, then clickable price/time */}
@@ -907,7 +954,7 @@ function ChatPanel({
                     onClick={() => setOpenBuildId(open ? null : b.id)}
                     className="font-mono inline-flex items-center gap-1 hover:text-primary underline-offset-2 hover:underline transition-colors"
                   >
-                    Worked for {durationLabel} · £{b.cost.toFixed(2)}
+                    Worked for {durationLabel}
                     <ChevronDown
                       className={`w-3 h-3 transition-transform ${
                         open ? "rotate-180" : ""
@@ -988,7 +1035,7 @@ function ChatPanel({
                   : "text-muted-foreground"
               }`}
             >
-              {typed}
+              <FileNoticeText text={typed} />
               <span className="inline-block w-[2px] h-[1.05em] bg-primary/80 ml-0.5 align-text-bottom animate-pulse" />
             </div>
           </div>
@@ -2358,7 +2405,9 @@ function HistoryPane({
                       <div className="text-[10px] uppercase tracking-wider font-mono text-secondary mb-1">
                         AI response
                       </div>
-                      <p className="text-sm leading-relaxed">{b.aiMessage}</p>
+                      <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap break-words">
+                        <FileNoticeText text={b.aiMessage} />
+                      </p>
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       <Stat label="Model" value={b.model} />
