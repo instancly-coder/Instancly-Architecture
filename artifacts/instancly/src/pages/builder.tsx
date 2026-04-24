@@ -97,6 +97,33 @@ const TAB_META: Record<TabKey, { label: string; icon: any }> = {
   settings: { label: "Settings", icon: SettingsIcon },
 };
 
+// Hide model-emitted file payloads from the live chat stream. Complete
+// blocks become a friendly "Updated `path`" line; an unfinished block at
+// the tail (still streaming) becomes a "Writing `path`…" indicator and
+// everything after the open tag is dropped from view.
+function stripIncompleteFileBlocks(text: string): string {
+  let out = "";
+  let cursor = 0;
+  const OPEN = /<file\s+path="([^"]*)"\s*>/g;
+  OPEN.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = OPEN.exec(text))) {
+    out += text.slice(cursor, m.index);
+    const closeIdx = text.indexOf("</file>", OPEN.lastIndex);
+    const path = m[1] || "file";
+    if (closeIdx === -1) {
+      out += `\n\n✏️ Writing \`${path}\`…`;
+      cursor = text.length;
+      break;
+    }
+    out += `\n\n✓ Updated \`${path}\``;
+    cursor = closeIdx + "</file>".length;
+    OPEN.lastIndex = cursor;
+  }
+  out += text.slice(cursor);
+  return out.replace(/\n{3,}/g, "\n\n").replace(/^\s+/, "");
+}
+
 const ADDABLE_TABS: TabKey[] = [
   "files",
   "database",
@@ -335,13 +362,45 @@ export default function Builder() {
         const j = await res.json().catch(() => ({}));
         throw new Error(j.message || `HTTP ${res.status}`);
       }
-      let acc = "";
+      // We keep two strings:
+      //   raw      — the full token stream from Anthropic, used to derive
+      //              the visible target via stripIncompleteFileBlocks().
+      //   revealed — characters already shown to the user; we advance this
+      //              toward target.length on a RAF loop so chunky tokens
+      //              feel like smooth letter-by-letter typing.
+      let raw = "";
+      let target = "";
+      let revealed = 0;
+      let raf: number | null = null;
+      let finished = false;
+
+      const tick = () => {
+        // Adaptive pace: when the gap is small we type slowly so a single
+        // word doesn't blink in; when the gap is large we catch up quickly
+        // so we never feel laggy. Cap so the typing always feels human.
+        const gap = target.length - revealed;
+        const charsPerFrame = finished
+          ? Math.max(8, Math.ceil(gap / 3))
+          : Math.max(1, Math.min(12, Math.ceil(gap / 8)));
+        revealed = Math.min(target.length, revealed + charsPerFrame);
+        setTyped(target.slice(0, revealed));
+        if (revealed < target.length) {
+          raf = requestAnimationFrame(tick);
+        } else {
+          raf = null;
+        }
+      };
+      const schedule = () => {
+        if (raf == null) raf = requestAnimationFrame(tick);
+      };
+
       for await (const evt of readSSE(res)) {
         if (evt.event === "start") {
           setPhase("Streaming");
         } else if (evt.event === "delta" && evt.data?.text) {
-          acc += evt.data.text;
-          setTyped(acc);
+          raw += evt.data.text;
+          target = stripIncompleteFileBlocks(raw);
+          schedule();
         } else if (evt.event === "error") {
           throw new Error(evt.data?.message || "AI error");
         } else if (evt.event === "done") {
@@ -356,6 +415,10 @@ export default function Builder() {
           }
         }
       }
+      // Stream finished — flush remaining characters quickly.
+      finished = true;
+      target = stripIncompleteFileBlocks(raw);
+      schedule();
       await queryClient.invalidateQueries({ queryKey: ["projects", username, slug, "builds"] });
       await queryClient.invalidateQueries({ queryKey: ["projects", username, slug] });
       await queryClient.invalidateQueries({ queryKey: ["projects", username, slug, "files"] });
@@ -918,9 +981,9 @@ function ChatPanel({
                 {currentPhase ?? "Working"}
               </span>
             </div>
-            <div className="font-mono text-sm text-foreground leading-snug min-h-[1.4em]">
+            <div className="text-sm text-foreground leading-relaxed min-h-[1.4em] whitespace-pre-wrap break-words">
               {typed}
-              <span className="inline-block w-1.5 h-4 bg-primary ml-0.5 align-text-bottom animate-pulse" />
+              <span className="inline-block w-[2px] h-[1.05em] bg-primary ml-0.5 align-text-bottom animate-pulse" />
             </div>
           </div>
         )}
