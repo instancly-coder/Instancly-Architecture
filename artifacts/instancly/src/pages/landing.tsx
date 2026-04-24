@@ -163,14 +163,11 @@ export default function Landing() {
             />
           </div>
 
-          {/* Bolt-style hero arch — sits above the announcement pill */}
-          <div aria-hidden className="hero-arch" />
-
-          {/* Announcement pill, sits above the arch like Bolt */}
+          {/* iOS-style glass announcement pill */}
           <div className="relative z-10 flex justify-center pt-12">
             <Link
               href="/explore"
-              className="group inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-medium backdrop-blur-md bg-foreground/[0.04] dark:bg-white/[0.04] border border-border/80 hover:border-primary/60 text-foreground/90 transition-colors"
+              className="glass-pill group inline-flex items-center gap-2 px-5 py-2 rounded-full text-xs font-medium text-foreground/90 transition-transform hover:-translate-y-px"
             >
               <Sparkles className="w-3.5 h-3.5 text-primary" />
               Introducing Instancly v2 — now with live AI builds
@@ -295,10 +292,6 @@ export default function Landing() {
         <section id="how" className="py-20 md:py-32 px-4 sm:px-6">
           <div className="max-w-7xl mx-auto">
             <div className="text-center max-w-2xl mx-auto mb-16 md:mb-24">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-mono mb-5 backdrop-blur-md bg-foreground/[0.04] dark:bg-foreground/[0.06] border border-border/80 text-foreground/80 shadow-sm">
-                <Sparkles className="w-3 h-3 text-primary" />
-                Meet Instancly
-              </div>
               <h2 className="text-3xl md:text-5xl font-bold tracking-tight mb-4 text-balance">
                 <span className="block sm:inline">From "wouldn't it be cool if…"</span>{" "}
                 <span className="block sm:inline">
@@ -579,10 +572,6 @@ export default function Landing() {
         {/* Final CTA */}
         <section className="py-24 md:py-32 px-4 sm:px-6 border-t border-border">
           <div className="max-w-7xl mx-auto text-center">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-mono mb-6 backdrop-blur-md bg-foreground/[0.04] dark:bg-foreground/[0.06] border border-border/80 text-foreground/80 shadow-sm">
-              <Sparkles className="w-3 h-3 text-primary" />
-              AI App Builder
-            </div>
             <h2 className="text-4xl md:text-5xl font-bold mb-6 tracking-tight">
               Ready to build?
             </h2>

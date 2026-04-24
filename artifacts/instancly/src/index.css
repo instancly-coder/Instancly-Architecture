@@ -138,59 +138,53 @@
   border-color: hsl(var(--primary));
 }
 
-/* --- Bolt-style hero arch --- */
-@keyframes arch-pulse {
-  0%, 100% { opacity: 0.65; transform: scaleY(1); }
-  50%      { opacity: 1;    transform: scaleY(1.08); }
+/* --- iOS-style glass pill (matches bolt.new announcement chip) --- */
+.glass-pill {
+  position: relative;
+  background:
+    linear-gradient(
+      180deg,
+      hsl(0 0% 100% / 0.10) 0%,
+      hsl(0 0% 100% / 0.04) 50%,
+      hsl(0 0% 100% / 0.02) 100%
+    );
+  backdrop-filter: blur(22px) saturate(160%);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  border: 1px solid hsl(0 0% 100% / 0.14);
+  box-shadow:
+    inset 0 1px 0 hsl(0 0% 100% / 0.22),
+    inset 0 -1px 0 hsl(0 0% 100% / 0.04),
+    inset 0 0 0 1px hsl(0 0% 100% / 0.02),
+    0 8px 28px hsl(0 0% 0% / 0.35),
+    0 2px 6px hsl(0 0% 0% / 0.25);
 }
-.hero-arch {
-  position: absolute;
-  left: 50%;
-  top: 0;
-  transform: translateX(-50%);
-  width: min(170vw, 1700px);
-  height: 160px;
-  pointer-events: none;
-  z-index: 0;
-  overflow: hidden;
-}
-.hero-arch::before,
-.hero-arch::after {
+/* Subtle top gloss highlight */
+.glass-pill::before {
   content: "";
   position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  border-radius: 50% / 100%;
+  inset: 1px 1px auto 1px;
+  height: 50%;
+  border-radius: 9999px 9999px 0 0;
+  background: linear-gradient(
+    180deg,
+    hsl(0 0% 100% / 0.18) 0%,
+    hsl(0 0% 100% / 0) 100%
+  );
   pointer-events: none;
 }
-/* Soft blue dome glowing above the arch line */
-.hero-arch::before {
-  width: 100%;
-  height: 220px;
-  top: -50px;
-  background: radial-gradient(
-    55% 70% at 50% 100%,
-    hsl(215 100% 62% / 0.85) 0%,
-    hsl(215 100% 55% / 0.45) 30%,
-    hsl(215 100% 50% / 0.2) 55%,
-    transparent 75%
-  );
-  filter: blur(8px);
-  animation: arch-pulse 6s ease-in-out infinite;
-}
-/* Bright crisp arch line (the "horizon") */
-.hero-arch::after {
-  width: 100%;
-  height: 80px;
-  top: 110px;
-  background: radial-gradient(
-    50% 100% at 50% 0%,
-    #ffffff 0%,
-    hsl(215 100% 88% / 0.95) 2%,
-    hsl(215 100% 70% / 0.55) 6%,
-    transparent 12%
-  );
-  filter: drop-shadow(0 0 8px hsl(215 100% 75% / 0.9));
+/* In light mode, glass leans on the foreground color so it stays visible */
+:root:not(.dark) .glass-pill {
+  background:
+    linear-gradient(
+      180deg,
+      hsl(0 0% 100% / 0.7) 0%,
+      hsl(0 0% 100% / 0.45) 100%
+    );
+  border-color: hsl(0 0% 0% / 0.08);
+  box-shadow:
+    inset 0 1px 0 hsl(0 0% 100% / 0.9),
+    0 8px 24px hsl(0 0% 0% / 0.08),
+    0 2px 6px hsl(0 0% 0% / 0.05);
 }
 
 /* --- Animated glowing border around the prompt box --- */
@@ -209,51 +203,26 @@
   --glow-angle: 0deg;
 }
 
-/* Only enable the rotating ring + dropshadow on browsers with @property
-   support and conic-gradient. Older browsers fall through to the plain
-   bordered textarea (still has visible focus styles inline). */
-@supports (background: conic-gradient(from 0deg, red, blue)) {
-  .prompt-glow::after {
-    content: "";
-    position: absolute;
-    inset: -10px;
-    border-radius: 22px;
-    background: conic-gradient(
-      from var(--glow-angle, 0deg),
-      transparent 0deg,
-      transparent 240deg,
-      hsl(215 100% 65% / 0.35) 310deg,
-      hsl(215 100% 75% / 0.55) 340deg,
-      transparent 400deg
-    );
-    filter: blur(18px);
-    animation: glow-spin 4s linear infinite;
-    pointer-events: none;
-    z-index: -1;
-    opacity: 0.7;
-  }
-}
-
-/* The crisp rotating border ring needs both conic-gradient AND
-   mask-composite. Without proper mask compositing the ::before would
-   become an opaque overlay above the textarea, hurting legibility —
-   so only render it where both are supported. */
+/* The crisp rotating border ring is contained ON the box border itself —
+   no outer halo or padding so the light never bleeds past the edge.
+   Needs conic-gradient + mask-composite; otherwise we just keep the
+   plain border + focus ring. */
 @supports ((mask-composite: exclude) or (-webkit-mask-composite: xor))
       and (background: conic-gradient(from 0deg, red, blue)) {
   .prompt-glow::before {
     content: "";
     position: absolute;
-    inset: -1.5px;
+    inset: 0;
     border-radius: inherit;
     padding: 1.5px;
     background: conic-gradient(
       from var(--glow-angle, 0deg),
       transparent 0deg,
       transparent 220deg,
-      hsl(215 100% 70% / 0.3) 270deg,
-      hsl(215 100% 75% / 1) 320deg,
-      hsl(215 100% 85% / 1) 340deg,
-      hsl(215 100% 75% / 1) 360deg,
+      hsl(215 100% 70% / 0.35) 270deg,
+      hsl(215 100% 78% / 1) 320deg,
+      hsl(215 100% 88% / 1) 340deg,
+      hsl(215 100% 78% / 1) 360deg,
       transparent 410deg
     );
     -webkit-mask:
@@ -267,9 +236,7 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .prompt-glow::before,
-  .prompt-glow::after,
-  .hero-arch::before {
+  .prompt-glow::before {
     animation: none;
   }
 }
