@@ -110,26 +110,102 @@ async function ensureUser(payload: JWTPayload): Promise<AuthedUser> {
 }
 
 /**
+ * In development, when no real auth token is present we fall back to a
+ * stable "demo" user so the product is fully usable without a configured
+ * Stack Auth (Google/Apple/GitHub). Real tokens still take precedence and
+ * production never hits this path.
+ */
+const DEV_BYPASS_ENABLED = process.env.NODE_ENV !== "production";
+const DEV_BYPASS_EMAIL = "demo@instancly.local";
+
+let devUserCache: AuthedUser | null = null;
+let devUserPromise: Promise<AuthedUser> | null = null;
+
+async function provisionDevUser(): Promise<AuthedUser> {
+  // Race-safe: try insert, ignore unique-violations, then re-select the
+  // canonical row by email. This handles concurrent first-requests after a
+  // cold start without producing duplicate users *or* spurious 401s.
+  await db
+    .insert(usersTable)
+    .values({
+      email: DEV_BYPASS_EMAIL,
+      username: "demo",
+      displayName: "Demo User",
+      avatarUrl: null,
+    })
+    .onConflictDoNothing({ target: usersTable.email });
+
+  const row = (
+    await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.email, DEV_BYPASS_EMAIL))
+      .limit(1)
+  )[0];
+
+  if (!row) {
+    throw new Error("dev bypass user could not be provisioned");
+  }
+  return {
+    id: row.id,
+    sub: `dev:${row.id}`,
+    email: row.email,
+    username: row.username,
+    displayName: row.displayName,
+  };
+}
+
+async function getOrCreateDevUser(): Promise<AuthedUser> {
+  if (devUserCache) return devUserCache;
+  // Coalesce concurrent callers onto a single in-flight provisioning promise.
+  if (!devUserPromise) {
+    devUserPromise = provisionDevUser()
+      .then((u) => {
+        devUserCache = u;
+        return u;
+      })
+      .finally(() => {
+        devUserPromise = null;
+      });
+  }
+  return devUserPromise;
+}
+
+/**
  * Verifies the bearer token if present, attaches `req.auth`. Does NOT reject
  * the request when missing/invalid — use `requireAuth` for that.
+ *
+ * In development with no token present, attaches a stable demo user so the
+ * app can be exercised end-to-end without a configured OAuth provider.
  */
 export async function tryAuth(
   req: Request,
   _res: Response,
   next: NextFunction,
 ): Promise<void> {
-  if (!jwks) return next();
-  const token = extractToken(req);
-  if (!token) return next();
-  try {
-    const verifyOpts: Parameters<typeof jwtVerify>[2] = {};
-    if (ISSUER) verifyOpts.issuer = ISSUER;
-    const { payload } = await jwtVerify(token, jwks, verifyOpts);
-    const user = await ensureUser(payload);
-    (req as AuthedRequest).auth = { payload, user };
-  } catch (err) {
-    logger.debug({ err }, "JWT verification failed");
+  const token = jwks ? extractToken(req) : null;
+  if (jwks && token) {
+    try {
+      const verifyOpts: Parameters<typeof jwtVerify>[2] = {};
+      if (ISSUER) verifyOpts.issuer = ISSUER;
+      const { payload } = await jwtVerify(token, jwks, verifyOpts);
+      const user = await ensureUser(payload);
+      (req as AuthedRequest).auth = { payload, user };
+      return next();
+    } catch (err) {
+      logger.debug({ err }, "JWT verification failed");
+    }
   }
+
+  if (DEV_BYPASS_ENABLED) {
+    try {
+      const user = await getOrCreateDevUser();
+      (req as AuthedRequest).auth = { payload: { sub: user.sub }, user };
+    } catch (err) {
+      logger.error({ err }, "Failed to provision dev bypass user");
+    }
+  }
+
   next();
 }
 

@@ -303,7 +303,7 @@ router.post("/me/projects", async (req: Request, res: Response): Promise<void> =
     })
     .returning();
 
-  res.status(201).json(created);
+  res.status(201).json({ ...created, ownerUsername: user.username });
 });
 
 export default router;

@@ -79,16 +79,15 @@ export default function Dashboard() {
       toast.error("Give your project a name");
       return;
     }
-    if (!me?.username) {
-      toast.error("Still signing you in — try again in a sec");
-      return;
-    }
     try {
       const created = await createProject.mutateAsync({ name });
       toast.success("Project created");
       setNewOpen(false);
+      // The API echoes back the owner — fall back to that if `me` hasn't
+      // hydrated yet (e.g. first visit after a fresh dev-bypass).
+      const owner = me?.username ?? created.ownerUsername;
       const initialPrompt = newPrompt.trim();
-      const target = `/${me?.username}/${created.slug}/build${
+      const target = `/${owner}/${created.slug}/build${
         initialPrompt
           ? `?prompt=${encodeURIComponent(initialPrompt)}`
           : ""
@@ -207,7 +206,7 @@ export default function Dashboard() {
               </Button>
               <Button
                 type="submit"
-                disabled={createProject.isPending || !newName.trim() || !me?.username}
+                disabled={createProject.isPending || !newName.trim()}
                 className="bg-primary text-primary-foreground hover:bg-primary/90 font-medium"
                 data-testid="button-create-project"
               >

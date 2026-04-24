@@ -278,7 +278,7 @@ export function useCreateProject() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: { name: string; description?: string; framework?: string }) =>
-      request<{ id: string; slug: string; name: string }>(`/me/projects`, {
+      request<{ id: string; slug: string; name: string; ownerUsername: string }>(`/me/projects`, {
         method: "POST",
         body: JSON.stringify(body),
       }),
