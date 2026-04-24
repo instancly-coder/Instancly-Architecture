@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 const NAV_LINKS = [
   { label: "How it works", href: "/#how" },
   { label: "Templates", href: "/templates" },
+  { label: "Pricing", href: "/pricing" },
   { label: "Explore", href: "/explore" },
   { label: "Docs", href: "/docs" },
 ];
@@ -58,14 +59,13 @@ export function MarketingNav() {
         >
           Log in
         </Link>
-        <Link href="/login">
-          <Button
-            size="sm"
-            className="bg-primary text-primary-foreground hover:bg-primary/90 font-medium"
-          >
-            Start building
-          </Button>
-        </Link>
+        <Button
+          asChild
+          size="sm"
+          className="bg-primary text-primary-foreground hover:bg-primary/90 font-medium"
+        >
+          <Link href="/login">Start building</Link>
+        </Button>
         <button
           onClick={() => setOpen((v) => !v)}
           className="md:hidden w-8 h-8 rounded-md flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"

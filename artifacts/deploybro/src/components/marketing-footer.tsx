@@ -19,6 +19,7 @@ export function MarketingFooter() {
           <ul className="space-y-2 text-sm">
             <li><a href="/#how" className="text-foreground/80 hover:text-primary transition-colors">How it works</a></li>
             <li><a href="/#templates" className="text-foreground/80 hover:text-primary transition-colors">Templates</a></li>
+            <li><Link href="/pricing" className="text-foreground/80 hover:text-primary transition-colors">Pricing</Link></li>
             <li><Link href="/explore" className="text-foreground/80 hover:text-primary transition-colors">Explore</Link></li>
             <li><Link href="/login" className="text-foreground/80 hover:text-primary transition-colors">Start building</Link></li>
           </ul>
