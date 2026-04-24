@@ -63,7 +63,8 @@ const AVAILABLE_MODELS = [
   { name: "Gemini 2.5 Pro", provider: "Google", costRange: "£0.01 - £0.04" },
   { name: "Gemini Flash", provider: "Google", costRange: "£0.002 - £0.01" },
 ];
-import { useMe, useProject, useProjectBuilds, useCreateBuild, type ApiBuild } from "@/lib/api";
+import { useMe, useProject, useProjectBuilds, type ApiBuild } from "@/lib/api";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 type TabKey =
@@ -141,14 +142,34 @@ function toPastBuild(b: ApiBuild): PastBuild {
   };
 }
 
-const STREAM_STEPS = [
-  { phase: "Planning", text: "Sketching component tree and routes" },
-  { phase: "Reading", text: "Scanning src/components/ui" },
-  { phase: "Writing", text: "Editing src/app/page.tsx" },
-  { phase: "Writing", text: "Updating src/lib/db.ts" },
-  { phase: "Migrating", text: "Applying Postgres schema" },
-  { phase: "Done", text: "Build complete" },
-];
+// Parse a Server-Sent Events stream into {event, data} objects.
+async function* readSSE(res: Response): AsyncGenerator<{ event: string; data: any }> {
+  if (!res.body) return;
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let idx;
+    while ((idx = buf.indexOf("\n\n")) >= 0) {
+      const chunk = buf.slice(0, idx);
+      buf = buf.slice(idx + 2);
+      let event = "message";
+      let data = "";
+      for (const line of chunk.split("\n")) {
+        if (line.startsWith("event:")) event = line.slice(6).trim();
+        else if (line.startsWith("data:")) data += line.slice(5).trim();
+      }
+      try {
+        yield { event, data: data ? JSON.parse(data) : null };
+      } catch {
+        yield { event, data };
+      }
+    }
+  }
+}
 
 export default function Builder() {
   const params = useParams();
@@ -157,7 +178,7 @@ export default function Builder() {
   const { data: me } = useMe();
   const { data: project } = useProject(username, slug);
   const { data: apiBuilds = [] } = useProjectBuilds(username, slug);
-  const createBuild = useCreateBuild(username, slug);
+  const queryClient = useQueryClient();
   const pastBuilds = apiBuilds.map(toPastBuild);
   const balance = me?.balance ?? 0;
 
@@ -201,8 +222,17 @@ export default function Builder() {
 
   const [chatInput, setChatInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
-  const [stepIndex, setStepIndex] = useState<number>(-1);
+  const [phase, setPhase] = useState<string | undefined>(undefined);
   const [typed, setTyped] = useState("");
+  const abortRef = useRef<AbortController | null>(null);
+
+  // Cancel any in-flight build stream when this component unmounts so the
+  // server can close the upstream Claude connection and stop billing.
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
   const [activeFile, setActiveFile] = useState<string>("src/app/page.tsx");
   const [openBuildId, setOpenBuildId] = useState<string | null>(null);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
@@ -242,40 +272,60 @@ export default function Builder() {
     document.body.style.userSelect = "none";
   };
 
-  // Typewriter for current step
-  useEffect(() => {
-    if (stepIndex < 0 || stepIndex >= STREAM_STEPS.length) return;
-    const target = STREAM_STEPS[stepIndex].text;
-    setTyped("");
-    let i = 0;
-    const id = window.setInterval(() => {
-      i += 1;
-      setTyped(target.slice(0, i));
-      if (i >= target.length) window.clearInterval(id);
-    }, 22);
-    return () => window.clearInterval(id);
-  }, [stepIndex]);
-
-  const handleSend = () => {
-    if (!chatInput.trim() || isStreaming) return;
+  const handleSend = async () => {
+    if (!chatInput.trim() || isStreaming || !username || !slug) return;
     const prompt = chatInput.trim();
     setChatInput("");
     setIsStreaming(true);
-    setStepIndex(0);
-    let i = 0;
-    const id = window.setInterval(() => {
-      i += 1;
-      if (i >= STREAM_STEPS.length) {
-        window.clearInterval(id);
-        createBuild
-          .mutateAsync({ prompt })
-          .then(() => toast.success("Build complete"))
-          .catch((err) => toast.error(err instanceof Error ? err.message : "Build failed"))
-          .finally(() => setIsStreaming(false));
-        return;
+    setPhase("Thinking");
+    setTyped("");
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    try {
+      const res = await fetch(`/api/ai/build/${username}/${slug}`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ prompt }),
+        signal: controller.signal,
+      });
+      if (!res.ok && res.headers.get("content-type")?.includes("application/json")) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.message || `HTTP ${res.status}`);
       }
-      setStepIndex(i);
-    }, 1200);
+      let acc = "";
+      for await (const evt of readSSE(res)) {
+        if (evt.event === "start") {
+          setPhase("Streaming");
+        } else if (evt.event === "delta" && evt.data?.text) {
+          acc += evt.data.text;
+          setTyped(acc);
+        } else if (evt.event === "error") {
+          throw new Error(evt.data?.message || "AI error");
+        } else if (evt.event === "done") {
+          if (evt.data?.ok) {
+            setPhase("Done");
+            toast.success("Build complete");
+          }
+        }
+      }
+      await queryClient.invalidateQueries({ queryKey: ["projects", username, slug, "builds"] });
+      await queryClient.invalidateQueries({ queryKey: ["projects", username, slug] });
+    } catch (err) {
+      if ((err as { name?: string })?.name !== "AbortError") {
+        toast.error(err instanceof Error ? err.message : "Build failed");
+      }
+    } finally {
+      abortRef.current = null;
+      setIsStreaming(false);
+      // Hold the final text briefly so the user sees it transition into history.
+      setTimeout(() => {
+        setPhase(undefined);
+        setTyped("");
+      }, 600);
+    }
   };
 
   const copyUrl = () => {
@@ -283,7 +333,7 @@ export default function Builder() {
     toast.success("URL copied");
   };
 
-  const currentStep = stepIndex >= 0 ? STREAM_STEPS[stepIndex] : null;
+  const currentStep = phase ? { phase, text: "" } : null;
 
   return (
     <div className="h-screen w-full bg-background flex flex-col overflow-hidden text-foreground">

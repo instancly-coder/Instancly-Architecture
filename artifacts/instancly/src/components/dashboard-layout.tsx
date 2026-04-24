@@ -8,6 +8,7 @@ import {
   LogOut,
   Menu,
   X,
+  Library,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -24,6 +25,7 @@ import { stackConfigured } from "@/stack";
 const NAV = [
   { href: "/dashboard", label: "Projects", icon: LayoutDashboard },
   { href: "/explore", label: "Explore", icon: Code },
+  { href: "/library", label: "Library", icon: Library },
   { href: "/dashboard/billing", label: "Billing", icon: CreditCard },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];

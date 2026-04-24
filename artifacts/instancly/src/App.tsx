@@ -17,6 +17,7 @@ import Dashboard from "@/pages/dashboard";
 import Billing from "@/pages/dashboard/billing";
 import Settings from "@/pages/dashboard/settings";
 import Explore from "@/pages/explore";
+import Library from "@/pages/library";
 import Profile from "@/pages/profile";
 import Project from "@/pages/project";
 import Builder from "@/pages/builder";
@@ -60,6 +61,7 @@ function Router() {
       <Route path="/dashboard/billing" component={gated(Billing)} />
       <Route path="/dashboard/settings" component={gated(Settings)} />
       <Route path="/explore" component={Explore} />
+      <Route path="/library" component={Library} />
       <Route path="/admin" component={gated(Admin)} />
       <Route path="/admin/models" component={gated(AdminModels)} />
       <Route path="/admin/users" component={gated(AdminUsers)} />
