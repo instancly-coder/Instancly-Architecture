@@ -161,3 +161,14 @@ export async function provisionAppDatabase(
     connectionUri,
   };
 }
+
+// Best-effort cleanup. Removes the branch (which cascades to its role,
+// database, and endpoint) so a failed publish doesn't leave orphaned Neon
+// resources behind. Caller swallows errors.
+export async function deleteBranch(branchId: string): Promise<void> {
+  const projectId = parentProjectId();
+  await request(
+    "DELETE",
+    `/projects/${encodeURIComponent(projectId)}/branches/${encodeURIComponent(branchId)}`,
+  );
+}

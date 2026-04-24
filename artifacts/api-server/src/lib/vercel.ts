@@ -175,3 +175,22 @@ export async function getDeployment(id: string): Promise<VercelDeployment> {
     `/v13/deployments/${encodeURIComponent(id)}${teamQuery()}`,
   );
 }
+
+// Best-effort cleanup helpers. The orchestrator calls these inside catch
+// blocks; they MUST swallow their own errors so they never mask the original
+// failure. We log via the orchestrator's logger when invoked.
+
+export async function deleteProject(nameOrId: string): Promise<void> {
+  await request(
+    "DELETE",
+    `/v9/projects/${encodeURIComponent(nameOrId)}${teamQuery()}`,
+  );
+}
+
+export async function cancelDeployment(id: string): Promise<void> {
+  // Vercel uses PATCH on /v12/deployments/{id}/cancel for in-flight builds.
+  await request(
+    "PATCH",
+    `/v12/deployments/${encodeURIComponent(id)}/cancel${teamQuery()}`,
+  );
+}

@@ -54,6 +54,7 @@ Required secrets:
 - `VERCEL_API_TOKEN` — personal/team token with project + deployment write scope.
 - `NEON_API_KEY` — account API key.
 - `NEON_PARENT_PROJECT_ID` — the shared Neon project under which a per-app branch is created.
+- `DATABASE_URL_ENC_KEY` — 32-byte AES-256-GCM key (hex / base64 / passphrase) used to encrypt each project's `databaseUrl` at rest. The pipeline refuses to publish without it.
 
 Optional:
 - `VERCEL_TEAM_ID` — appended as `?teamId=` to all Vercel calls when deploying under a team.
@@ -65,10 +66,11 @@ Endpoints (in `artifacts/api-server/src/routes/deployments.ts`):
 - `GET  /api/projects/:username/:slug/publish-status` — current `publishStatus` + `liveUrl`.
 
 Internals:
-- `lib/vercel.ts` — `getOrCreateProject`, `upsertEnvVar`, `createDeployment`, `getDeployment` (30s timeout, structured `VercelApiError`).
-- `lib/neon.ts` — `provisionAppDatabase` (branch + role + database, returns `postgresql://…?sslmode=require`).
+- `lib/vercel.ts` — `getOrCreateProject`, `upsertEnvVar`, `createDeployment`, `getDeployment`, plus `deleteProject` and `cancelDeployment` for failure cleanup (30s timeout, structured `VercelApiError`).
+- `lib/neon.ts` — `provisionAppDatabase` (branch + role + database, returns `postgresql://…?sslmode=require`) and `deleteBranch` for failure cleanup.
+- `lib/secret-cipher.ts` — AES-256-GCM `encryptSecret` / `decryptSecret`, `enc:v1:` versioned ciphertext. The stored `databaseUrl` is encrypted with `DATABASE_URL_ENC_KEY`; plaintext is only ever held in memory and pushed to Vercel's encrypted env store.
 - `lib/deploy-payload.ts` — base64-inlines project files, synthesises `package.json`/`vite.config.ts`/`vercel.json` when missing, switches to a static-only build when no `package.json` and no JSX is detected.
-- Pipeline polls Vercel every 3s for up to 10 minutes; failures sanitise error messages before persisting.
+- Pipeline polls Vercel every 3s for up to 10 minutes; failures sanitise error messages before persisting and run best-effort cleanup of any cloud resources that were created during this attempt (cancel in-flight Vercel deployment → delete net-new Vercel project → delete net-new Neon branch). Cleanup errors are logged but never mask the original failure.
 
 ## Auth (none yet)
 

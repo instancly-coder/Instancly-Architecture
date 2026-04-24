@@ -15,10 +15,13 @@ import {
   createDeployment,
   getDeployment,
   projectNameFor,
+  deleteProject as vercelDeleteProject,
+  cancelDeployment as vercelCancelDeployment,
   type VercelDeployment,
 } from "../lib/vercel";
-import { provisionAppDatabase } from "../lib/neon";
+import { provisionAppDatabase, deleteBranch as neonDeleteBranch } from "../lib/neon";
 import { buildVercelPayload } from "../lib/deploy-payload";
+import { encryptSecret, decryptSecret } from "../lib/secret-cipher";
 
 const router: IRouter = Router();
 
@@ -73,6 +76,18 @@ async function runPublishPipeline(args: {
       .where(eq(deploymentsTable.id, deploymentId));
   };
 
+  // Track which cloud resources we created in *this* run so the failure
+  // path can clean them up without touching pre-existing reusable state.
+  const createdInThisRun: {
+    neonBranchId: string | null;
+    vercelProjectName: string | null;
+    vercelDeploymentId: string | null;
+  } = {
+    neonBranchId: null,
+    vercelProjectName: null,
+    vercelDeploymentId: null,
+  };
+
   try {
     // ---------- 1. Reload current project state ----------
     const project = (
@@ -85,22 +100,38 @@ async function runPublishPipeline(args: {
     if (!project) throw new Error("Project disappeared mid-publish");
 
     // ---------- 2. Provision (or reuse) the Neon database ----------
-    let databaseUrl = project.databaseUrl;
+    // `databaseUrl` is encrypted-at-rest. If a prior publish stored one we
+    // decrypt for the in-memory pipeline; otherwise we provision fresh and
+    // store the new ciphertext.
+    let plainDatabaseUrl: string | null = null;
     let neonBranchId = project.neonBranchId;
     let neonRoleName = project.neonRoleName;
     let neonProjectId = project.neonProjectId;
 
-    if (!databaseUrl || !neonBranchId) {
+    if (project.databaseUrl) {
+      try {
+        plainDatabaseUrl = decryptSecret(project.databaseUrl);
+      } catch (decErr) {
+        // Stored value is corrupt or was written under a different key —
+        // fall through to re-provisioning below. Log so an operator notices.
+        logger.warn({ decErr, projectId }, "Could not decrypt stored DATABASE_URL; re-provisioning");
+        plainDatabaseUrl = null;
+        neonBranchId = null;
+      }
+    }
+
+    if (!plainDatabaseUrl || !neonBranchId) {
       await setStatus("provisioning_db");
       const provisioned = await provisionAppDatabase(`${slug}-${username}`);
-      databaseUrl = provisioned.connectionUri;
+      plainDatabaseUrl = provisioned.connectionUri;
       neonBranchId = provisioned.branchId;
       neonRoleName = provisioned.roleName;
       neonProjectId = process.env.NEON_PARENT_PROJECT_ID ?? null;
+      createdInThisRun.neonBranchId = neonBranchId;
       await db
         .update(projectsTable)
         .set({
-          databaseUrl,
+          databaseUrl: encryptSecret(plainDatabaseUrl),
           neonBranchId,
           neonRoleName,
           neonProjectId,
@@ -116,10 +147,14 @@ async function runPublishPipeline(args: {
       .set({ publishStatus: "creating_project" })
       .where(eq(projectsTable.id, projectId));
     const projectName = projectNameFor(username, slug);
+    const hadVercelProject = !!project.vercelProjectId;
     const vercelProject = await getOrCreateProject(projectName);
+    if (!hadVercelProject) {
+      createdInThisRun.vercelProjectName = projectName;
+    }
 
     // ---------- 4. Push DATABASE_URL into the Vercel env ----------
-    await upsertEnvVar(vercelProject.id, "DATABASE_URL", databaseUrl);
+    await upsertEnvVar(vercelProject.id, "DATABASE_URL", plainDatabaseUrl);
 
     // ---------- 5. Build payload + create deployment ----------
     await setStatus("deploying");
@@ -140,6 +175,7 @@ async function runPublishPipeline(args: {
     }
     const payload = buildVercelPayload(fileRows);
     const deployment = await createDeployment(projectName, payload);
+    createdInThisRun.vercelDeploymentId = deployment.id;
 
     // Vercel returns `url` as a hostname (e.g. `myapp-abc.vercel.app`).
     const tentativeUrl = deployment.url ? `https://${deployment.url}` : null;
@@ -179,6 +215,11 @@ async function runPublishPipeline(args: {
     }
 
     const finalUrl = final.url ? `https://${final.url}` : tentativeUrl;
+    // Success — the deployment is now the project's live state, so it is
+    // no longer a candidate for cleanup even though we created it in this run.
+    createdInThisRun.vercelDeploymentId = null;
+    createdInThisRun.vercelProjectName = null;
+    createdInThisRun.neonBranchId = null;
     await setStatus("live", {
       liveUrl: finalUrl,
       finishedAt: new Date(),
@@ -206,8 +247,55 @@ async function runPublishPipeline(args: {
       .catch(() => {
         /* noop */
       });
+
+    // ---------- Best-effort cleanup of resources we created in this run ----------
+    // Order: cancel the in-flight Vercel deployment first (cheap), then
+    // delete the Vercel project if it was net-new, then delete the Neon
+    // branch if we provisioned it. Each step swallows its own errors so a
+    // cleanup failure can never mask the original publish failure.
+    if (createdInThisRun.vercelDeploymentId) {
+      const id = createdInThisRun.vercelDeploymentId;
+      vercelCancelDeployment(id).catch((cleanupErr) => {
+        logger.warn({ cleanupErr, deploymentId, vercelDeploymentId: id }, "Failed to cancel Vercel deployment during cleanup");
+      });
+    }
+    if (createdInThisRun.vercelProjectName) {
+      const name = createdInThisRun.vercelProjectName;
+      vercelDeleteProject(name)
+        .then(() => {
+          // Also clear the FK on the project row since the underlying
+          // resource is gone.
+          return db
+            .update(projectsTable)
+            .set({ vercelProjectId: null, vercelDeploymentId: null })
+            .where(eq(projectsTable.id, projectId));
+        })
+        .catch((cleanupErr) => {
+          logger.warn({ cleanupErr, deploymentId, vercelProjectName: name }, "Failed to delete Vercel project during cleanup");
+        });
+    }
+    if (createdInThisRun.neonBranchId) {
+      const branchId = createdInThisRun.neonBranchId;
+      neonDeleteBranch(branchId)
+        .then(() => {
+          // Branch is gone — wipe the now-stale credential + FKs.
+          return db
+            .update(projectsTable)
+            .set({
+              databaseUrl: null,
+              neonBranchId: null,
+              neonRoleName: null,
+              neonProjectId: null,
+            })
+            .where(eq(projectsTable.id, projectId));
+        })
+        .catch((cleanupErr) => {
+          logger.warn({ cleanupErr, deploymentId, neonBranchId: branchId }, "Failed to delete Neon branch during cleanup");
+        });
+    }
   }
 }
+
 
 // ---------- POST /publish ----------
 router.post(
@@ -247,6 +335,7 @@ router.post(
     if (!process.env.VERCEL_API_TOKEN) missing.push("VERCEL_API_TOKEN");
     if (!process.env.NEON_API_KEY) missing.push("NEON_API_KEY");
     if (!process.env.NEON_PARENT_PROJECT_ID) missing.push("NEON_PARENT_PROJECT_ID");
+    if (!process.env.DATABASE_URL_ENC_KEY) missing.push("DATABASE_URL_ENC_KEY");
     if (missing.length > 0) {
       res.status(503).json({
         status: "error",
