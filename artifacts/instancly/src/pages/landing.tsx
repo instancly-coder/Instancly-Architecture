@@ -164,18 +164,18 @@ export default function Landing() {
           </div>
 
           {/* iOS-style glass announcement pill */}
-          <div className="relative z-10 flex justify-center pt-12">
+          <div className="relative z-10 flex justify-center pt-10 pb-4">
             <Link
               href="/explore"
               className="glass-pill group inline-flex items-center gap-2 px-5 py-2 rounded-full text-xs font-medium text-foreground/90 transition-transform hover:-translate-y-px"
             >
               <Sparkles className="w-3.5 h-3.5 text-primary" />
-              Introducing Instancly v2 — now with live AI builds
+              Introducing Instancly v2
               <ArrowRight className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
             </Link>
           </div>
 
-          <div className="px-4 sm:px-8 max-w-7xl mx-auto w-full text-center flex flex-col items-center justify-center min-h-[88vh] pt-10 pb-16">
+          <div className="px-4 sm:px-8 max-w-7xl mx-auto w-full text-center flex flex-col items-center justify-center min-h-[80vh] pt-2 pb-16">
           <h1 className="text-4xl sm:text-5xl md:text-7xl font-bold tracking-tight mb-6 leading-[1.02]">
             <span className="block">Ship your</span>
             <span className="block mt-2">
