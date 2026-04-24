@@ -9,6 +9,7 @@ import authRouter from "./auth";
 import adminRouter from "./admin";
 import aiRouter from "./ai";
 import filesRouter from "./files";
+import deploymentsRouter from "./deployments";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use(meRouter);
 router.use(adminRouter);
 router.use(aiRouter);
 router.use(filesRouter);
+router.use(deploymentsRouter);
 
 export default router;

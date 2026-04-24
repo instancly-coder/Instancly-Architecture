@@ -2,6 +2,19 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 const BASE = "/api";
 
+// Thrown for any non-2xx response. Carries the parsed JSON body when present
+// so callers can branch on structured fields like `requiresUpgrade` without
+// re-parsing the response.
+export class ApiError extends Error {
+  status: number;
+  body: unknown;
+  constructor(status: number, body: unknown, message: string) {
+    super(message);
+    this.status = status;
+    this.body = body;
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     ...init,
@@ -12,7 +25,17 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(`HTTP ${res.status}: ${text || res.statusText}`);
+    let body: unknown = text;
+    try {
+      body = text ? JSON.parse(text) : null;
+    } catch {
+      /* keep raw text */
+    }
+    const message =
+      body && typeof body === "object" && "message" in body
+        ? String((body as { message: unknown }).message)
+        : `HTTP ${res.status}: ${text || res.statusText}`;
+    throw new ApiError(res.status, body, message);
   }
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
@@ -318,5 +341,141 @@ export function useCreateProject() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["me", "projects"] });
     },
+  });
+}
+
+// ---- Publish / Deployments ----
+export type DeploymentStatus =
+  | "queued"
+  | "provisioning_db"
+  | "creating_project"
+  | "deploying"
+  | "polling"
+  | "live"
+  | "failed";
+
+export type ApiDeployment = {
+  id: string;
+  status: DeploymentStatus;
+  liveUrl: string | null;
+  vercelInspectorUrl: string | null;
+  errorMessage: string | null;
+  createdAt: string;
+  finishedAt: string | null;
+};
+
+export type ApiPublishStatus = {
+  publishStatus: string;
+  liveUrl: string | null;
+  lastPublishedAt: string | null;
+};
+
+export const TERMINAL_DEPLOYMENT_STATUSES: ReadonlySet<DeploymentStatus> = new Set([
+  "live",
+  "failed",
+]);
+
+// Human-readable label for each pipeline phase. Used in the navbar pill and
+// the History pane so they stay in sync.
+export function deploymentStepLabel(s: DeploymentStatus): string {
+  switch (s) {
+    case "queued":
+      return "Queued";
+    case "provisioning_db":
+      return "Provisioning DB";
+    case "creating_project":
+      return "Creating project";
+    case "deploying":
+      return "Deploying";
+    case "polling":
+      return "Going live";
+    case "live":
+      return "Live";
+    case "failed":
+      return "Failed";
+  }
+}
+
+export function usePublishProject(
+  username: string | undefined,
+  slug: string | undefined,
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      request<{ deploymentId: string; alreadyRunning?: boolean }>(
+        `/projects/${username}/${slug}/publish`,
+        { method: "POST" },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({
+        queryKey: ["projects", username, slug, "deployments"],
+      });
+      qc.invalidateQueries({
+        queryKey: ["projects", username, slug, "publish-status"],
+      });
+    },
+  });
+}
+
+export function useDeployments(
+  username: string | undefined,
+  slug: string | undefined,
+) {
+  return useQuery({
+    queryKey: ["projects", username, slug, "deployments"],
+    queryFn: () =>
+      request<ApiDeployment[]>(`/projects/${username}/${slug}/deployments`),
+    enabled: !!username && !!slug,
+  });
+}
+
+// Polls every 3s while the deployment is still in flight. Once the row hits
+// `live` or `failed`, the interval drops to a slow refresh so the History
+// pane stays accurate without hammering the API. On terminal transition we
+// also invalidate the deployments list and the navbar publish-status chip
+// so they refresh without a manual reload.
+export function useDeploymentStatus(
+  username: string | undefined,
+  slug: string | undefined,
+  deploymentId: string | null | undefined,
+) {
+  const qc = useQueryClient();
+  return useQuery({
+    queryKey: ["projects", username, slug, "deployments", deploymentId],
+    queryFn: async () => {
+      const data = await request<ApiDeployment>(
+        `/projects/${username}/${slug}/deployments/${deploymentId}`,
+      );
+      if (TERMINAL_DEPLOYMENT_STATUSES.has(data.status)) {
+        qc.invalidateQueries({
+          queryKey: ["projects", username, slug, "deployments"],
+        });
+        qc.invalidateQueries({
+          queryKey: ["projects", username, slug, "publish-status"],
+        });
+      }
+      return data;
+    },
+    enabled: !!username && !!slug && !!deploymentId,
+    refetchInterval: (q) => {
+      const data = q.state.data as ApiDeployment | undefined;
+      if (!data) return 3000;
+      return TERMINAL_DEPLOYMENT_STATUSES.has(data.status) ? false : 3000;
+    },
+  });
+}
+
+export function usePublishStatus(
+  username: string | undefined,
+  slug: string | undefined,
+) {
+  return useQuery({
+    queryKey: ["projects", username, slug, "publish-status"],
+    queryFn: () =>
+      request<ApiPublishStatus>(
+        `/projects/${username}/${slug}/publish-status`,
+      ),
+    enabled: !!username && !!slug,
   });
 }

@@ -214,11 +214,24 @@ router.patch("/me/projects/:slug", async (req: Request, res: Response): Promise<
     }
   }
 
+  // Explicit field projection — never spread the raw row because it now
+  // contains sensitive Neon/Vercel fields (databaseUrl, neonRoleName, etc.)
+  // that must never leave the server.
   const [updated] = await db
     .update(projectsTable)
     .set({ name: trimmed, slug: finalSlug })
     .where(and(eq(projectsTable.userId, user.id), eq(projectsTable.slug, slug)))
-    .returning();
+    .returning({
+      id: projectsTable.id,
+      name: projectsTable.name,
+      slug: projectsTable.slug,
+      description: projectsTable.description,
+      framework: projectsTable.framework,
+      status: projectsTable.status,
+      isPublic: projectsTable.isPublic,
+      clones: projectsTable.clones,
+      lastBuiltAt: projectsTable.lastBuiltAt,
+    });
 
   if (!updated) {
     res.status(404).json({ status: "error", message: "Project not found" });

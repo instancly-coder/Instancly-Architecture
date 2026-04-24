@@ -172,7 +172,9 @@ async function fetchUrlForRedesign(rawUrl: string): Promise<{
   try {
     // Manual redirect handling so each hop is re-validated against the SSRF
     // rules. Without this, a public URL could 302 to an internal address.
-    let resp: Response | null = null;
+    // Note: `Response` is imported from express at the top of the file, so we
+    // use the globalThis fetch Response type here to avoid the name clash.
+    let resp: globalThis.Response | null = null;
     const MAX_HOPS = 5;
     for (let hop = 0; hop < MAX_HOPS; hop++) {
       const v = await validateUrlForFetch(current);

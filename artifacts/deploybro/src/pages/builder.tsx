@@ -47,6 +47,9 @@ import {
   Filter,
   FileCheck,
   FilePen,
+  Lock,
+  Loader2,
+  Rocket,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -83,7 +86,15 @@ import {
   useProjectBuilds,
   useProjectFile,
   useProjectFiles,
+  usePublishProject,
+  useDeployments,
+  useDeploymentStatus,
+  usePublishStatus,
+  deploymentStepLabel,
+  TERMINAL_DEPLOYMENT_STATUSES,
+  ApiError,
   type ApiBuild,
+  type ApiDeployment,
 } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -288,6 +299,113 @@ export default function Builder() {
   useEffect(() => {
     setUrlValue(liveUrl);
   }, [liveUrl]);
+
+  // ---------- Publish (Vercel + Neon) ----------
+  // `activeDeploymentId` drives the polling hook. When the row hits a
+  // terminal status (live/failed) we leave the id set so the navbar can
+  // still show the result until the user starts a fresh publish.
+  const [activeDeploymentId, setActiveDeploymentId] = useState<string | null>(null);
+  const publishMutation = usePublishProject(username, slug);
+  const { data: activeDeployment } = useDeploymentStatus(
+    username,
+    slug,
+    activeDeploymentId,
+  );
+  const { data: publishStatus } = usePublishStatus(username, slug);
+  const { data: deployments = [] } = useDeployments(username, slug);
+
+  // On mount, adopt any in-flight deployment so a refresh mid-publish still
+  // shows the spinning pill instead of resetting the UI.
+  useEffect(() => {
+    if (activeDeploymentId) return;
+    const inflight = deployments.find(
+      (d) => !TERMINAL_DEPLOYMENT_STATUSES.has(d.status),
+    );
+    if (inflight) setActiveDeploymentId(inflight.id);
+  }, [deployments, activeDeploymentId]);
+
+  // Toast on terminal transitions. We key on status alone so the effect
+  // doesn't re-fire while a deployment is mid-poll.
+  const lastToastedStatusRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!activeDeployment) return;
+    const key = `${activeDeployment.id}:${activeDeployment.status}`;
+    if (lastToastedStatusRef.current === key) return;
+    if (activeDeployment.status === "live") {
+      lastToastedStatusRef.current = key;
+      toast.success("Published!", {
+        description: activeDeployment.liveUrl ?? undefined,
+        action: activeDeployment.liveUrl
+          ? {
+              label: "Open",
+              onClick: () =>
+                window.open(activeDeployment.liveUrl!, "_blank", "noopener,noreferrer"),
+            }
+          : undefined,
+      });
+    } else if (activeDeployment.status === "failed") {
+      lastToastedStatusRef.current = key;
+      toast.error("Publish failed", {
+        description: activeDeployment.errorMessage ?? "Please try again.",
+      });
+    }
+  }, [activeDeployment]);
+
+  const isFreePlan = (me?.plan ?? "Free").toLowerCase() === "free";
+  const isPublishing =
+    !!activeDeployment &&
+    !TERMINAL_DEPLOYMENT_STATUSES.has(activeDeployment.status);
+  // Prefer the freshest poll result; fall back to the project-level summary
+  // so a fresh page-load with no in-flight deployment still renders the URL.
+  const liveDeploymentUrl =
+    activeDeployment?.status === "live"
+      ? activeDeployment.liveUrl
+      : publishStatus?.publishStatus === "live"
+      ? publishStatus.liveUrl
+      : null;
+
+  const handlePublish = async () => {
+    if (isFreePlan) {
+      toast.error("Publishing is a Pro plan feature", {
+        description: "Upgrade to deploy your app to the web.",
+        action: {
+          label: "Upgrade",
+          onClick: () => {
+            window.location.href = "/dashboard/billing";
+          },
+        },
+      });
+      return;
+    }
+    try {
+      const result = await publishMutation.mutateAsync();
+      setActiveDeploymentId(result.deploymentId);
+      lastToastedStatusRef.current = null;
+      if (result.alreadyRunning) {
+        toast.info("A publish is already in progress");
+      } else {
+        toast.success("Publish started", {
+          description: "We'll provision your database and deploy your app.",
+        });
+      }
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 402) {
+        toast.error("Publishing is a Pro plan feature", {
+          description: "Upgrade to deploy your app to the web.",
+          action: {
+            label: "Upgrade",
+            onClick: () => {
+              window.location.href = "/dashboard/billing";
+            },
+          },
+        });
+      } else {
+        toast.error("Could not start publish", {
+          description: err instanceof Error ? err.message : "Unknown error",
+        });
+      }
+    }
+  };
 
   const openTab = (key: TabKey) => {
     setOpenTabs((tabs) => (tabs.includes(key) ? tabs : [...tabs, key]));
@@ -710,22 +828,77 @@ export default function Builder() {
           </span>
 
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                size="sm"
-                className="bg-primary text-primary-foreground hover:bg-primary/90 h-8 px-3 md:px-4 font-medium rounded-md"
-              >
-                Publish
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="border-border">
-              <DropdownMenuItem>Deploy to deploybro.app</DropdownMenuItem>
-              <DropdownMenuItem>Connect custom domain</DropdownMenuItem>
-              <DropdownMenuSeparator className="bg-border" />
-              <DropdownMenuItem>Export as ZIP</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {/* Live URL chip — only when there's a successful publish and we
+              aren't currently re-publishing. Click to open, secondary copy. */}
+          {liveDeploymentUrl && !isPublishing && (
+            <a
+              href={liveDeploymentUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-success/10 text-success text-xs font-mono hover:bg-success/20 transition-colors max-w-[14rem]"
+              title={liveDeploymentUrl}
+            >
+              <Globe className="w-3 h-3 shrink-0" />
+              <span className="truncate">
+                {liveDeploymentUrl.replace(/^https?:\/\//, "")}
+              </span>
+            </a>
+          )}
+
+          {isPublishing ? (
+            // In-flight pill — disabled, animates while pipeline runs.
+            <button
+              disabled
+              className="inline-flex items-center gap-2 h-8 px-3 md:px-4 rounded-md bg-primary/15 text-primary text-sm font-medium cursor-not-allowed"
+              title={deploymentStepLabel(activeDeployment!.status)}
+            >
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              <span className="hidden sm:inline">
+                {deploymentStepLabel(activeDeployment!.status)}
+              </span>
+            </button>
+          ) : (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  size="sm"
+                  className="bg-primary text-primary-foreground hover:bg-primary/90 h-8 px-3 md:px-4 font-medium rounded-md"
+                  disabled={publishMutation.isPending}
+                >
+                  {publishMutation.isPending ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : liveDeploymentUrl ? (
+                    "Republish"
+                  ) : (
+                    "Publish"
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="border-border w-56">
+                <DropdownMenuItem
+                  onClick={handlePublish}
+                  className="flex items-center gap-2"
+                >
+                  {isFreePlan ? (
+                    <Lock className="w-3.5 h-3.5 text-secondary" />
+                  ) : (
+                    <Rocket className="w-3.5 h-3.5" />
+                  )}
+                  <span>
+                    {liveDeploymentUrl ? "Redeploy to web" : "Deploy to web"}
+                  </span>
+                  {isFreePlan && (
+                    <span className="ml-auto text-[10px] uppercase tracking-wider text-secondary font-mono">
+                      Pro
+                    </span>
+                  )}
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled>Connect custom domain</DropdownMenuItem>
+                <DropdownMenuSeparator className="bg-border" />
+                <DropdownMenuItem disabled>Export as ZIP</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
 
           <Popover>
             <PopoverTrigger asChild>
@@ -989,6 +1162,9 @@ export default function Builder() {
                 openBuildId={openBuildId}
                 setOpenBuildId={setOpenBuildId}
                 builds={pastBuilds}
+                deployments={deployments}
+                onRetryPublish={handlePublish}
+                publishBusy={publishMutation.isPending || isPublishing}
               />
             )}
             {activeTab === "settings" && <SettingsPane />}
@@ -2713,10 +2889,16 @@ function HistoryPane({
   openBuildId,
   setOpenBuildId,
   builds,
+  deployments,
+  onRetryPublish,
+  publishBusy,
 }: {
   openBuildId: string | null;
   setOpenBuildId: (id: string | null) => void;
   builds: PastBuild[];
+  deployments: ApiDeployment[];
+  onRetryPublish: () => void;
+  publishBusy: boolean;
 }) {
   const totalCost = builds.reduce((s, b) => s + b.cost, 0);
   const totalFiles = builds.reduce((s, b) => s + b.filesChanged, 0);
@@ -2743,8 +2925,78 @@ function HistoryPane({
         <KpiCard label="Total time" value={fmtTime(totalTime)} />
       </div>
 
+      {deployments.length > 0 && (
+        <div>
+          <SectionHeader title="Deployments" hint="Newest first" />
+          <div className="space-y-2">
+            {deployments.map((d) => {
+              const isLive = d.status === "live";
+              const isFailed = d.status === "failed";
+              const isInflight = !isLive && !isFailed;
+              const badgeClass = isLive
+                ? "bg-success/15 text-success"
+                : isFailed
+                ? "bg-destructive/15 text-destructive"
+                : "bg-primary/15 text-primary";
+              const created = new Date(d.createdAt);
+              return (
+                <div
+                  key={d.id}
+                  className="border border-border bg-surface rounded-xl p-4 flex items-start justify-between gap-3"
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span
+                        className={`text-[10px] uppercase tracking-wider font-mono px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${badgeClass}`}
+                      >
+                        {isInflight && <Loader2 className="w-3 h-3 animate-spin" />}
+                        {deploymentStepLabel(d.status)}
+                      </span>
+                      <span className="text-[11px] text-secondary font-mono">
+                        {created.toLocaleString()}
+                      </span>
+                    </div>
+                    {d.liveUrl ? (
+                      <a
+                        href={d.liveUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm font-mono text-primary hover:underline truncate block max-w-full"
+                      >
+                        {d.liveUrl.replace(/^https?:\/\//, "")}
+                      </a>
+                    ) : (
+                      <span className="text-sm text-secondary">
+                        {isInflight ? "In progress…" : "No URL yet"}
+                      </span>
+                    )}
+                    {isFailed && d.errorMessage && (
+                      <div className="text-[12px] text-destructive mt-1.5 break-words">
+                        {d.errorMessage}
+                      </div>
+                    )}
+                  </div>
+                  {isFailed && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-border shrink-0"
+                      onClick={onRetryPublish}
+                      disabled={publishBusy}
+                    >
+                      <RotateCw className="w-3.5 h-3.5 mr-1.5" />
+                      Retry
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div>
-        <SectionHeader title="Timeline" hint="Newest first" />
+        <SectionHeader title="Build timeline" hint="Newest first" />
         <div className="space-y-2">
           {builds.map((b) => {
             const open = openBuildId === b.id;
