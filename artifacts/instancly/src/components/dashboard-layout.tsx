@@ -1,5 +1,4 @@
 import { type ReactNode, useState } from "react";
-import { BoxLogo } from "@/components/box-logo";
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard,
@@ -17,7 +16,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { mockUser } from "@/lib/mock-data";
+import logoUrl from "@assets/download_1776989236348.png";
+import { useMe } from "@/lib/api";
+import { useUser } from "@stackframe/react";
+import { stackConfigured } from "@/stack";
 
 const NAV = [
   { href: "/dashboard", label: "Projects", icon: LayoutDashboard },
@@ -29,14 +31,26 @@ const NAV = [
 export function DashboardLayout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const [open, setOpen] = useState(false);
+  const { data: me } = useMe();
+  const stackUser = stackConfigured ? useUser() : null;
+
+  const initial = (me?.displayName?.[0] ?? me?.username?.[0] ?? "?").toUpperCase();
+  const displayName = me?.displayName ?? "—";
+  const username = me?.username ?? "loading";
+
+  const signOut = async () => {
+    if (stackUser) {
+      await stackUser.signOut();
+    }
+    await fetch("/api/auth/sign-out", { method: "POST", credentials: "include" }).catch(() => {});
+    window.location.href = "/";
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground flex">
-      {/* Mobile top bar */}
       <header className="md:hidden fixed top-0 inset-x-0 h-14 z-30 bg-surface border-b border-border flex items-center justify-between px-4">
         <Link href="/dashboard" className="flex items-center gap-2">
-          <BoxLogo className="w-5 h-5 text-primary" />
-          <span className="font-bold tracking-tight">instancly</span>
+          <img src={logoUrl} alt="Instancly" className="h-5 w-auto" />
         </Link>
         <div className="flex items-center gap-1">
           <button
@@ -49,7 +63,6 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      {/* Mobile drawer backdrop */}
       {open && (
         <div
           className="md:hidden fixed inset-0 z-40 bg-black/60"
@@ -57,17 +70,15 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
         />
       )}
 
-      {/* Sidebar (desktop fixed, mobile drawer) */}
       <aside
         className={`fixed inset-y-0 left-0 z-50 w-64 border-r border-border bg-surface flex flex-col transition-transform duration-200 md:translate-x-0 ${
           open ? "translate-x-0" : "-translate-x-full md:translate-x-0"
         }`}
       >
         <div className="h-14 border-b border-border flex items-center justify-between px-6 gap-2">
-          <div className="flex items-center gap-2">
-            <BoxLogo className="w-5 h-5 text-primary" />
-            <span className="font-bold tracking-tight">instancly</span>
-          </div>
+          <Link href="/dashboard" className="flex items-center gap-2">
+            <img src={logoUrl} alt="Instancly" className="h-5 w-auto" />
+          </Link>
           <button
             onClick={() => setOpen(false)}
             className="md:hidden w-8 h-8 rounded-md flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised"
@@ -101,22 +112,15 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
         </div>
 
         <div className="p-4 border-t border-border space-y-2">
-          <div className="hidden md:flex items-center justify-between text-xs text-secondary px-1">
-            <span>Theme</span>
-          </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="flex items-center gap-3 w-full p-2 rounded-md hover:bg-surface-raised transition-colors text-left">
                 <div className="w-8 h-8 rounded bg-border flex items-center justify-center font-bold text-sm">
-                  {mockUser.username[0].toUpperCase()}
+                  {initial}
                 </div>
                 <div className="flex-1 overflow-hidden">
-                  <div className="text-sm font-medium truncate">
-                    {mockUser.displayName}
-                  </div>
-                  <div className="text-xs text-secondary truncate">
-                    @{mockUser.username}
-                  </div>
+                  <div className="text-sm font-medium truncate">{displayName}</div>
+                  <div className="text-xs text-secondary truncate">@{username}</div>
                 </div>
               </button>
             </DropdownMenuTrigger>
@@ -126,10 +130,18 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
             >
               <div className="px-2 py-1.5 text-sm font-medium">Account</div>
               <DropdownMenuSeparator className="bg-border" />
-              <DropdownMenuItem className="text-secondary hover:text-foreground cursor-pointer">
-                Profile ({mockUser.plan})
-              </DropdownMenuItem>
-              <DropdownMenuItem className="text-error focus:text-error cursor-pointer">
+              <Link href={`/${username}`}>
+                <DropdownMenuItem className="text-secondary hover:text-foreground cursor-pointer">
+                  View public profile
+                </DropdownMenuItem>
+              </Link>
+              <DropdownMenuItem
+                className="text-error focus:text-error cursor-pointer"
+                onSelect={(e) => {
+                  e.preventDefault();
+                  signOut();
+                }}
+              >
                 <LogOut className="w-4 h-4 mr-2" /> Log out
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -137,7 +149,6 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      {/* Main */}
       <main className="flex-1 md:ml-64 min-h-screen pt-14 md:pt-0 w-full overflow-x-hidden">
         {children}
       </main>

@@ -102,6 +102,12 @@ export type ApiTransaction = {
   createdAt: string;
 };
 
+export type UpdateMeBody = Partial<{
+  username: string;
+  displayName: string;
+  bio: string;
+}>;
+
 // ---- Hooks ----
 export function useMe() {
   return useQuery({
@@ -179,6 +185,90 @@ export function useCreateBuild(username: string | undefined, slug: string | unde
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["projects", username, slug] });
       qc.invalidateQueries({ queryKey: ["projects", username, slug, "builds"] });
+      qc.invalidateQueries({ queryKey: ["me", "projects"] });
+    },
+  });
+}
+
+// ---- Admin ----
+export type AdminStats = {
+  totalUsers: number;
+  totalProjects: number;
+  buildsToday: number;
+  revenueGbp: number;
+  spendGbp: number;
+};
+export type AdminRecentBuild = {
+  id: string;
+  duration: number;
+  cost: number;
+  status: string;
+  createdAt: string;
+  project: string;
+  username: string;
+};
+export type AdminUser = {
+  id: string;
+  username: string;
+  email: string;
+  plan: string;
+  balance: number;
+  status: string;
+  signupDate: string;
+};
+export type AdminCostByModel = { model: string; total: number };
+
+export function useIsAdmin() {
+  return useQuery({
+    queryKey: ["admin", "me"],
+    queryFn: () => request<{ isAdmin: boolean; configured: boolean }>("/admin/me"),
+    retry: false,
+  });
+}
+export function useAdminStats() {
+  return useQuery({ queryKey: ["admin", "stats"], queryFn: () => request<AdminStats>("/admin/stats") });
+}
+export function useAdminRecentBuilds() {
+  return useQuery({ queryKey: ["admin", "recent-builds"], queryFn: () => request<AdminRecentBuild[]>("/admin/recent-builds") });
+}
+export function useAdminUsers() {
+  return useQuery({ queryKey: ["admin", "users"], queryFn: () => request<AdminUser[]>("/admin/users") });
+}
+export function useAdminCostByModel() {
+  return useQuery({ queryKey: ["admin", "cost-by-model"], queryFn: () => request<AdminCostByModel[]>("/admin/cost-by-model") });
+}
+
+export function useUpdateMe() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: UpdateMeBody) =>
+      request<ApiMe>(`/me`, { method: "PATCH", body: JSON.stringify(body) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["me"] });
+    },
+  });
+}
+
+export function useRenameProject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { slug: string; name: string }) =>
+      request<ApiProjectListItem>(`/me/projects/${vars.slug}`, {
+        method: "PATCH",
+        body: JSON.stringify({ name: vars.name }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["me", "projects"] });
+    },
+  });
+}
+
+export function useDeleteProject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (slug: string) =>
+      request<void>(`/me/projects/${slug}`, { method: "DELETE" }),
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["me", "projects"] });
     },
   });

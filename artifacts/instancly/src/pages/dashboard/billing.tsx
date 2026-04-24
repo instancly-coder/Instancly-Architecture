@@ -1,11 +1,17 @@
-import { mockUser, mockTransactions } from "@/lib/mock-data";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { DashboardLayout } from "@/components/dashboard-layout";
+import { useMe, useMyTransactions } from "@/lib/api";
+import { Loader2 } from "lucide-react";
 
 export default function Billing() {
-  const topup = (amount: number) => {
-    toast.success(`Topped up £${amount}. (Mocked)`);
+  const { data: user, isLoading: userLoading } = useMe();
+  const { data: transactions = [], isLoading: txLoading } = useMyTransactions();
+
+  const topup = (_amount: number) => {
+    toast.message("Stripe top-up isn't connected yet.", {
+      description: "We'll wire this to a real checkout once Stripe is enabled.",
+    });
   };
 
   return (
@@ -20,8 +26,12 @@ export default function Billing() {
             <h2 className="text-sm font-medium text-secondary mb-2">
               Current Balance
             </h2>
-            <div className="text-3xl md:text-4xl font-mono font-bold mb-6">
-              £{mockUser.balance.toFixed(2)}
+            <div className="text-3xl md:text-4xl font-mono font-bold mb-6 min-h-[2.5rem] flex items-center">
+              {userLoading ? (
+                <Loader2 className="w-6 h-6 animate-spin text-secondary" />
+              ) : (
+                `£${(user?.balance ?? 0).toFixed(2)}`
+              )}
             </div>
 
             <h3 className="text-sm font-medium mb-3">Quick Top-up</h3>
@@ -44,15 +54,24 @@ export default function Billing() {
               Current Plan
             </h2>
             <div className="flex items-center gap-2 mb-2">
-              <div className="text-2xl font-bold">{mockUser.plan}</div>
-              <div className="px-2 py-0.5 rounded text-xs font-medium bg-primary/10 text-primary">
-                Active
-              </div>
+              <div className="text-2xl font-bold">{user?.plan ?? "—"}</div>
+              {user?.status === "active" && (
+                <div className="px-2 py-0.5 rounded text-xs font-medium bg-primary/10 text-primary">
+                  Active
+                </div>
+              )}
             </div>
             <p className="text-sm text-secondary mb-6 flex-1">
-              You are on the Pro plan. Includes custom domains, priority support, and higher compute limits.
+              {user?.plan === "free"
+                ? "Free plan: enough credit to try Instancly out. Upgrade for higher limits and custom domains."
+                : "Includes custom domains, priority support, and higher compute limits."}
             </p>
-            <Button className="w-full bg-surface-raised hover:bg-border text-foreground border border-border">
+            <Button
+              onClick={() =>
+                toast.message("Stripe portal isn't connected yet.")
+              }
+              className="w-full bg-surface-raised hover:bg-border text-foreground border border-border"
+            >
               Manage in Stripe <ExternalLink className="w-3 h-3 ml-2" />
             </Button>
           </div>
@@ -64,28 +83,57 @@ export default function Billing() {
             <thead>
               <tr className="border-b border-border bg-surface-raised/50">
                 <th className="text-left font-medium p-3 md:p-4 text-secondary">Date</th>
-                <th className="text-left font-medium p-3 md:p-4 text-secondary">Amount</th>
                 <th className="text-left font-medium p-3 md:p-4 text-secondary">Method</th>
+                <th className="text-right font-medium p-3 md:p-4 text-secondary">Amount</th>
                 <th className="text-right font-medium p-3 md:p-4 text-secondary">Status</th>
               </tr>
             </thead>
             <tbody>
-              {mockTransactions.map((tx) => (
-                <tr
-                  key={tx.id}
-                  className="border-b border-border last:border-0 hover:bg-surface-raised/50 transition-colors"
-                >
-                  <td className="p-3 md:p-4">{tx.date}</td>
-                  <td className="p-3 md:p-4 font-mono">{tx.amount}</td>
-                  <td className="p-3 md:p-4 text-secondary">{tx.method}</td>
-                  <td className="p-3 md:p-4 text-right">
-                    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium text-success bg-success/10">
-                      <div className="w-1.5 h-1.5 rounded-full bg-success"></div>
-                      {tx.status}
-                    </span>
+              {txLoading ? (
+                <tr>
+                  <td colSpan={4} className="p-6 text-center text-secondary">
+                    <Loader2 className="w-4 h-4 animate-spin inline" />
                   </td>
                 </tr>
-              ))}
+              ) : transactions.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="p-6 text-center text-secondary text-sm">
+                    No transactions yet.
+                  </td>
+                </tr>
+              ) : (
+                transactions.map((tx) => (
+                  <tr
+                    key={tx.id}
+                    className="border-b border-border last:border-0 hover:bg-surface-raised/50 transition-colors"
+                  >
+                    <td className="p-3 md:p-4">
+                      {new Date(tx.createdAt).toISOString().slice(0, 10)}
+                    </td>
+                    <td className="p-3 md:p-4 text-secondary">{tx.method}</td>
+                    <td className="p-3 md:p-4 font-mono text-right">
+                      {tx.amount >= 0 ? "+" : ""}
+                      £{tx.amount.toFixed(2)}
+                    </td>
+                    <td className="p-3 md:p-4 text-right">
+                      <span
+                        className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium ${
+                          (tx.status?.toLowerCase() === "success")
+                            ? "text-success bg-success/10"
+                            : "text-secondary bg-surface-raised"
+                        }`}
+                      >
+                        <div
+                          className={`w-1.5 h-1.5 rounded-full ${
+                            tx.status?.toLowerCase() === "success" ? "bg-success" : "bg-secondary"
+                          }`}
+                        />
+                        {tx.status ?? "—"}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

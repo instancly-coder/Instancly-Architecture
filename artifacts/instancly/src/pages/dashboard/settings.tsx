@@ -1,19 +1,56 @@
-import { AlertTriangle } from "lucide-react";
-import { mockUser } from "@/lib/mock-data";
+import { useEffect, useState } from "react";
+import { AlertTriangle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { DashboardLayout } from "@/components/dashboard-layout";
+import { useMe, useUpdateMe } from "@/lib/api";
+import { useUser } from "@stackframe/react";
+import { stackConfigured } from "@/stack";
 
 export default function SettingsPage() {
-  const save = (e: React.FormEvent) => {
+  const { data: user, isLoading } = useMe();
+  const update = useUpdateMe();
+  const stackUser = stackConfigured ? useUser() : null;
+
+  const [displayName, setDisplayName] = useState("");
+  const [bio, setBio] = useState("");
+
+  useEffect(() => {
+    if (user) {
+      setDisplayName(user.displayName ?? "");
+      setBio(user.bio ?? "");
+    }
+  }, [user]);
+
+  const save = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast.success("Settings saved successfully.");
+    try {
+      await update.mutateAsync({ displayName, bio });
+      toast.success("Settings saved.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save.");
+    }
   };
 
-  const deleteAccount = () => {
-    toast.error("Account deletion requested.");
+  const deleteAccount = async () => {
+    if (!confirm("Are you sure? This permanently deletes your account and all projects.")) return;
+    try {
+      const res = await fetch("/api/me", { method: "DELETE", credentials: "include" });
+      if (!res.ok && res.status !== 204) {
+        throw new Error(`Backend cleanup failed (${res.status})`);
+      }
+      if (stackUser) {
+        await stackUser.delete().catch(() => {
+          // Stack user deletion failed; backend record is already gone.
+        });
+      }
+      toast.success("Account deleted.");
+      window.location.href = "/";
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete account.");
+    }
   };
 
   return (
@@ -23,32 +60,71 @@ export default function SettingsPage() {
           Account Settings
         </h1>
 
-        <form onSubmit={save} className="space-y-6 mb-12">
-          <div className="space-y-2">
-            <Label htmlFor="displayName" className="text-secondary">Display Name</Label>
-            <Input id="displayName" defaultValue={mockUser.displayName} className="bg-surface border-border max-w-md" />
+        {isLoading ? (
+          <div className="flex items-center gap-2 text-secondary text-sm">
+            <Loader2 className="w-4 h-4 animate-spin" /> Loading…
           </div>
+        ) : (
+          <form onSubmit={save} className="space-y-6 mb-12">
+            <div className="space-y-2">
+              <Label htmlFor="displayName" className="text-secondary">Display Name</Label>
+              <Input
+                id="displayName"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                className="bg-surface border-border max-w-md"
+              />
+            </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="username" className="text-secondary">Username</Label>
-            <Input id="username" defaultValue={mockUser.username} readOnly disabled className="bg-surface border-border text-muted-foreground max-w-md font-mono" />
-            <p className="text-xs text-secondary">Username cannot be changed.</p>
-          </div>
+            <div className="space-y-2">
+              <Label htmlFor="bio" className="text-secondary">Bio</Label>
+              <Input
+                id="bio"
+                value={bio}
+                onChange={(e) => setBio(e.target.value)}
+                placeholder="A short description for your profile"
+                className="bg-surface border-border max-w-md"
+              />
+            </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="email" className="text-secondary">Email Address</Label>
-            <Input id="email" type="email" defaultValue={mockUser.email} readOnly disabled className="bg-surface border-border text-muted-foreground max-w-md" />
-          </div>
+            <div className="space-y-2">
+              <Label htmlFor="username" className="text-secondary">Username</Label>
+              <Input
+                id="username"
+                value={user?.username ?? ""}
+                readOnly
+                disabled
+                className="bg-surface border-border text-muted-foreground max-w-md font-mono"
+              />
+              <p className="text-xs text-secondary">Username cannot be changed.</p>
+            </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="password" className="text-secondary">New Password</Label>
-            <Input id="password" type="password" placeholder="••••••••" className="bg-surface border-border max-w-md" />
-          </div>
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-secondary">Email Address</Label>
+              <Input
+                id="email"
+                type="email"
+                value={user?.email ?? ""}
+                readOnly
+                disabled
+                className="bg-surface border-border text-muted-foreground max-w-md"
+              />
+              <p className="text-xs text-secondary">
+                {stackConfigured
+                  ? "Manage your email and password from the account menu."
+                  : "Email is locked in dev mode."}
+              </p>
+            </div>
 
-          <Button type="submit" className="bg-primary text-primary-foreground hover:bg-primary/90">
-            Save Changes
-          </Button>
-        </form>
+            <Button
+              type="submit"
+              disabled={update.isPending}
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
+            >
+              {update.isPending ? "Saving…" : "Save Changes"}
+            </Button>
+          </form>
+        )}
 
         <div className="border border-error/30 rounded-xl p-5 md:p-6 bg-error/5">
           <h2 className="text-error font-bold flex items-center gap-2 mb-2">
@@ -57,7 +133,11 @@ export default function SettingsPage() {
           <p className="text-sm text-secondary mb-4">
             Permanently delete your account and all associated projects. This action cannot be undone.
           </p>
-          <Button variant="destructive" onClick={deleteAccount} className="bg-error text-white hover:bg-error/90 font-medium">
+          <Button
+            variant="destructive"
+            onClick={deleteAccount}
+            className="bg-error text-white hover:bg-error/90 font-medium"
+          >
             Delete Account
           </Button>
         </div>

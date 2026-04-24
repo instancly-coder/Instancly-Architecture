@@ -55,7 +55,14 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { mockModels } from "@/lib/mock-data";
+const AVAILABLE_MODELS = [
+  { name: "Claude Sonnet 4.5", provider: "Anthropic", costRange: "£0.01 - £0.05" },
+  { name: "Claude Opus", provider: "Anthropic", costRange: "£0.05 - £0.20" },
+  { name: "GPT-4o", provider: "OpenAI", costRange: "£0.02 - £0.10" },
+  { name: "GPT-4o mini", provider: "OpenAI", costRange: "£0.005 - £0.02" },
+  { name: "Gemini 2.5 Pro", provider: "Google", costRange: "£0.01 - £0.04" },
+  { name: "Gemini Flash", provider: "Google", costRange: "£0.002 - £0.01" },
+];
 import { useMe, useProject, useProjectBuilds, useCreateBuild, type ApiBuild } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -140,7 +147,7 @@ const STREAM_STEPS = [
   { phase: "Writing", text: "Editing src/app/page.tsx" },
   { phase: "Writing", text: "Updating src/lib/db.ts" },
   { phase: "Migrating", text: "Applying Postgres schema" },
-  { phase: "Done", text: "Build complete · £0.03 · 4.1s" },
+  { phase: "Done", text: "Build complete" },
 ];
 
 export default function Builder() {
@@ -297,7 +304,7 @@ export default function Builder() {
 
         <div className="flex items-center gap-2 md:gap-3 shrink-0">
           <span className="hidden lg:inline text-xs text-secondary font-mono">
-            £0.03 spend
+            £{apiBuilds.reduce((s, b) => s + b.cost, 0).toFixed(2)} spend
           </span>
 
 
@@ -672,7 +679,7 @@ function ChatPanel({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [attachments, setAttachments] = useState<File[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>(
-    mockModels[0]?.name ?? "Claude Sonnet 4.5"
+    AVAILABLE_MODELS[0].name
   );
   const [modelOpen, setModelOpen] = useState(false);
 
@@ -894,7 +901,7 @@ function ChatPanel({
                   <div className="px-2 pt-1.5 pb-1 text-[10px] uppercase tracking-wider font-mono text-secondary">
                     Model
                   </div>
-                  {mockModels.map((m) => {
+                  {AVAILABLE_MODELS.map((m) => {
                     const active = m.name === selectedModel;
                     return (
                       <button

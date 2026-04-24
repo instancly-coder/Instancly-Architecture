@@ -9,7 +9,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { DashboardLayout } from "@/components/dashboard-layout";
-import { useMe, useMyProjects, useCreateProject, type ApiProjectListItem } from "@/lib/api";
+import {
+  useMe,
+  useMyProjects,
+  useCreateProject,
+  useRenameProject,
+  useDeleteProject,
+  type ApiProjectListItem,
+} from "@/lib/api";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 
@@ -108,6 +115,30 @@ export default function Dashboard() {
 }
 
 function ProjectCard({ project, ownerUsername }: { project: ApiProjectListItem; ownerUsername: string }) {
+  const rename = useRenameProject();
+  const remove = useDeleteProject();
+
+  const handleRename = async () => {
+    const next = window.prompt("New name?", project.name);
+    if (!next || next.trim() === project.name) return;
+    try {
+      await rename.mutateAsync({ slug: project.slug, name: next.trim() });
+      toast.success("Renamed");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to rename");
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!window.confirm(`Delete "${project.name}"? This cannot be undone.`)) return;
+    try {
+      await remove.mutateAsync(project.slug);
+      toast.success("Deleted");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete");
+    }
+  };
+
   return (
     <div className="group relative border border-border bg-surface rounded-xl overflow-hidden hover-elevate transition-all duration-200">
       <Link
@@ -148,10 +179,23 @@ function ProjectCard({ project, ownerUsername }: { project: ApiProjectListItem; 
                 align="end"
                 className="bg-surface-raised border-border"
               >
-                <DropdownMenuItem className="cursor-pointer">Rename</DropdownMenuItem>
-                <DropdownMenuItem className="cursor-pointer">Settings</DropdownMenuItem>
+                <DropdownMenuItem
+                  className="cursor-pointer"
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    handleRename();
+                  }}
+                >
+                  Rename
+                </DropdownMenuItem>
                 <DropdownMenuSeparator className="bg-border" />
-                <DropdownMenuItem className="text-error focus:text-error cursor-pointer">
+                <DropdownMenuItem
+                  className="text-error focus:text-error cursor-pointer"
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    handleDelete();
+                  }}
+                >
                   Delete
                 </DropdownMenuItem>
               </DropdownMenuContent>
