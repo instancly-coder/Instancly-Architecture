@@ -43,7 +43,7 @@ const TIERS: Tier[] = [
     priceSuffix: "forever",
     cta: { label: "Start free", href: "/login" },
     features: [
-      { label: "$2.50 in credits each month", icon: Coins },
+      { label: "$2.50 of usage each month", icon: Coins },
       { label: "1 active project", icon: Layers },
       { label: "Claude Haiku 4.5", sub: "Fast model, great for iterating", icon: Sparkles },
       { label: "Community support", icon: Users },
@@ -60,7 +60,7 @@ const TIERS: Tier[] = [
     cta: { label: "Upgrade to Pro", href: "/login" },
     highlight: true,
     features: [
-      { label: "$20 in credits each month", sub: "Unused credits roll over up to $10", icon: Coins },
+      { label: "$20 of usage each month", sub: "Unused balance rolls over up to $10", icon: Coins },
       { label: "Unlimited projects", icon: Layers },
       { label: "Claude Sonnet 4.5 + Opus", sub: "Smartest models for complex tasks", icon: Sparkles },
       { label: "One-click Vercel deployment", icon: Zap },
@@ -83,7 +83,7 @@ const TIERS: Tier[] = [
     features: [
       { label: "Everything in Pro", icon: Check },
       { label: "Shared project workspace", icon: Users },
-      { label: "Pooled team credits", icon: Coins },
+      { label: "Pooled team balance", icon: Coins },
       { label: "Role-based access control", icon: Shield },
       { label: "SSO / SAML", icon: Shield },
       { label: "Per-seat usage analytics", icon: Globe },
@@ -92,7 +92,7 @@ const TIERS: Tier[] = [
   },
 ];
 
-const CREDIT_PACKS = [
+const TOPUP_PACKS = [
   { amount: 10, label: "Topper", description: "Finish the project you're mid-flow on." },
   { amount: 25, label: "Sprint", description: "A full weekend of Sonnet generation.", highlight: true },
   { amount: 50, label: "Builder", description: "For heavy iteration weeks and rebuilds." },
@@ -106,13 +106,13 @@ const STRATEGIC_NOTES = [
   },
   {
     icon: Coins,
-    title: "Credits that don't disappear",
-    body: "Pro carries up to $10 in unused credits to the following month. No more racing the clock at the end of a billing cycle.",
+    title: "A balance that doesn't disappear",
+    body: "Pro carries up to $10 of unused balance into the following month. No more racing the clock at the end of a billing cycle.",
   },
   {
     icon: Zap,
     title: "Top up any time",
-    body: "Out of credits mid-build? Buy a $10, $25, or $50 pack on demand. No plan upgrade, no friction, no waiting.",
+    body: "Run out mid-build? Buy a $10, $25, or $50 top-up on demand. No plan upgrade, no friction, no waiting.",
   },
   {
     icon: Shield,
@@ -123,11 +123,11 @@ const STRATEGIC_NOTES = [
 
 const FAQS = [
   {
-    q: "What counts as a credit?",
-    a: "One credit = $1 of model usage at our pass-through rate. A typical generation on Haiku costs $0.001–0.005, on Sonnet $0.05–0.30, and on Opus $0.20–1.00 depending on length and context.",
+    q: "How does usage-based billing work?",
+    a: "Your monthly plan includes a dollar amount of usage (Free: $2.50, Pro: $20). Every generation deducts from that balance at our pass-through model rate. A typical generation on Haiku costs $0.001–0.005, on Sonnet $0.05–0.30, and on Opus $0.20–1.00 depending on length and context.",
   },
   {
-    q: "What happens if I run out of credits?",
+    q: "What happens if I use up my monthly balance?",
     a: "Generations pause until you top up or your monthly allotment refreshes. Your projects stay live, your code stays yours, nothing is deleted.",
   },
   {
@@ -139,8 +139,8 @@ const FAQS = [
     a: "Yes. Email hello@deploybro.app from your .edu address or with a link to your maintained OSS project and we'll get you sorted.",
   },
   {
-    q: "Will my credits roll over forever?",
-    a: "Pro accounts roll over up to $10 of unused credits per month. Anything beyond $10 expires — keeps the system honest without punishing busy months.",
+    q: "Will my unused balance roll over forever?",
+    a: "Pro accounts roll over up to $10 of unused balance per month. Anything beyond $10 expires — keeps the system honest without punishing busy months.",
   },
   {
     q: "When do Teams plans launch?",
@@ -370,8 +370,8 @@ export default function Pricing() {
               <span className="text-primary italic font-black">Nothing else.</span>
             </h1>
             <p className="text-lg text-secondary max-w-2xl mx-auto mb-8">
-              Transparent credit-based pricing. Top up when you need to.
-              Cancel any time. No seat tax, no overage surprises.
+              Transparent usage-based pricing in plain dollars. Top up when you
+              need to. Cancel any time. No seat tax, no overage surprises.
             </p>
             <div className="flex justify-center">
               <CadenceToggle value={cadence} onChange={setCadence} />
@@ -391,16 +391,16 @@ export default function Pricing() {
           </p>
         </section>
 
-        {/* Credit top-ups */}
+        {/* Top-ups */}
         <section className="border-t border-border bg-surface/40">
           <div className="max-w-7xl mx-auto px-4 sm:px-8 py-20">
             <SectionHeader
               eyebrow="Top-ups"
-              title="Need more credits? Buy a pack."
-              intro="Available on every plan, including Free. No subscription change required — credits are added instantly and never expire."
+              title="Need more usage? Buy a top-up."
+              intro="Available on every plan, including Free. No subscription change required — the balance is added instantly and never expires."
             />
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5 max-w-4xl mx-auto">
-              {CREDIT_PACKS.map((pack) => (
+              {TOPUP_PACKS.map((pack) => (
                 <div
                   key={pack.amount}
                   className={`relative rounded-xl border p-6 text-center ${
@@ -418,7 +418,7 @@ export default function Pricing() {
                     {pack.label}
                   </div>
                   <div className="text-4xl font-bold tracking-tight mb-1">${pack.amount}</div>
-                  <div className="text-xs font-mono text-primary mb-4">+{pack.amount} credits</div>
+                  <div className="text-xs font-mono text-primary mb-4">+${pack.amount} of usage</div>
                   <p className="text-sm text-secondary">{pack.description}</p>
                 </div>
               ))}
@@ -473,7 +473,7 @@ export default function Pricing() {
                 Start free. Ship today.
               </h3>
               <p className="text-secondary mb-7 max-w-xl mx-auto">
-                $2.50 in credits the moment you sign up. No card required.
+                $2.50 of usage the moment you sign up. No card required.
                 Upgrade only when your projects start paying for themselves.
               </p>
               <div className="flex flex-wrap items-center justify-center gap-3">
