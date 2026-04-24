@@ -138,6 +138,33 @@
   border-color: hsl(var(--primary));
 }
 
+/* Streaming-text shimmer: a soft highlight sweeps left → right across
+   the dimmed text while the AI is generating, so the user can see
+   that something is happening even between token bursts. */
+@keyframes shimmer-sweep {
+  0%   { background-position: -150% 0; }
+  100% { background-position:  250% 0; }
+}
+
+.shimmer-text {
+  /* Base color is the dim "resting" tone of the prose. */
+  color: hsl(var(--muted-foreground));
+  background-image: linear-gradient(
+    100deg,
+    transparent 0%,
+    transparent 35%,
+    hsl(var(--foreground) / 0.95) 50%,
+    transparent 65%,
+    transparent 100%
+  );
+  background-size: 250% 100%;
+  background-repeat: no-repeat;
+  background-position: -150% 0;
+  -webkit-background-clip: text;
+          background-clip: text;
+  animation: shimmer-sweep 2.4s linear infinite;
+}
+
 /* --- iOS-style glass pill (matches bolt.new announcement chip) --- */
 .glass-pill {
   position: relative;

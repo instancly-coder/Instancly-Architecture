@@ -888,7 +888,7 @@ function ChatPanel({
 
               {/* AI response */}
               <div className="space-y-2">
-                <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
+                <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap break-words">
                   {b.aiMessage}
                 </p>
 
@@ -981,9 +981,15 @@ function ChatPanel({
                 {currentPhase ?? "Working"}
               </span>
             </div>
-            <div className="text-sm text-foreground leading-relaxed min-h-[1.4em] whitespace-pre-wrap break-words">
+            <div
+              className={`text-sm leading-relaxed min-h-[1.4em] whitespace-pre-wrap break-words ${
+                isStreaming
+                  ? "shimmer-text"
+                  : "text-muted-foreground"
+              }`}
+            >
               {typed}
-              <span className="inline-block w-[2px] h-[1.05em] bg-primary ml-0.5 align-text-bottom animate-pulse" />
+              <span className="inline-block w-[2px] h-[1.05em] bg-primary/80 ml-0.5 align-text-bottom animate-pulse" />
             </div>
           </div>
         )}
