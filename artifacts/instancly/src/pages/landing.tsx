@@ -418,9 +418,10 @@ export default function Landing() {
                 {INTEGRATIONS.map((it) => (
                   <div
                     key={it.name}
-                    className="group relative rounded-xl border border-border bg-surface/40 p-5 overflow-hidden transition-all hover:-translate-y-0.5"
+                    className="group relative rounded-xl border bg-surface/40 p-5 overflow-hidden transition-all hover:-translate-y-0.5"
                     style={{
-                      boxShadow: `inset 0 1px 0 0 ${it.color}10`,
+                      borderColor: `${it.color}40`,
+                      boxShadow: `inset 0 1px 0 0 ${it.color}18, 0 0 0 1px ${it.color}10`,
                     }}
                   >
                     {/* Themed glow */}
