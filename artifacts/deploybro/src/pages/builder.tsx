@@ -2372,10 +2372,10 @@ function FilesPane({
                   <Icon className="w-3.5 h-3.5 shrink-0" />
                   <span className="truncate flex-1">{name}</span>
                   {/* Per-file size makes "what's eating my budget?"
-                      a one-glance answer when the project size gauge
-                      goes amber. Hidden when active row already shows
-                      file metadata in the editor header to keep the
-                      row compact. */}
+                      a one-glance answer when the project size
+                      gauge goes amber. Always rendered (including
+                      the active row) so the column lines up
+                      visually across the whole tree. */}
                   <span className="text-[9px] font-mono text-secondary/60 shrink-0">
                     {f.size}
                   </span>
