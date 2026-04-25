@@ -617,6 +617,11 @@ export default function Builder() {
 
   const [chatInput, setChatInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
+  // The user's prompt for the in-flight build, shown as a chat bubble at
+  // the top of the streaming section so the user can see what they
+  // typed even before the AI responds. Cleared once the build is
+  // recorded in `pastBuilds` (so the bubble doesn't double-render).
+  const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
   const [phase, setPhase] = useState<string | undefined>(undefined);
   const [typed, setTyped] = useState("");
   // Per-prompt action rows that show under the in-flight assistant bubble:
@@ -824,6 +829,12 @@ export default function Builder() {
     }
     setChatInput("");
     setIsStreaming(true);
+    // Show the user's prompt as a bubble in the chat immediately so
+    // they can see what they sent — without it, the textbox empties
+    // but their words don't appear until the build is recorded
+    // ~10–60s later. Cleared after the build is persisted (or kept
+    // visible if the build errors so the user can retry).
+    setPendingPrompt(prompt);
     setPhase("Thinking");
     setTyped("");
     setLastUsage(null);
@@ -953,9 +964,41 @@ export default function Builder() {
       };
 
       // Track whether we've already pushed the "Generating code" step so
-      // the very first `delta` event swaps the spinner off "Connecting"
-      // even when the server didn't send a separate status for it.
+      // the very first `delta` event swaps the spinner off the previous
+      // status even when the server didn't send a separate status for it.
       let generatingPushed = false;
+      // Per-file write progress: as soon as the AI emits `<file path="X">`
+      // we add a "Writing X" step (in progress); once the matching
+      // `</file>` arrives we tick it. This turns a single "Generating
+      // code" spinner into a live checklist of files being written.
+      const fileSeen = new Map<string, boolean>(); // path -> closed?
+      const markFileDone = (path: string) =>
+        setStreamSteps((prev) =>
+          prev.map((s) =>
+            s.label === `Writing ${path}` && s.status === "in_progress"
+              ? { ...s, status: "done" as const }
+              : s,
+          ),
+        );
+      const syncFileSteps = (rawText: string) => {
+        const re = /<file\s+path="([^"]+)"\s*>/g;
+        let m: RegExpExecArray | null;
+        while ((m = re.exec(rawText))) {
+          const path = m[1];
+          const closeIdx = rawText.indexOf("</file>", re.lastIndex);
+          const closed = closeIdx >= 0;
+          const known = fileSeen.get(path);
+          if (known === undefined) {
+            fileSeen.set(path, closed);
+            closeAndAdd(`Writing ${path}`);
+            if (closed) markFileDone(path);
+          } else if (!known && closed) {
+            fileSeen.set(path, true);
+            markFileDone(path);
+          }
+          if (closed) re.lastIndex = closeIdx + "</file>".length;
+        }
+      };
       for await (const evt of readSSE(res)) {
         if (evt.event === "status" && typeof evt.data?.message === "string") {
           closeAndAdd(evt.data.message.replace(/[…\.]+$/g, ""));
@@ -973,6 +1016,7 @@ export default function Builder() {
             closeAndAdd("Generating code");
             generatingPushed = true;
           }
+          syncFileSteps(raw);
         } else if (evt.event === "usage") {
           // The server tells us exactly what this generation cost and what's
           // left in the balance, so we can show "Used $X · Remaining: $Y"
@@ -1020,6 +1064,10 @@ export default function Builder() {
       // post-deduction amounts show up immediately.
       await queryClient.invalidateQueries({ queryKey: ["me"] });
       await queryClient.invalidateQueries({ queryKey: ["me", "transactions"] });
+      // The new build is now in `pastBuilds` (which renders the user's
+      // prompt as a bubble). Drop the pending bubble so the prompt
+      // doesn't render twice during the 600ms cleanup hold.
+      setPendingPrompt(null);
       // Force the preview iframe to reload with the freshly-written files.
       setIframeKey((k) => k + 1);
     } catch (err) {
@@ -1276,6 +1324,7 @@ export default function Builder() {
             currentPhase={currentStep?.phase}
             streamSteps={streamSteps}
             typed={typed}
+            pendingPrompt={pendingPrompt}
             onSend={handleSend}
             openBuildId={openBuildId}
             setOpenBuildId={setOpenBuildId}
@@ -1454,6 +1503,7 @@ export default function Builder() {
           currentPhase={currentStep?.phase}
           streamSteps={streamSteps}
           typed={typed}
+          pendingPrompt={pendingPrompt}
           onSend={handleSend}
           openBuildId={openBuildId}
           setOpenBuildId={setOpenBuildId}
@@ -1508,6 +1558,7 @@ function ChatPanel({
   currentPhase,
   streamSteps,
   typed,
+  pendingPrompt,
   onSend,
   openBuildId,
   setOpenBuildId,
@@ -1528,6 +1579,7 @@ function ChatPanel({
   currentPhase: string | undefined;
   streamSteps: StreamStep[];
   typed: string;
+  pendingPrompt: string | null;
   onSend: () => void;
   openBuildId: string | null;
   setOpenBuildId: (id: string | null) => void;
@@ -1680,8 +1732,21 @@ function ChatPanel({
         })}
 
         {/* Live streaming status (latest, in-progress turn) */}
-        {(isStreaming || currentPhase) && (
-          <div className="space-y-2">
+        {(isStreaming || currentPhase || pendingPrompt) && (
+          <div className="space-y-3">
+            {/* The user's prompt for this in-flight turn, shown
+                immediately so they can see what they sent — without
+                this the textbox empties but their message doesn't
+                show up until the build is recorded. Mirrors the
+                styling of past-build user bubbles above. */}
+            {pendingPrompt && (
+              <div className="flex justify-end">
+                <div className="max-w-[88%] px-3.5 py-2 rounded-2xl rounded-br-md bg-primary/15 text-primary text-sm leading-snug">
+                  {pendingPrompt}
+                </div>
+              </div>
+            )}
+
             {/* The AI's prose — calm, muted, no animation. This is where
                 the model tells the user what it is about to do. */}
             <div className="text-sm leading-relaxed min-h-[1.4em] whitespace-pre-wrap break-words text-muted-foreground">

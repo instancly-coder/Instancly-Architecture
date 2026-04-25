@@ -351,19 +351,122 @@ router.get(
     // Prefer the stored content type for binary uploads (it was set from
     // the browser's File.type at upload time and is more accurate than
     // an extension-only guess for things like svg-vs-svg+xml).
-    res.setHeader(
-      "Content-Type",
+    const ct =
       row.contentType && row.encoding === "base64"
         ? row.contentType
-        : contentTypeFor(path),
-    );
+        : contentTypeFor(path);
+    res.setHeader("Content-Type", ct);
     if (row.encoding === "base64") {
       res.send(Buffer.from(row.content, "base64"));
-    } else {
-      res.send(row.content);
+      return;
     }
+    // For HTML files served to the dev preview iframe, inject a small
+    // runtime-error overlay so JS errors / unhandled promise rejections
+    // / console.error calls become visible. Without this, a single
+    // typo or runtime crash in the AI's generated code shows up as a
+    // blank page with no clue what went wrong. The overlay is
+    // dev-preview-only — it's not in the published Vercel build.
+    if (ct.startsWith("text/html")) {
+      res.send(injectErrorOverlay(row.content));
+      return;
+    }
+    res.send(row.content);
   },
 );
+
+// Inline error overlay injected into every dev-preview HTML response.
+// Listens for `error` and `unhandledrejection` and also intercepts
+// `console.error` so Babel-standalone parse errors (which it logs
+// instead of throwing) surface too. First error wins so the overlay
+// stays readable even if the page enters an error loop.
+const ERROR_OVERLAY_SCRIPT = `<script>
+(function () {
+  if (window.__deploybroOverlay) return;
+  window.__deploybroOverlay = true;
+  var shown = false;
+  function esc(s) {
+    return String(s).replace(/[&<>]/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c];
+    });
+  }
+  function show(title, message, stack) {
+    if (shown) return;
+    shown = true;
+    function paint() {
+      var el = document.createElement("div");
+      el.setAttribute("data-deploybro-error-overlay", "");
+      el.style.cssText =
+        "position:fixed;inset:0;background:rgba(15,15,20,0.96);color:#fff;" +
+        "font:14px/1.5 ui-sans-serif,system-ui,-apple-system,sans-serif;" +
+        "z-index:2147483647;padding:24px;overflow:auto;";
+      el.innerHTML =
+        '<div style="max-width:760px;margin:0 auto;">' +
+          '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">' +
+            '<div style="width:10px;height:10px;background:#ef4444;border-radius:9999px;"></div>' +
+            '<div style="font-weight:600;letter-spacing:0.05em;text-transform:uppercase;font-size:11px;color:#fca5a5;">' +
+              esc(title) +
+            "</div>" +
+          "</div>" +
+          '<pre style="background:#1f1f24;border:1px solid #2a2a30;border-radius:8px;padding:14px;' +
+            'white-space:pre-wrap;word-break:break-word;color:#fee2e2;' +
+            'font:12px/1.55 ui-monospace,Menlo,Consolas,monospace;margin:0;">' +
+            esc(message) + (stack ? "\\n\\n" + esc(stack) : "") +
+          "</pre>" +
+          '<div style="margin-top:14px;font-size:12px;color:#9ca3af;">' +
+            "Tell DeployBro what went wrong in the chat and it will try to fix it." +
+          "</div>" +
+        "</div>";
+      (document.body || document.documentElement).appendChild(el);
+    }
+    if (document.body) paint();
+    else document.addEventListener("DOMContentLoaded", paint);
+  }
+  window.addEventListener("error", function (e) {
+    var msg =
+      (e.error && e.error.message) ||
+      e.message ||
+      "Unknown error";
+    var stack =
+      (e.error && e.error.stack) ||
+      (e.filename ? e.filename + ":" + e.lineno + ":" + e.colno : "");
+    show("Runtime error", msg, stack);
+  });
+  window.addEventListener("unhandledrejection", function (e) {
+    var r = e.reason || {};
+    var msg =
+      (r && r.message) ||
+      (typeof r === "string" ? r : "Unhandled promise rejection");
+    show("Unhandled rejection", msg, (r && r.stack) || "");
+  });
+  // Babel-standalone reports JSX parse errors via console.error
+  // instead of throwing — wrap so they trigger the overlay too.
+  var origErr = console.error.bind(console);
+  console.error = function () {
+    try {
+      origErr.apply(null, arguments);
+    } catch (_) {}
+    var parts = [];
+    for (var i = 0; i < arguments.length; i++) {
+      var a = arguments[i];
+      if (a && a.stack) parts.push(String(a.stack));
+      else if (typeof a === "string") parts.push(a);
+      else { try { parts.push(JSON.stringify(a)); } catch (_) { parts.push(String(a)); } }
+    }
+    var text = parts.join(" ");
+    // Skip noisy framework warnings that aren't real errors.
+    if (/^(Warning:|\\[HMR\\])/.test(text)) return;
+    show("Console error", text, "");
+  };
+})();
+</script>`;
+
+function injectErrorOverlay(html: string): string {
+  if (/data-deploybro-error-overlay/.test(html)) return html;
+  if (/<\/body>/i.test(html)) {
+    return html.replace(/<\/body>/i, `${ERROR_OVERLAY_SCRIPT}\n</body>`);
+  }
+  return html + `\n${ERROR_OVERLAY_SCRIPT}\n`;
+}
 
 function emptyHtml(headline = "Your app will appear here"): string {
   return `<!doctype html>

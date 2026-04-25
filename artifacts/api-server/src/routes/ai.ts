@@ -612,7 +612,6 @@ router.post(
             ]
           : textPart;
 
-      send("status", { message: "Connecting to Claude…" });
       stream = anthropic.messages.stream({
         model: modelInfo.id,
         max_tokens: 16_384,
