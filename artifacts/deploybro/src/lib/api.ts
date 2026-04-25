@@ -368,6 +368,9 @@ export type ApiPublishStatus = {
   publishStatus: string;
   liveUrl: string | null;
   lastPublishedAt: string | null;
+  // The user's verified custom domain that should replace `liveUrl` in the
+  // navbar chip. Null when no custom domain is set or none have verified.
+  primaryCustomDomain: string | null;
 };
 
 export const TERMINAL_DEPLOYMENT_STATUSES: ReadonlySet<DeploymentStatus> = new Set([
@@ -477,5 +480,123 @@ export function usePublishStatus(
         `/projects/${username}/${slug}/publish-status`,
       ),
     enabled: !!username && !!slug,
+  });
+}
+
+// ---- Custom domains ----
+export type ApiDomainVerificationRecord = {
+  type: string;
+  domain: string;
+  value: string;
+  reason: string;
+};
+
+export type ApiDomainSuggestedRecord = {
+  type: "CNAME" | "A";
+  name: string;
+  value: string;
+};
+
+export type ApiProjectDomain = {
+  id: string;
+  host: string;
+  verified: boolean;
+  isPrimary: boolean;
+  misconfigured: boolean;
+  verificationRecords: ApiDomainVerificationRecord[];
+  suggestedRecords: ApiDomainSuggestedRecord[];
+  createdAt: string;
+  lastCheckedAt: string | null;
+};
+
+export function useProjectDomains(
+  username: string | undefined,
+  slug: string | undefined,
+) {
+  return useQuery({
+    queryKey: ["projects", username, slug, "domains"],
+    queryFn: () =>
+      request<ApiProjectDomain[]>(`/projects/${username}/${slug}/domains`),
+    enabled: !!username && !!slug,
+    // While at least one row is unverified or misconfigured, poll so the
+    // UI flips to "Active" without the user clicking "Refresh status".
+    refetchInterval: (q) => {
+      const data = q.state.data as ApiProjectDomain[] | undefined;
+      if (!data || data.length === 0) return false;
+      const anyPending = data.some((d) => !d.verified || d.misconfigured);
+      return anyPending ? 15000 : false;
+    },
+  });
+}
+
+export function useAddDomain(
+  username: string | undefined,
+  slug: string | undefined,
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (host: string) =>
+      request<ApiProjectDomain>(`/projects/${username}/${slug}/domains`, {
+        method: "POST",
+        body: JSON.stringify({ host }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["projects", username, slug, "domains"] });
+      qc.invalidateQueries({ queryKey: ["projects", username, slug, "publish-status"] });
+    },
+  });
+}
+
+export function useRemoveDomain(
+  username: string | undefined,
+  slug: string | undefined,
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (host: string) =>
+      request<void>(
+        `/projects/${username}/${slug}/domains/${encodeURIComponent(host)}`,
+        { method: "DELETE" },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["projects", username, slug, "domains"] });
+      qc.invalidateQueries({ queryKey: ["projects", username, slug, "publish-status"] });
+    },
+  });
+}
+
+export function useVerifyDomain(
+  username: string | undefined,
+  slug: string | undefined,
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (host: string) =>
+      request<ApiProjectDomain>(
+        `/projects/${username}/${slug}/domains/${encodeURIComponent(host)}/verify`,
+        { method: "POST" },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["projects", username, slug, "domains"] });
+      qc.invalidateQueries({ queryKey: ["projects", username, slug, "publish-status"] });
+    },
+  });
+}
+
+export function useSetPrimaryDomain(
+  username: string | undefined,
+  slug: string | undefined,
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (host: string) =>
+      request<{ status: string }>(
+        `/projects/${username}/${slug}/domains/${encodeURIComponent(host)}/primary`,
+        { method: "POST" },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["projects", username, slug, "domains"] });
+      qc.invalidateQueries({ queryKey: ["projects", username, slug, "publish-status"] });
+    },
   });
 }

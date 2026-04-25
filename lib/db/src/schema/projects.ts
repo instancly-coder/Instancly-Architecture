@@ -40,6 +40,11 @@ export const projectsTable = pgTable(
     liveUrl: text("live_url"),
     lastPublishedAt: timestamp("last_published_at", { withTimezone: true }),
     publishStatus: text("publish_status").default("none").notNull(),
+    // The custom domain that should be served as the canonical "live URL"
+    // in place of the auto-generated `*.vercel.app` host. NULL means the
+    // user hasn't set a primary custom domain (or the verified one was
+    // removed) and we fall back to `liveUrl`.
+    primaryCustomDomain: text("primary_custom_domain"),
   },
   (t) => ({
     userSlugUnique: uniqueIndex("projects_user_slug_unique").on(t.userId, t.slug),

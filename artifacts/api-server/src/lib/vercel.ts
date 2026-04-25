@@ -194,3 +194,104 @@ export async function cancelDeployment(id: string): Promise<void> {
     `/v12/deployments/${encodeURIComponent(id)}/cancel${teamQuery()}`,
   );
 }
+
+// ---------- Custom domains ----------
+//
+// Vercel returns a `verification` array when the domain isn't yet owned by
+// the project. Each entry is a TXT record the user must place in their DNS
+// before we can call `verifyProjectDomain` to flip the domain to verified.
+// Once verified, traffic for that hostname is served by the project.
+
+export type VercelDomainVerification = {
+  type: string;
+  domain: string;
+  value: string;
+  reason: string;
+};
+
+export type VercelDomain = {
+  name: string;
+  verified: boolean;
+  verification?: VercelDomainVerification[];
+  // Returned on add when Vercel detects another project already owns it.
+  // Surfaced verbatim so the route layer can decide how to message the user.
+  apexName?: string;
+  projectId?: string;
+};
+
+export type VercelDomainConfig = {
+  // True when Vercel can't see the expected DNS yet.
+  misconfigured?: boolean;
+  // Convenience: the recommended target for the user's CNAME or A record.
+  configuredBy?: string | null;
+  aValues?: string[];
+  cnames?: string[];
+  serviceType?: string;
+};
+
+// Add a domain to a Vercel project. Returns the verification challenges
+// the user needs to set in DNS (when applicable).
+export async function addProjectDomain(
+  projectIdOrName: string,
+  name: string,
+): Promise<VercelDomain> {
+  return request<VercelDomain>(
+    "POST",
+    `/v10/projects/${encodeURIComponent(projectIdOrName)}/domains${teamQuery()}`,
+    { name },
+  );
+}
+
+// Look up the current state (verified / verification array) of a domain
+// already attached to the project. Used to refresh status after the user
+// updates their DNS.
+export async function getProjectDomain(
+  projectIdOrName: string,
+  name: string,
+): Promise<VercelDomain> {
+  return request<VercelDomain>(
+    "GET",
+    `/v9/projects/${encodeURIComponent(projectIdOrName)}/domains/${encodeURIComponent(name)}${teamQuery()}`,
+  );
+}
+
+// Trigger Vercel to re-check the verification TXT records. Returns the
+// updated domain row (verified flips to true on success).
+export async function verifyProjectDomain(
+  projectIdOrName: string,
+  name: string,
+): Promise<VercelDomain> {
+  return request<VercelDomain>(
+    "POST",
+    `/v9/projects/${encodeURIComponent(projectIdOrName)}/domains/${encodeURIComponent(name)}/verify${teamQuery()}`,
+  );
+}
+
+export async function removeProjectDomain(
+  projectIdOrName: string,
+  name: string,
+): Promise<void> {
+  try {
+    await request(
+      "DELETE",
+      `/v9/projects/${encodeURIComponent(projectIdOrName)}/domains/${encodeURIComponent(name)}${teamQuery()}`,
+    );
+  } catch (err) {
+    // 404 = already gone on Vercel — treat as success so the local row can
+    // be cleaned up regardless.
+    if (err instanceof VercelApiError && err.status === 404) return;
+    throw err;
+  }
+}
+
+// Returns the resolver-side view of the domain's DNS — used to surface
+// "your CNAME isn't pointing at us yet" without making the user click a
+// separate verify button.
+export async function getDomainConfig(
+  name: string,
+): Promise<VercelDomainConfig> {
+  return request<VercelDomainConfig>(
+    "GET",
+    `/v6/domains/${encodeURIComponent(name)}/config${teamQuery()}`,
+  );
+}

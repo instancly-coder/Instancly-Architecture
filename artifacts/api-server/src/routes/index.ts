@@ -10,6 +10,7 @@ import adminRouter from "./admin";
 import aiRouter from "./ai";
 import filesRouter from "./files";
 import deploymentsRouter from "./deployments";
+import domainsRouter from "./domains";
 
 const router: IRouter = Router();
 
@@ -24,5 +25,6 @@ router.use(adminRouter);
 router.use(aiRouter);
 router.use(filesRouter);
 router.use(deploymentsRouter);
+router.use(domainsRouter);
 
 export default router;

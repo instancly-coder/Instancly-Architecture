@@ -506,6 +506,7 @@ router.get(
       publishStatus: row.project.publishStatus,
       liveUrl: row.project.liveUrl,
       lastPublishedAt: row.project.lastPublishedAt?.toISOString() ?? null,
+      primaryCustomDomain: row.project.primaryCustomDomain,
     });
   },
 );

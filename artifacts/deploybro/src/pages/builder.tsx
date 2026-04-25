@@ -92,6 +92,11 @@ import {
   useDeployments,
   useDeploymentStatus,
   usePublishStatus,
+  useProjectDomains,
+  useAddDomain,
+  useRemoveDomain,
+  useVerifyDomain,
+  useSetPrimaryDomain,
   deploymentStepLabel,
   TERMINAL_DEPLOYMENT_STATUSES,
   ApiError,
@@ -369,12 +374,22 @@ export default function Builder() {
     !TERMINAL_DEPLOYMENT_STATUSES.has(activeDeployment.status);
   // Prefer the freshest poll result; fall back to the project-level summary
   // so a fresh page-load with no in-flight deployment still renders the URL.
-  const liveDeploymentUrl =
+  // If the user has a verified custom domain, that takes priority over the
+  // auto-generated `*.vercel.app` URL — that's the whole point of adding
+  // one. We require either an active in-flight deployment to be live or
+  // the project-level summary to be live before swapping in the chip.
+  const baseLiveUrl =
     activeDeployment?.status === "live"
       ? activeDeployment.liveUrl
       : publishStatus?.publishStatus === "live"
       ? publishStatus.liveUrl
       : null;
+  const customDomain = publishStatus?.primaryCustomDomain ?? null;
+  const liveDeploymentUrl = baseLiveUrl
+    ? customDomain
+      ? `https://${customDomain}`
+      : baseLiveUrl
+    : null;
 
   const handlePublish = async () => {
     if (isFreePlan) {
@@ -970,7 +985,13 @@ export default function Builder() {
                     </span>
                   )}
                 </DropdownMenuItem>
-                <DropdownMenuItem disabled>Connect custom domain</DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => openTab("domains")}
+                  className="flex items-center gap-2"
+                >
+                  <Globe className="w-3.5 h-3.5" />
+                  <span>Connect custom domain</span>
+                </DropdownMenuItem>
                 <DropdownMenuSeparator className="bg-border" />
                 <DropdownMenuItem disabled>Export as ZIP</DropdownMenuItem>
               </DropdownMenuContent>
@@ -2924,69 +2945,117 @@ function AnalyticsView() {
 type DomainStatus = "active" | "pending" | "error";
 
 function DomainsView() {
-  const [domains, setDomains] = useState<
-    { host: string; primary: boolean; status: DomainStatus; ssl: boolean; addedAgo: string }[]
-  >([
-    { host: "todo-app-johndoe.deploybro.app", primary: true, status: "active", ssl: true, addedAgo: "27 mins ago" },
-    { host: "todoapp.com", primary: false, status: "active", ssl: true, addedAgo: "3 days ago" },
-    { host: "www.todoapp.com", primary: false, status: "pending", ssl: false, addedAgo: "12 mins ago" },
-  ]);
+  const params = useParams();
+  const { username, slug } = params;
+  const { data: project } = useProject(username, slug);
+  const { data: publishStatus } = usePublishStatus(username, slug);
+  const { data: domains = [], isLoading } = useProjectDomains(username, slug);
+  const addMutation = useAddDomain(username, slug);
+  const removeMutation = useRemoveDomain(username, slug);
+  const verifyMutation = useVerifyDomain(username, slug);
+  const setPrimaryMutation = useSetPrimaryDomain(username, slug);
+
   const [newDomain, setNewDomain] = useState("");
 
-  const addDomain = () => {
-    const host = newDomain.trim().toLowerCase();
+  // The auto-generated `*.vercel.app` URL is always there once published —
+  // we surface it in the list as a read-only entry so the user knows what
+  // their app is reachable on while DNS for a custom domain settles.
+  const defaultHost = publishStatus?.liveUrl
+    ? publishStatus.liveUrl.replace(/^https?:\/\//, "")
+    : null;
+
+  const isPublished =
+    !!project && publishStatus?.publishStatus === "live" && !!defaultHost;
+
+  const onAdd = async () => {
+    const host = newDomain.trim();
     if (!host) return;
-    if (domains.some((d) => d.host === host)) {
-      toast.error("That domain is already on the list");
-      return;
+    try {
+      const created = await addMutation.mutateAsync(host);
+      setNewDomain("");
+      if (created.verified) {
+        toast.success(`${created.host} is live`);
+      } else {
+        toast.success(`Added ${created.host} · update DNS to verify`);
+      }
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 402) {
+        toast.error("Custom domains are a Pro plan feature", {
+          description: "Upgrade to connect your own domain.",
+          action: {
+            label: "Upgrade",
+            onClick: () => {
+              window.location.href = "/dashboard/billing";
+            },
+          },
+        });
+      } else {
+        toast.error(err instanceof Error ? err.message : "Could not add domain");
+      }
     }
-    setDomains((prev) => [
-      ...prev,
-      { host, primary: false, status: "pending", ssl: false, addedAgo: "just now" },
-    ]);
-    setNewDomain("");
-    toast.success(`Added ${host} · waiting for DNS`);
   };
 
-  const setPrimary = (host: string) => {
-    setDomains((prev) =>
-      prev.map((d) => ({ ...d, primary: d.host === host }))
-    );
-    toast.success(`${host} is now the primary domain`);
+  const onRemove = async (host: string) => {
+    try {
+      await removeMutation.mutateAsync(host);
+      toast.message(`Removed ${host}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not remove");
+    }
   };
 
-  const removeDomain = (host: string) => {
-    setDomains((prev) => prev.filter((d) => d.host !== host));
-    toast.message(`Removed ${host}`);
+  const onVerify = async (host: string) => {
+    try {
+      const result = await verifyMutation.mutateAsync(host);
+      if (result.verified) {
+        toast.success(`${host} verified`);
+      } else if (result.misconfigured) {
+        toast.warning(`${host} — DNS doesn't point to us yet`);
+      } else {
+        toast.message(`Still waiting on DNS for ${host}`);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Verify failed");
+    }
   };
+
+  const onSetPrimary = async (host: string) => {
+    try {
+      await setPrimaryMutation.mutateAsync(host);
+      toast.success(`${host} is now the primary domain`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not set primary");
+    }
+  };
+
+  const verifiedCount = domains.filter((d) => d.verified).length;
+  const pendingCount = domains.length - verifiedCount;
 
   return (
     <PaneShell
       title="Domains"
       subtitle="Connect a custom domain. We provision SSL automatically once DNS resolves."
-      actions={
-        <Button size="sm" variant="outline" className="border-border h-8">
-          DNS guide
-        </Button>
-      }
     >
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiCard label="Domains" value={`${domains.length}`} />
-        <KpiCard
-          label="Active"
-          value={`${domains.filter((d) => d.status === "active").length}`}
-        />
-        <KpiCard
-          label="Pending DNS"
-          value={`${domains.filter((d) => d.status === "pending").length}`}
-        />
+        <KpiCard label="Custom domains" value={`${domains.length}`} />
+        <KpiCard label="Active" value={`${verifiedCount}`} />
+        <KpiCard label="Pending DNS" value={`${pendingCount}`} />
         <KpiCard label="SSL renewals" value="Auto" />
       </div>
+
+      {!isPublished && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-sm text-amber-700 dark:text-amber-300 flex items-start gap-3">
+          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+          <div>
+            Publish your app first, then you can attach a custom domain.
+          </div>
+        </div>
+      )}
 
       <div>
         <SectionHeader
           title="Add a custom domain"
-          hint="Point a CNAME at the address below, then add the domain here."
+          hint="We'll show you the exact DNS record to add at your registrar."
         />
         <div className="rounded-xl border border-border bg-surface p-5">
           <div className="flex flex-col sm:flex-row gap-2">
@@ -2994,112 +3063,234 @@ function DomainsView() {
               value={newDomain}
               onChange={(e) => setNewDomain(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") addDomain();
+                if (e.key === "Enter" && !addMutation.isPending) onAdd();
               }}
               placeholder="app.example.com"
               className="bg-background border-border font-mono"
+              disabled={!isPublished || addMutation.isPending}
             />
             <Button
-              onClick={addDomain}
-              disabled={!newDomain.trim()}
+              onClick={onAdd}
+              disabled={
+                !newDomain.trim() || !isPublished || addMutation.isPending
+              }
               className="bg-primary text-primary-foreground hover:bg-primary/90"
             >
-              <Plus className="w-4 h-4 mr-1.5" /> Add domain
+              {addMutation.isPending ? (
+                <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+              ) : (
+                <Plus className="w-4 h-4 mr-1.5" />
+              )}{" "}
+              Add domain
             </Button>
-          </div>
-
-          <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-3">
-            <DnsRow
-              type="CNAME"
-              name="@ (or your subdomain)"
-              value="cname.deploybro.app"
-            />
-            <DnsRow type="TXT" name="_deploybro" value="verify=ab12-cd34-ef56" />
           </div>
         </div>
       </div>
 
       <div>
-        <SectionHeader title="Connected domains" hint="The primary domain receives all traffic." />
+        <SectionHeader
+          title="Connected domains"
+          hint="The primary domain receives all traffic."
+        />
         <div className="rounded-xl border border-border overflow-hidden">
+          {/* Built-in deploybro / vercel.app host — always present once
+              published. Cannot be removed or made non-primary; just shown
+              here so users have full visibility of what's serving traffic. */}
+          {defaultHost && (
+            <DefaultHostRow
+              host={defaultHost}
+              hasCustomPrimary={!!publishStatus?.primaryCustomDomain}
+            />
+          )}
           {domains.map((d, i, arr) => {
-            const last = i === arr.length - 1;
+            const last = i === arr.length - 1 && !defaultHost;
+            const status: DomainStatus = d.verified
+              ? d.misconfigured
+                ? "error"
+                : "active"
+              : "pending";
             return (
               <div
                 key={d.host}
-                className={`flex flex-wrap items-center gap-3 px-4 py-4 bg-surface ${
+                className={`flex flex-col gap-3 px-4 py-4 bg-surface ${
                   last ? "" : "border-b border-border"
                 }`}
               >
-                <Globe className="w-4 h-4 text-secondary shrink-0" />
-                <div className="flex-1 min-w-[200px]">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-mono text-sm">{d.host}</span>
-                    {d.primary && (
-                      <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-primary/10 text-primary">
-                        Primary
+                <div className="flex flex-wrap items-center gap-3">
+                  <Globe className="w-4 h-4 text-secondary shrink-0" />
+                  <div className="flex-1 min-w-[200px]">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-sm">{d.host}</span>
+                      {d.isPrimary && (
+                        <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-primary/10 text-primary">
+                          Primary
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-secondary font-mono mt-0.5">
+                      Added {timeAgo(d.createdAt)}
+                      {d.lastCheckedAt && (
+                        <>
+                          {" · checked "}
+                          {timeAgo(d.lastCheckedAt)}
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <DomainStatusBadge status={status} />
+                    {d.verified ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-mono uppercase px-2 py-1 rounded bg-success/10 text-success">
+                        <ShieldCheck className="w-3 h-3" /> SSL
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-mono uppercase px-2 py-1 rounded bg-surface-raised text-secondary">
+                        <ShieldCheck className="w-3 h-3" /> SSL pending
                       </span>
                     )}
                   </div>
-                  <div className="text-[11px] text-secondary font-mono mt-0.5">
-                    Added {d.addedAgo}
-                  </div>
-                </div>
 
-                <div className="flex items-center gap-2 shrink-0">
-                  <DomainStatusBadge status={d.status} />
-                  {d.ssl ? (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-mono uppercase px-2 py-1 rounded bg-success/10 text-success">
-                      <ShieldCheck className="w-3 h-3" /> SSL
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-mono uppercase px-2 py-1 rounded bg-surface-raised text-secondary">
-                      <ShieldCheck className="w-3 h-3" /> SSL pending
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-1 shrink-0">
-                  {!d.primary && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-border h-7 text-xs"
-                      onClick={() => setPrimary(d.host)}
+                  <div className="flex items-center gap-1 shrink-0">
+                    {!d.verified && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-border h-7 text-xs"
+                        onClick={() => onVerify(d.host)}
+                        disabled={verifyMutation.isPending}
+                      >
+                        {verifyMutation.isPending ? (
+                          <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                        ) : (
+                          <RotateCw className="w-3 h-3 mr-1" />
+                        )}
+                        Refresh
+                      </Button>
+                    )}
+                    {d.verified && !d.isPrimary && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-border h-7 text-xs"
+                        onClick={() => onSetPrimary(d.host)}
+                        disabled={setPrimaryMutation.isPending}
+                      >
+                        Set primary
+                      </Button>
+                    )}
+                    <a
+                      href={`https://${d.host}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="w-7 h-7 rounded flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised"
+                      title="Open"
                     >
-                      Set primary
-                    </Button>
-                  )}
-                  <a
-                    href={`https://${d.host}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="w-7 h-7 rounded flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised"
-                    title="Open"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
-                  {!d.host.endsWith(".deploybro.app") && (
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
                     <button
-                      onClick={() => removeDomain(d.host)}
-                      className="w-7 h-7 rounded flex items-center justify-center text-secondary hover:text-destructive hover:bg-destructive/10"
+                      onClick={() => onRemove(d.host)}
+                      disabled={removeMutation.isPending}
+                      className="w-7 h-7 rounded flex items-center justify-center text-secondary hover:text-destructive hover:bg-destructive/10 disabled:opacity-50"
                       title="Remove"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
-                  )}
+                  </div>
                 </div>
+
+                {/* DNS instructions: show until the domain is verified.
+                    Combine the suggested CNAME/A record with any TXT
+                    verification challenges Vercel has issued so the user
+                    sees everything they need in one place. */}
+                {!d.verified && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-1">
+                    {d.suggestedRecords.map((r, idx) => (
+                      <DnsRow
+                        key={`s-${idx}`}
+                        type={r.type}
+                        name={r.name}
+                        value={r.value}
+                      />
+                    ))}
+                    {d.verificationRecords.map((r, idx) => (
+                      <DnsRow
+                        key={`v-${idx}`}
+                        type={r.type}
+                        name={r.domain}
+                        value={r.value}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}
-          {domains.length === 0 && (
-            <div className="px-6 py-10 text-center text-sm text-secondary bg-surface">
+          {domains.length === 0 && !isLoading && (
+            <div
+              className={`px-6 py-10 text-center text-sm text-secondary bg-surface ${
+                defaultHost ? "border-t border-border" : ""
+              }`}
+            >
               No custom domains yet.
+            </div>
+          )}
+          {isLoading && (
+            <div className="px-6 py-10 text-center text-sm text-secondary bg-surface">
+              <Loader2 className="w-4 h-4 animate-spin inline mr-2" />
+              Loading…
             </div>
           )}
         </div>
       </div>
     </PaneShell>
+  );
+}
+
+function DefaultHostRow({
+  host,
+  hasCustomPrimary,
+}: {
+  host: string;
+  hasCustomPrimary: boolean;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-3 px-4 py-4 bg-surface border-b border-border">
+      <Globe className="w-4 h-4 text-secondary shrink-0" />
+      <div className="flex-1 min-w-[200px]">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="font-mono text-sm">{host}</span>
+          {!hasCustomPrimary && (
+            <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-primary/10 text-primary">
+              Primary
+            </span>
+          )}
+          <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-surface-raised text-secondary">
+            Built-in
+          </span>
+        </div>
+        <div className="text-[11px] text-secondary font-mono mt-0.5">
+          Auto-generated when you publish
+        </div>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        <span className="inline-flex items-center gap-1 text-[10px] font-mono uppercase px-2 py-1 rounded bg-success/10 text-success">
+          <span className="w-1.5 h-1.5 rounded-full bg-success" /> Active
+        </span>
+        <span className="inline-flex items-center gap-1 text-[10px] font-mono uppercase px-2 py-1 rounded bg-success/10 text-success">
+          <ShieldCheck className="w-3 h-3" /> SSL
+        </span>
+      </div>
+      <a
+        href={`https://${host}`}
+        target="_blank"
+        rel="noreferrer"
+        className="w-7 h-7 rounded flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised"
+        title="Open"
+      >
+        <ExternalLink className="w-3.5 h-3.5" />
+      </a>
+    </div>
   );
 }
 
@@ -3120,7 +3311,7 @@ function DomainStatusBadge({ status }: { status: DomainStatus }) {
   }
   return (
     <span className="inline-flex items-center gap-1 text-[10px] font-mono uppercase px-2 py-1 rounded bg-destructive/10 text-destructive">
-      <AlertCircle className="w-3 h-3" /> Error
+      <AlertCircle className="w-3 h-3" /> Misconfigured
     </span>
   );
 }
@@ -3145,9 +3336,9 @@ function DnsRow({ type, name, value }: { type: string; name: string; value: stri
       </div>
       <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
         <span className="text-secondary">Name</span>
-        <span className="font-mono truncate">{name}</span>
+        <span className="font-mono truncate" title={name}>{name}</span>
         <span className="text-secondary">Value</span>
-        <span className="font-mono truncate">{value}</span>
+        <span className="font-mono truncate" title={value}>{value}</span>
       </div>
     </div>
   );
