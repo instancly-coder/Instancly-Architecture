@@ -1,5 +1,13 @@
-import { Switch, Route, Router as WouterRouter } from "wouter";
+import {
+  Switch,
+  Route,
+  Router as WouterRouter,
+  Link as WouterLink,
+  useLocation,
+} from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { NeonAuthUIProvider } from "@neondatabase/neon-js/auth/react/ui";
+import "@neondatabase/neon-js/ui/css";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
@@ -7,6 +15,7 @@ import { initThemeOnce } from "@/hooks/use-theme";
 import { AuthGate } from "@/components/auth-gate";
 import { SessionSync } from "@/components/session-sync";
 import { ConfigPrewarm } from "@/components/config-prewarm";
+import { authClient } from "@/auth";
 
 initThemeOnce();
 
@@ -96,6 +105,36 @@ function Router() {
   );
 }
 
+/**
+ * Mounts Neon's official `<NeonAuthUIProvider>` so the SDK's components
+ * (`<AuthCallback>`, `<AuthView>`, `<AccountView>`, `<SignedIn>` /
+ * `<SignedOut>`, `useAuthData()` …) can find their auth client + theme +
+ * navigation context. We bridge wouter's `useLocation` into the provider's
+ * `navigate`/`replace` props so post-login redirects stay SPA-routed.
+ *
+ * When auth isn't configured (no `VITE_NEON_AUTH_BASE_URL`), we render the
+ * children unwrapped so the dev fallback (`demo` user) keeps working.
+ */
+function AuthProviderShell({ children }: { children: React.ReactNode }) {
+  const [, navigate] = useLocation();
+  if (!authClient) return <>{children}</>;
+  return (
+    <NeonAuthUIProvider
+      authClient={authClient}
+      navigate={(href) => navigate(href)}
+      replace={(href) => navigate(href, { replace: true })}
+      Link={({ href, ...props }) => <WouterLink href={href} {...props} />}
+      social={{ providers: ["google", "github", "apple"] }}
+      redirectTo="/dashboard"
+      credentials={false}
+      signUp={false}
+      defaultTheme="dark"
+    >
+      {children}
+    </NeonAuthUIProvider>
+  );
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -103,7 +142,9 @@ function App() {
         <SessionSync />
         <ConfigPrewarm />
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <Router />
+          <AuthProviderShell>
+            <Router />
+          </AuthProviderShell>
         </WouterRouter>
         <Toaster />
       </TooltipProvider>

@@ -97,20 +97,44 @@ Sign-in is powered by Neon's hosted Better Auth project. The browser talks
 directly to Neon's auth server for OAuth (Google, GitHub) and session
 management; the API server only ever sees a JWT.
 
+Sign-in goes through Neon's official `@neondatabase/neon-js` SDK (the SDK
+wraps Better Auth and provides drop-in React UI components). The SDK's
+`AuthView` is the rendered login page and `AuthCallback` handles the
+OAuth-return restore-then-redirect dance.
+
 Frontend (`artifacts/deploybro`):
-- `src/auth.ts` — instantiates `createAuthClient({ baseURL: VITE_NEON_AUTH_BASE_URL, fetchOptions: { credentials: "include" } })`. Exports `authClient`, `authConfigured`, `authBaseURL`, and `fetchAuthJwt()` (GETs `<baseURL>/token` for a fresh signed JWT).
-- `pages/login.tsx` — `authClient.signIn.social({ provider, callbackURL: <origin>/handler })` for Google/GitHub. Apple stays as a dev-only bypass.
-- `pages/handler.tsx` — post-OAuth landing page: waits for `useSession()` to confirm, syncs the JWT cookie, then forwards to the stashed `deploybro:after-login` target (or `/dashboard`).
+- `src/auth.ts` — `createAuthClient(VITE_NEON_AUTH_BASE_URL, { adapter: BetterAuthReactAdapter({ fetchOptions: { credentials: "include" } }) })`. Exports `authClient`, `authConfigured`, `authBaseURL`, and `fetchAuthJwt()` (GETs `<baseURL>/token` for a fresh signed JWT). Includes a normaliser that strips a trailing `/.well-known/jwks.json` if someone set `VITE_NEON_AUTH_BASE_URL` to the JWKS URL by mistake.
+- `App.tsx` — wraps all routes in `<NeonAuthUIProvider>` with `social: ["google","github","apple"]`, `redirectTo: "/dashboard"`, `credentials: false` (no email/password tab — social only), `signUp: false`, `defaultTheme: "dark"`. Bridges wouter `navigate`/`replace`/`Link` into the provider. Imports `@neondatabase/neon-js/ui/css`.
+- `pages/login.tsx` — renders the SDK's `<AuthView>` for the social-login UI. `authClient.signIn.social({ provider, callbackURL: <origin>/handler })` is still the underlying API.
+- `pages/handler.tsx` — post-OAuth landing page. Renders `<AuthCallback redirectTo={target} />`; `target` is read **once** from `sessionStorage["deploybro:after-login"]` into a `useRef` on first render so re-renders can't flip the destination back to `/dashboard`. In parallel, fetches a fresh JWT and POSTs it to `/api/auth/session` so the cookie is in place by the time the destination route's first API call fires.
 - `components/auth-gate.tsx` — wraps every gated route; `useSession()`-based redirect to `/login` when signed out.
 - `components/session-sync.tsx` — globally mounted; whenever `useSession()` resolves to a user, fetches a JWT from Neon and POSTs it to `/api/auth/session` so the API cookie is set / refreshed (every ~10 min while the tab is open).
 
 Backend (`artifacts/api-server`):
 - `middlewares/auth.ts` — `tryAuth` verifies the JWT against `AUTH_JWKS_URL` (cached `createRemoteJWKSet`), optionally enforces `AUTH_ISSUER_URL`, and lazily upserts the local user from the standard claims (`sub`, `email`, `name`, `picture`). The "demo user" dev bypass only fires when **both** `NODE_ENV !== "production"` **and** `AUTH_JWKS_URL` is unset — once real auth is configured (even in dev) requests with no/invalid token are treated as anonymous, never as `demo`. This prevents a cookie-sync race right after OAuth callback from silently resolving `/api/me` to the wrong user.
-- `routes/auth.ts` — `GET /auth/config`, `GET /auth/whoami`, `POST /auth/session` (sets the `auth_token` cookie — `httpOnly: true`, `secure` in prod, `sameSite: lax`, 30-day max-age — used by `tryAuth`'s cookie fallback), `POST /auth/sign-out`.
+- `routes/auth.ts` — `GET /auth/config`, `GET /auth/whoami`, `POST /auth/session` (sets the `auth_token` cookie — `httpOnly: true`, `secure` in prod, `sameSite: lax`, 30-day max-age), `POST /auth/sign-out`. Both POST endpoints are CSRF-gated by an `Origin`/`Referer` allow-list (`deploybro.com`, `www.deploybro.com`, `APP_ORIGIN` if set; in dev: `*.replit.dev`/`*.replit.app`/`localhost`/`127.0.0.1`). Cross-origin requests get 403.
 
 Required env vars / secrets:
 - `VITE_NEON_AUTH_BASE_URL` — base URL of Neon's hosted Better Auth instance (e.g. `https://ep-…neonauth.…neon.tech/<db>/auth`). The JWKS lives at `<base>/.well-known/jwks.json` and the JWT issuance endpoint at `<base>/token`.
 - `AUTH_JWKS_URL` — full JWKS URL (typically `<VITE_NEON_AUTH_BASE_URL>/.well-known/jwks.json`).
 - `AUTH_ISSUER_URL` — should match Better Auth's `iss` claim, which defaults to its baseURL (= `VITE_NEON_AUTH_BASE_URL`). Leave unset to skip strict issuer validation.
+- `APP_ORIGIN` (optional) — extra trusted origin for the `/api/auth/session` CSRF gate. The canonical `deploybro.com` and `www.deploybro.com` are always trusted; set this if you serve the SPA from another host.
 
 Obsolete (safe to delete from secrets): `VITE_STACK_PROJECT_ID`, `VITE_STACK_PUBLISHABLE_CLIENT_KEY`.
+
+`@neondatabase/neon-js` packaging-bug workaround:
+- `@neondatabase/neon-js@0.2.0-beta.1` ships pre-bundled chunks (under
+  `@neondatabase/auth/dist/`) that import `tailwind-merge`, `clsx`,
+  `class-variance-authority`, `next-themes`, `sonner`, `lucide-react`,
+  `react-hook-form`, `input-otp`, `vaul`, `zod`, `ua-parser-js`,
+  `react-qr-code`, `react-google-recaptcha`, plus several
+  `@radix-ui/*`, `@hookform/*`, `@captchafox/*`, `@hcaptcha/*`,
+  `@marsidev/*`, and `@wojtekmaj/*` packages — but does **not** declare
+  any of them as deps of `@neondatabase/auth` itself. They're declared
+  on `@neondatabase/auth-ui` (a transitive dep), which under pnpm's
+  strict isolation makes them invisible to the `@neondatabase/auth`
+  chunks that actually do the importing.
+- Workaround: `.npmrc` adds `public-hoist-pattern[]=` lines for all of
+  these packages so they get hoisted to the workspace-root
+  `node_modules` and become resolvable. **Remove these lines once Neon
+  publishes a fixed SDK version that declares its own deps correctly.**

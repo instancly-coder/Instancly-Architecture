@@ -1,4 +1,5 @@
-import { createAuthClient } from "better-auth/react";
+import { createAuthClient } from "@neondatabase/neon-js/auth";
+import { BetterAuthReactAdapter } from "@neondatabase/neon-js/auth/react/adapters";
 
 /**
  * Normalise whatever the user pasted into `VITE_NEON_AUTH_BASE_URL` into
@@ -16,8 +17,6 @@ function normaliseAuthBaseURL(raw: string | undefined): string | null {
   let url = raw.trim();
   if (!/^https?:\/\//.test(url)) return null;
   url = url.replace(/\/+$/, "");
-  // Common pasted-by-mistake suffixes — strip them so the SDK ends up
-  // hitting `<base>/sign-in/social` instead of `<base>/.well-known/jwks.json/sign-in/social`.
   const stripSuffixes = [
     "/.well-known/jwks.json",
     "/.well-known/openid-configuration",
@@ -41,10 +40,19 @@ const hasValidConfig = !!normalised;
 
 export const authBaseURL = normalised;
 
+/**
+ * Auth client built via Neon's official `@neondatabase/neon-js/auth` SDK
+ * with the React adapter. This returns a Better-Auth-compatible React
+ * client (so all existing call sites — `authClient.signIn.social(...)`,
+ * `authClient.useSession()`, `authClient.getSession()` — keep working)
+ * BUT plugs into Neon's `NeonAuthUIProvider` so the official `<AuthView>`
+ * / `<AuthCallback>` / `<AccountView>` components light up.
+ */
 export const authClient = hasValidConfig
-  ? createAuthClient({
-      baseURL: normalised!,
-      fetchOptions: { credentials: "include" },
+  ? createAuthClient(normalised!, {
+      adapter: BetterAuthReactAdapter({
+        fetchOptions: { credentials: "include" },
+      }),
     })
   : null;
 
