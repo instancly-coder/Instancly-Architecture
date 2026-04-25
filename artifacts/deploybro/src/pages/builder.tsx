@@ -1829,21 +1829,6 @@ function ChatPanel({
                 </PopoverContent>
               </Popover>
 
-              {/* Plan-mode toggle */}
-              <button
-                onClick={() => setPlanMode(!planMode)}
-                className={`h-7 px-2 rounded-md inline-flex items-center gap-1.5 text-[11px] font-mono transition-colors min-w-0 ${
-                  planMode
-                    ? "bg-primary/15 text-primary border border-primary/30"
-                    : "text-secondary hover:text-foreground hover:bg-surface-raised"
-                }`}
-                title={planMode ? "Plan mode is on — AI plans before coding" : "Turn on plan mode"}
-                aria-pressed={planMode}
-              >
-                <ListTodo className="w-3.5 h-3.5 shrink-0" />
-                <span>Plan</span>
-              </button>
-
               <Popover open={modelOpen} onOpenChange={setModelOpen}>
                 <PopoverTrigger asChild>
                   <button
@@ -1890,15 +1875,33 @@ function ChatPanel({
               </Popover>
             </div>
 
-            <button
-              onClick={() => onSend()}
-              disabled={!chatInput.trim() || isStreaming}
-              className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors shrink-0"
-              title="Send"
-              aria-label="Send"
-            >
-              <ArrowUp className="w-4 h-4" />
-            </button>
+            {/* Right action group: Plan toggle lives next to Send so the
+                "what mode / send it" decision is grouped together. */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                onClick={() => setPlanMode(!planMode)}
+                className={`h-7 px-2 rounded-md inline-flex items-center gap-1.5 text-[11px] font-mono transition-colors ${
+                  planMode
+                    ? "bg-primary/15 text-primary border border-primary/30"
+                    : "text-secondary hover:text-foreground hover:bg-surface-raised border border-transparent"
+                }`}
+                title={planMode ? "Plan mode is on — AI plans before coding" : "Turn on plan mode"}
+                aria-pressed={planMode}
+              >
+                <ListTodo className="w-3.5 h-3.5 shrink-0" />
+                <span>Plan</span>
+              </button>
+
+              <button
+                onClick={() => onSend()}
+                disabled={!chatInput.trim() || isStreaming}
+                className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors"
+                title="Send"
+                aria-label="Send"
+              >
+                <ArrowUp className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
         <div className="text-[10px] text-secondary text-center mt-2">

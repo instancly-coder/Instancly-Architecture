@@ -586,22 +586,6 @@ export default function Landing() {
                     </PopoverContent>
                   </Popover>
 
-                  {/* Plan-mode toggle */}
-                  <button
-                    type="button"
-                    onClick={() => setPlanMode(!planMode)}
-                    className={`h-8 px-2.5 rounded-md inline-flex items-center gap-1.5 text-xs transition-colors min-w-0 ${
-                      planMode
-                        ? "bg-primary/15 text-primary border border-primary/30"
-                        : "text-secondary hover:text-foreground hover:bg-surface-raised"
-                    }`}
-                    title={planMode ? "Plan mode is on" : "Turn on plan mode"}
-                    aria-pressed={planMode}
-                  >
-                    <ListTodo className="w-3.5 h-3.5 shrink-0" />
-                    <span>Plan</span>
-                  </button>
-
                   {/* Model picker */}
                   <Popover open={modelOpen} onOpenChange={setModelOpen}>
                     <PopoverTrigger asChild>
@@ -649,16 +633,35 @@ export default function Landing() {
                   </Popover>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => void submit()}
-                  aria-label="Generate"
-                  disabled={!prompt.trim()}
-                  className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors shrink-0"
-                  title="Send"
-                >
-                  <ArrowUp className="w-4 h-4" />
-                </button>
+                {/* Right action group: Plan toggle sits next to Send so the
+                    "what mode am I in / send it" decision lives together. */}
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setPlanMode(!planMode)}
+                    className={`h-8 px-2.5 rounded-md inline-flex items-center gap-1.5 text-xs transition-colors ${
+                      planMode
+                        ? "bg-primary/15 text-primary border border-primary/30"
+                        : "text-secondary hover:text-foreground hover:bg-surface-raised border border-transparent"
+                    }`}
+                    title={planMode ? "Plan mode is on — AI plans before coding" : "Turn on plan mode"}
+                    aria-pressed={planMode}
+                  >
+                    <ListTodo className="w-3.5 h-3.5 shrink-0" />
+                    <span>Plan</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => void submit()}
+                    aria-label="Generate"
+                    disabled={!prompt.trim()}
+                    className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors"
+                    title="Send"
+                  >
+                    <ArrowUp className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             </div>
 
