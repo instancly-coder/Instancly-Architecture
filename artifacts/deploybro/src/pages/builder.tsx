@@ -3499,12 +3499,198 @@ function AnalyticsView() {
 
 type DomainStatus = "active" | "pending" | "error";
 
+// Ordered pipeline phases used to draw the progress bar inside the
+// in-flight deployment card. Kept in sync with `deploymentStepLabel` in
+// `lib/api.ts` — if a phase is added there, mirror it here so the bar
+// fills smoothly across the full lifecycle instead of jumping.
+const DEPLOY_STEP_ORDER: ApiDeployment["status"][] = [
+  "queued",
+  "validating",
+  "provisioning_db",
+  "creating_project",
+  "deploying",
+  "polling",
+  "live",
+];
+
+function DeploymentStatusCard({
+  deployment,
+  primaryCustomDomain,
+}: {
+  deployment: ApiDeployment | null;
+  primaryCustomDomain: string | null;
+}) {
+  // Empty state — no deployments yet. We replace the previous amber
+  // "publish first" banner with a more inviting card so the Domains
+  // pane has a clear top-of-page anchor regardless of state.
+  if (!deployment) {
+    return (
+      <div className="rounded-xl border border-border bg-surface p-5 flex items-start gap-4">
+        <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+          <Rocket className="w-5 h-5" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-semibold">Not published yet</div>
+          <div className="text-[12px] text-secondary mt-0.5">
+            Publish your app from the toolbar to get a live URL. After that
+            you can attach a custom domain below.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const isLive = deployment.status === "live";
+  const isFailed = deployment.status === "failed";
+  const isInflight = !isLive && !isFailed;
+
+  // 0..1 progress through the pipeline phases. We snap `failed` and any
+  // unknown phase to a sensible default so the bar still renders.
+  const stepIndex = DEPLOY_STEP_ORDER.indexOf(deployment.status);
+  const pct =
+    stepIndex >= 0
+      ? (stepIndex / (DEPLOY_STEP_ORDER.length - 1)) * 100
+      : isFailed
+      ? 100
+      : 0;
+
+  const accent = isLive
+    ? "bg-success/10 text-success"
+    : isFailed
+    ? "bg-destructive/10 text-destructive"
+    : "bg-primary/10 text-primary";
+
+  const Icon = isLive ? Check : isFailed ? AlertCircle : Loader2;
+  const headline = isLive
+    ? "Live"
+    : isFailed
+    ? "Last deploy failed"
+    : "Deploying your app";
+
+  // Prefer the user's verified custom domain over the auto-generated
+  // *.vercel.app URL when both are available — that's the URL the user
+  // actually wants to share once they've connected one.
+  const displayUrl = isLive
+    ? primaryCustomDomain
+      ? `https://${primaryCustomDomain}`
+      : deployment.liveUrl
+    : null;
+
+  const finished = deployment.finishedAt ?? null;
+
+  return (
+    <div className="rounded-xl border border-border bg-surface p-5">
+      <div className="flex items-start gap-4">
+        <div
+          className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${accent}`}
+        >
+          <Icon
+            className={`w-5 h-5 ${isInflight ? "animate-spin" : ""}`}
+          />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-semibold">{headline}</span>
+            <span
+              className={`text-[10px] uppercase tracking-wider font-mono px-2 py-0.5 rounded-full ${accent}`}
+            >
+              {deploymentStepLabel(deployment.status)}
+            </span>
+            {finished && (
+              <span className="text-[11px] text-secondary font-mono">
+                {timeAgo(finished)}
+              </span>
+            )}
+          </div>
+
+          {isLive && !displayUrl && (
+            <div className="text-[12px] text-secondary mt-1.5">
+              Live URL isn't available yet — refresh in a moment.
+            </div>
+          )}
+
+          {isLive && displayUrl && (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <a
+                href={displayUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-sm font-mono text-primary hover:underline truncate max-w-full"
+              >
+                <Globe className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">
+                  {displayUrl.replace(/^https?:\/\//, "")}
+                </span>
+                <ExternalLink className="w-3 h-3 shrink-0 opacity-70" />
+              </a>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 text-[11px] font-mono text-secondary hover:text-text px-2 py-1 rounded hover:bg-background"
+                onClick={() => {
+                  void navigator.clipboard.writeText(displayUrl);
+                  toast.success("Copied URL");
+                }}
+              >
+                <Copy className="w-3 h-3" /> Copy
+              </button>
+            </div>
+          )}
+
+          {isInflight && (
+            <>
+              <div className="text-[12px] text-secondary mt-1">
+                Hold tight — this usually takes 30–90 seconds. The card
+                updates as each step completes.
+              </div>
+              <div className="mt-3 h-1.5 w-full rounded-full bg-background overflow-hidden">
+                <div
+                  className="h-full bg-primary transition-all duration-500 ease-out"
+                  style={{ width: `${Math.max(8, pct)}%` }}
+                />
+              </div>
+            </>
+          )}
+
+          {isFailed && (
+            <>
+              <div className="text-[12px] text-destructive mt-1.5 break-words">
+                {deployment.errorMessage ??
+                  "Something went wrong. Use the Publish button in the toolbar to try again."}
+              </div>
+              <div className="text-[11px] text-secondary mt-1">
+                Tap <span className="font-medium text-text">Republish</span> in
+                the toolbar to retry.
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DomainsView() {
   const params = useParams();
   const { username, slug } = params;
   const { data: project } = useProject(username, slug);
   const { data: publishStatus } = usePublishStatus(username, slug);
   const { data: domains = [], isLoading } = useProjectDomains(username, slug);
+  const { data: deployments = [] } = useDeployments(username, slug);
+  // Watch the latest in-flight (or most recent) deployment so the status
+  // card at the top of this pane updates in real time as the pipeline
+  // progresses, without depending on the navbar's local state.
+  const latestDeployment = deployments[0];
+  const inflightId =
+    latestDeployment &&
+    !TERMINAL_DEPLOYMENT_STATUSES.has(latestDeployment.status)
+      ? latestDeployment.id
+      : null;
+  const { data: liveStatusDeployment } = useDeploymentStatus(
+    username,
+    slug,
+    inflightId,
+  );
+  const currentDeployment = liveStatusDeployment ?? latestDeployment ?? null;
   const addMutation = useAddDomain(username, slug);
   const removeMutation = useRemoveDomain(username, slug);
   const verifyMutation = useVerifyDomain(username, slug);
@@ -3591,21 +3777,17 @@ function DomainsView() {
       title="Domains"
       subtitle="Connect a custom domain. We provision SSL automatically once DNS resolves."
     >
+      <DeploymentStatusCard
+        deployment={currentDeployment}
+        primaryCustomDomain={publishStatus?.primaryCustomDomain ?? null}
+      />
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard label="Custom domains" value={`${domains.length}`} />
         <KpiCard label="Active" value={`${verifiedCount}`} />
         <KpiCard label="Pending DNS" value={`${pendingCount}`} />
         <KpiCard label="SSL renewals" value="Auto" />
       </div>
-
-      {!isPublished && (
-        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-sm text-amber-700 dark:text-amber-300 flex items-start gap-3">
-          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-          <div>
-            Publish your app first, then you can attach a custom domain.
-          </div>
-        </div>
-      )}
 
       <div>
         <SectionHeader

@@ -95,14 +95,30 @@ function encodeForVercel(file: ProjectFileLite): {
 }
 
 // True if the project file list looks like it should be treated as a
-// pre-built static site (raw HTML/CSS/JS at the root) rather than a Vite
-// project. In that case we ship everything as-is and let Vercel serve it
-// without a build step.
+// pre-built static site rather than a project that needs `vite build` to
+// run on Vercel. In that case we ship everything as-is and let Vercel
+// serve it without a build step.
+//
+// The AI builder emits CDN-style projects on purpose: an `index.html`
+// that pulls React + ReactDOM from unpkg and uses
+// `<script type="text/babel" src="app.jsx">` so Babel-standalone
+// transpiles the JSX in the browser at runtime. That means the
+// presence of `.jsx` files is NOT a signal of a Vite project — those
+// files are meant to be served as raw text and compiled client-side,
+// the same way the dev preview iframe loads them.
+//
+// So the real signal is `package.json`. Without it there is nothing to
+// `npm install` and no build to run, and any attempt to force one
+// would silently produce an empty bundle (Vercel's auto-detect treats
+// a folder with only `.jsx` and `index.html` as Vite, runs
+// `vite build`, and emits a near-empty `dist/` because the JSX files
+// reference `React`/`ReactDOM` as globals from CDNs that aren't
+// imported as ES modules — which is exactly the "blank page after
+// publish" report we got).
 function isStaticOnly(files: ProjectFileLite[]): boolean {
   const hasIndexHtml = files.some((f) => f.path === "index.html");
   const hasPackage = files.some((f) => f.path === "package.json");
-  const hasJsx = files.some((f) => /\.(tsx|jsx)$/.test(f.path));
-  return hasIndexHtml && !hasPackage && !hasJsx;
+  return hasIndexHtml && !hasPackage;
 }
 
 export function buildVercelPayload(
