@@ -91,7 +91,7 @@ import {
   useProjectFiles,
   useUploadProjectFile,
   useDeleteProjectFile,
-  PUBLISH_SIZE_LIMIT_BYTES,
+  useAppConfigValues,
   usePublishProject,
   useDeployments,
   useDeploymentStatus,
@@ -2168,10 +2168,12 @@ function ProjectSizeGauge({
   totalBytes,
   pct,
   state,
+  limitBytes,
 }: {
   totalBytes: number;
   pct: number;
   state: "ok" | "warn" | "over";
+  limitBytes: number;
 }) {
   const barColor =
     state === "over"
@@ -2188,7 +2190,7 @@ function ProjectSizeGauge({
   // Cap the rendered bar width at 100% so an oversized project doesn't
   // overflow the container, but keep the numeric label honest.
   const barWidth = Math.min(100, pct);
-  const limitMb = Math.round(PUBLISH_SIZE_LIMIT_BYTES / 1024 / 1024);
+  const limitMb = Math.round(limitBytes / 1024 / 1024);
   return (
     <div
       className="px-3 py-2 border-t border-border bg-surface"
@@ -2242,6 +2244,11 @@ function FilesPane({
   const { data: files = [] } = useProjectFiles(username, slug);
   const uploadFile = useUploadProjectFile(username, slug);
   const deleteFile = useDeleteProjectFile(username, slug);
+  // Server-advertised limits for the gauge + per-file pre-flight.
+  // `useAppConfigValues` collapses the loading state into the fallback
+  // so we always get real numbers without a non-null assertion.
+  const { publishSizeLimitBytes: publishLimitBytes, perFileUploadLimitBytes: perFileLimitBytes } =
+    useAppConfigValues();
   // Hidden file input for the Explorer's Upload button. We render one
   // <input type=file multiple> and trigger it imperatively from the
   // toolbar button + drag handler so the rest of the layout stays clean.
@@ -2259,13 +2266,13 @@ function FilesPane({
       contentType: f.contentType,
     };
   });
-  // Sum the byte size of every file so we can show a live "X / 90 MB"
+  // Sum the byte size of every file so we can show a live "X / N MB"
   // gauge in the Explorer footer. The publish pipeline rejects anything
-  // above PUBLISH_SIZE_LIMIT_BYTES, and the user previously only learned
+  // above the server-advertised cap, and the user previously only learned
   // they were over the cap *after* hitting Publish — this surfaces the
   // problem while they can still prune.
   const totalBytes = files.reduce((sum, f) => sum + (f.size ?? 0), 0);
-  const sizePct = (totalBytes / PUBLISH_SIZE_LIMIT_BYTES) * 100;
+  const sizePct = (totalBytes / publishLimitBytes) * 100;
   const sizeState: "ok" | "warn" | "over" =
     sizePct >= 100 ? "over" : sizePct >= 80 ? "warn" : "ok";
 
@@ -2278,7 +2285,17 @@ function FilesPane({
     const arr = Array.from(list);
     if (arr.length === 0) return;
     setUploadError(null);
+    const perFileLimitMb = Math.floor(perFileLimitBytes / (1024 * 1024));
     for (const file of arr) {
+      // Pre-flight against the server's per-file cap so we fail fast
+      // with a friendly message instead of round-tripping a multi-MB
+      // base64 body just to be rejected with 413.
+      if (file.size > perFileLimitBytes) {
+        setUploadError(
+          `${file.name}: File is too large (${(file.size / (1024 * 1024)).toFixed(1)}MB). Limit is ${perFileLimitMb}MB.`,
+        );
+        break;
+      }
       try {
         await uploadFile.mutateAsync({ file });
       } catch (err) {
@@ -2462,6 +2479,7 @@ function FilesPane({
           totalBytes={totalBytes}
           pct={sizePct}
           state={sizeState}
+          limitBytes={publishLimitBytes}
         />
       </div>
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
@@ -2507,6 +2525,7 @@ function FilesPane({
                   totalBytes={totalBytes}
                   pct={sizePct}
                   state={sizeState}
+                  limitBytes={publishLimitBytes}
                 />
               </div>
             </>

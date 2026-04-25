@@ -6,6 +6,7 @@ import NotFound from "@/pages/not-found";
 import { initThemeOnce } from "@/hooks/use-theme";
 import { AuthGate } from "@/components/auth-gate";
 import { SessionSync } from "@/components/session-sync";
+import { ConfigPrewarm } from "@/components/config-prewarm";
 
 initThemeOnce();
 
@@ -99,6 +100,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <SessionSync />
+        <ConfigPrewarm />
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
           <Router />
         </WouterRouter>

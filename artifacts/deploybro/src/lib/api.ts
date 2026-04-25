@@ -169,12 +169,45 @@ export function useUserProjects(username: string | undefined) {
   });
 }
 
-// Hard cap the publish pipeline enforces on the total deflated payload
-// uploaded to Vercel. Mirrors `PAYLOAD_SIZE_LIMIT_BYTES` in
-// `artifacts/api-server/src/lib/deploy-payload.ts` — keep these two
-// constants in sync. The Files panel uses this to render a live size
-// gauge so users can prune before the next publish fails.
-export const PUBLISH_SIZE_LIMIT_BYTES = 90 * 1024 * 1024;
+export type ApiAppConfig = {
+  publishSizeLimitBytes: number;
+  perFileUploadLimitBytes: number;
+};
+
+// Server-advertised limits for the Files panel size gauge and the
+// per-file upload pre-flight. The server is the single source of truth
+// (see `GET /api/config`); these fallback numbers only render the gauge
+// during the very first paint before the config query resolves, so the
+// bar doesn't briefly show "X / 0 MB". They're intentionally generous
+// enough that nothing renders as "over" in that window.
+const FALLBACK_APP_CONFIG: ApiAppConfig = {
+  publishSizeLimitBytes: 90 * 1024 * 1024,
+  perFileUploadLimitBytes: 10 * 1024 * 1024,
+};
+
+// One-shot fetch of the public config endpoint. Cached forever (the
+// values can only change via a server redeploy) and seeded with
+// fallbacks so consumers never see `undefined` even on the first paint.
+// The query is mounted once at the app root via <ConfigPrewarm/> so
+// any later consumer hits the warmed cache immediately.
+export function useAppConfig() {
+  return useQuery({
+    queryKey: ["config"],
+    queryFn: () => request<ApiAppConfig>("/config"),
+    staleTime: Infinity,
+    gcTime: Infinity,
+    placeholderData: FALLBACK_APP_CONFIG,
+  });
+}
+
+// Convenience wrapper that always returns a non-nullable ApiAppConfig
+// by collapsing the loading state into the fallback. Use this when the
+// caller just wants the numbers (gauge widths, pre-flight bounds) and
+// has no need to distinguish "loading" from "loaded".
+export function useAppConfigValues(): ApiAppConfig {
+  const { data } = useAppConfig();
+  return data ?? FALLBACK_APP_CONFIG;
+}
 
 export type ApiProjectFile = {
   path: string;

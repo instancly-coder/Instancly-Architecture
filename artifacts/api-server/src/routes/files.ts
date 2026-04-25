@@ -13,8 +13,10 @@ const router: IRouter = Router();
 
 // Per-file cap on uploaded binary content (decoded). 10MB is generous for
 // images/fonts and leaves comfortable headroom under express.json's 30MB
-// body limit (base64 inflates by ~4/3 → ~13.3MB on the wire).
-const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+// body limit (base64 inflates by ~4/3 → ~13.3MB on the wire). Exported so
+// the public `/api/config` endpoint can advertise it to the frontend
+// (Files panel pre-flight check) without duplicating the number.
+export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 async function findProject(username: string, slug: string) {
   const rows = await db
