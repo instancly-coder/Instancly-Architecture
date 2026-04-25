@@ -110,12 +110,21 @@ async function ensureUser(payload: JWTPayload): Promise<AuthedUser> {
 }
 
 /**
- * In development, when no real auth token is present we fall back to a
- * stable "demo" user so the product is fully usable without a configured
- * upstream auth provider (Better Auth via Neon's hosted instance). Real
- * tokens still take precedence and production never hits this path.
+ * Dev-only "demo" user fallback so the product is exercisable when no
+ * upstream auth provider is wired up at all. The bypass is gated on
+ * BOTH conditions:
+ *   1. We're not in production.
+ *   2. JWKS is unconfigured (i.e. `AUTH_JWKS_URL` was not set on boot).
+ *
+ * The moment real auth is configured — even in development — we MUST
+ * stop silently signing requests in as the demo user, otherwise a
+ * transient cookie-sync race (e.g. right after a Google OAuth callback)
+ * would resolve `/api/me` to "demo" instead of the real account, and
+ * the homepage prompt would create the user's project under the wrong
+ * owner.
  */
-const DEV_BYPASS_ENABLED = process.env.NODE_ENV !== "production";
+const DEV_BYPASS_ENABLED =
+  process.env.NODE_ENV !== "production" && !jwks;
 const DEV_BYPASS_EMAIL = "demo@deploybro.local";
 
 let devUserCache: AuthedUser | null = null;

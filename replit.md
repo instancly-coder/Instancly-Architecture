@@ -105,8 +105,8 @@ Frontend (`artifacts/deploybro`):
 - `components/session-sync.tsx` — globally mounted; whenever `useSession()` resolves to a user, fetches a JWT from Neon and POSTs it to `/api/auth/session` so the API cookie is set / refreshed (every ~10 min while the tab is open).
 
 Backend (`artifacts/api-server`):
-- `middlewares/auth.ts` — `tryAuth` verifies the JWT against `AUTH_JWKS_URL` (cached `createRemoteJWKSet`), optionally enforces `AUTH_ISSUER_URL`, and lazily upserts the local user from the standard claims (`sub`, `email`, `name`, `picture`). In development with no token, falls through to a stable `demo` user so the app is exercisable without provider config.
-- `routes/auth.ts` — `GET /auth/config`, `GET /auth/whoami`, `POST /auth/session` (sets the `auth_token` cookie used by `tryAuth`'s cookie fallback), `POST /auth/sign-out`.
+- `middlewares/auth.ts` — `tryAuth` verifies the JWT against `AUTH_JWKS_URL` (cached `createRemoteJWKSet`), optionally enforces `AUTH_ISSUER_URL`, and lazily upserts the local user from the standard claims (`sub`, `email`, `name`, `picture`). The "demo user" dev bypass only fires when **both** `NODE_ENV !== "production"` **and** `AUTH_JWKS_URL` is unset — once real auth is configured (even in dev) requests with no/invalid token are treated as anonymous, never as `demo`. This prevents a cookie-sync race right after OAuth callback from silently resolving `/api/me` to the wrong user.
+- `routes/auth.ts` — `GET /auth/config`, `GET /auth/whoami`, `POST /auth/session` (sets the `auth_token` cookie — `httpOnly: true`, `secure` in prod, `sameSite: lax`, 30-day max-age — used by `tryAuth`'s cookie fallback), `POST /auth/sign-out`.
 
 Required env vars / secrets:
 - `VITE_NEON_AUTH_BASE_URL` — base URL of Neon's hosted Better Auth instance (e.g. `https://ep-…neonauth.…neon.tech/<db>/auth`). The JWKS lives at `<base>/.well-known/jwks.json` and the JWT issuance endpoint at `<base>/token`.
