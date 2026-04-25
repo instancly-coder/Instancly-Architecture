@@ -172,6 +172,16 @@
   animation: shimmer-sweep 1.8s linear infinite;
 }
 
+/* Respect users who've requested reduced motion: pin the gradient at
+   the highlighted phase so the text stays readable in the foreground
+   color instead of strobing across the screen. */
+@media (prefers-reduced-motion: reduce) {
+  .shimmer-text {
+    animation: none;
+    background-position: -100% 0;
+  }
+}
+
 /* --- iOS-style glass pill (matches bolt.new announcement chip) --- */
 .glass-pill {
   position: relative;

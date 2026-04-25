@@ -50,7 +50,9 @@ import {
   Lock,
   Loader2,
   Rocket,
+  Sparkles,
 } from "lucide-react";
+import brandLogoUrl from "@assets/download_1776989236348.png";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -1218,6 +1220,7 @@ export default function Builder() {
                 slug={slug}
                 viewport={viewport}
                 setViewport={setViewport}
+                isBuilding={isStreaming}
               />
             )}
             {activeTab === "files" && (
@@ -1843,11 +1846,13 @@ function PreviewPane({
   username,
   slug,
   viewport,
+  isBuilding,
 }: {
   username: string;
   slug: string;
   viewport: "desktop" | "tablet" | "mobile";
   setViewport: (v: "desktop" | "tablet" | "mobile") => void;
+  isBuilding?: boolean;
 }) {
   const { data: files } = useProjectFiles(username, slug);
   const hasIndex = !!files?.some((f) => f.path === "index.html");
@@ -1856,11 +1861,22 @@ function PreviewPane({
   const apiBase =
     (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "/api";
   const previewSrc = `${apiBase.replace(/\/+$/, "")}/preview/${username}/${slug}/`;
+
+  // Three distinct empty states sit on top of the white "device" frame:
+  //   1. Files still loading from the server  → soft loader.
+  //   2. A build is in flight + no index yet  → branded "building" splash
+  //      with shimmer skeletons that mimic a page being painted in.
+  //   3. No build yet at all                  → branded "no preview" splash
+  //      that nudges the user to send a prompt.
+  // Once `index.html` exists we hand the frame off to the live iframe.
+  const showBuilding = !hasIndex && isBuilding;
+  const showEmpty = !hasIndex && !isBuilding && files !== undefined;
+
   return (
     <div className="absolute inset-0 flex flex-col bg-surface-raised">
       <div className="flex-1 p-3 md:p-8 flex items-center justify-center overflow-hidden">
         <div
-          className="bg-white w-full h-full flex flex-col transition-all duration-200 ease-in-out rounded-md overflow-hidden shadow-2xl"
+          className="w-full h-full flex flex-col transition-all duration-200 ease-in-out rounded-md overflow-hidden shadow-2xl"
           style={{
             maxWidth:
               viewport === "desktop"
@@ -1869,22 +1885,24 @@ function PreviewPane({
                 ? "768px"
                 : "390px",
             maxHeight: viewport === "mobile" ? "844px" : "100%",
+            background: hasIndex ? "#ffffff" : "transparent",
           }}
         >
           {files === undefined ? (
-            <div className="flex-1 flex items-center justify-center text-sm text-gray-500">
-              Loading preview…
-            </div>
-          ) : !hasIndex ? (
-            <div className="flex-1 flex flex-col items-center justify-center text-center px-6 gap-2 text-gray-600">
-              <div className="text-base font-semibold text-gray-800">
-                No preview yet
+            <PreviewPaneShell>
+              <div className="flex-1 flex items-center justify-center text-sm text-secondary">
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Loading preview…
               </div>
-              <div className="text-sm max-w-sm">
-                Send a prompt in the chat to have the AI generate your app.
-                Your preview will appear here as soon as it builds.
-              </div>
-            </div>
+            </PreviewPaneShell>
+          ) : showBuilding ? (
+            <PreviewPaneShell>
+              <PreviewBuildingState />
+            </PreviewPaneShell>
+          ) : showEmpty ? (
+            <PreviewPaneShell>
+              <PreviewEmptyState />
+            </PreviewPaneShell>
           ) : (
             <iframe
               key={previewSrc}
@@ -1897,6 +1915,156 @@ function PreviewPane({
         </div>
       </div>
     </div>
+  );
+}
+
+// Shared "device" backdrop used for every non-iframe state so the empty
+// and building screens share one consistent branded surface (subtle
+// radial glow on top of the dark builder canvas) instead of dropping
+// the user onto a stark white card.
+function PreviewPaneShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      className="flex-1 flex flex-col relative overflow-hidden"
+      style={{
+        background:
+          "radial-gradient(120% 80% at 50% 0%, rgba(59,130,246,0.12) 0%, rgba(15,15,18,0) 60%), linear-gradient(180deg, #0b0b0f 0%, #0e0f14 100%)",
+      }}
+    >
+      {/* Faint grid texture so the empty surface still feels like "a canvas" */}
+      <div
+        aria-hidden
+        className="absolute inset-0 opacity-[0.06] pointer-events-none"
+        style={{
+          backgroundImage:
+            "linear-gradient(rgba(255,255,255,0.6) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.6) 1px, transparent 1px)",
+          backgroundSize: "32px 32px",
+        }}
+      />
+      <div className="relative flex-1 flex flex-col">{children}</div>
+    </div>
+  );
+}
+
+function PreviewEmptyState() {
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center text-center px-6 gap-5">
+      <div className="relative">
+        <div
+          aria-hidden
+          className="absolute inset-0 -m-6 rounded-full blur-2xl opacity-40"
+          style={{
+            background:
+              "radial-gradient(circle, rgba(59,130,246,0.7) 0%, rgba(59,130,246,0) 70%)",
+          }}
+        />
+        <img
+          src={brandLogoUrl}
+          alt="DeployBro"
+          className="relative h-10 w-auto opacity-95"
+        />
+      </div>
+      <div className="space-y-2 max-w-sm">
+        <div className="text-lg font-semibold text-foreground">
+          Your preview will appear here
+        </div>
+        <div className="text-sm text-secondary">
+          Describe what you want to build in the chat on the left and DeployBro
+          will generate a live preview right here.
+        </div>
+      </div>
+      <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-tertiary">
+        <Sparkles className="w-3 h-3" />
+        Ready when you are
+      </div>
+    </div>
+  );
+}
+
+function PreviewBuildingState() {
+  return (
+    <div
+      className="flex-1 flex flex-col p-6 md:p-10 gap-6"
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+      aria-label="Building your preview"
+    >
+      {/* Top headline: branded shimmer text + live status */}
+      <div className="flex items-center gap-3">
+        <div className="relative">
+          <div
+            aria-hidden
+            className="absolute inset-0 -m-2 rounded-full blur-xl opacity-50"
+            style={{
+              background:
+                "radial-gradient(circle, rgba(59,130,246,0.7) 0%, rgba(59,130,246,0) 70%)",
+            }}
+          />
+          <img
+            src={brandLogoUrl}
+            alt="DeployBro"
+            className="relative h-7 w-auto"
+          />
+        </div>
+        <div className="flex flex-col">
+          <div className="shimmer-text text-base font-semibold leading-tight">
+            Building your preview…
+          </div>
+          <div className="text-xs text-tertiary mt-0.5">
+            Your live app will appear here in a moment
+          </div>
+        </div>
+      </div>
+
+      {/* Skeleton mock of a page being painted in: nav row, hero block,
+          three feature tiles. Uses Tailwind's `animate-pulse` plus a
+          gradient base so the blocks feel like content shimmering in.
+          Marked aria-hidden because the wrapping `role="status"` already
+          announces the live build to assistive tech — these decorative
+          rectangles would just add noise. */}
+      <div className="flex-1 flex flex-col gap-4 min-h-0" aria-hidden="true">
+        <div className="flex items-center justify-between">
+          <ShimmerBlock className="h-5 w-24 rounded" />
+          <div className="flex items-center gap-2">
+            <ShimmerBlock className="h-5 w-12 rounded" />
+            <ShimmerBlock className="h-5 w-12 rounded" />
+            <ShimmerBlock className="h-5 w-12 rounded" />
+            <ShimmerBlock className="h-7 w-20 rounded-md" />
+          </div>
+        </div>
+        <ShimmerBlock className="h-32 md:h-40 w-full rounded-lg" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
+          <ShimmerBlock className="h-24 md:h-28 w-full rounded-lg" />
+          <ShimmerBlock className="h-24 md:h-28 w-full rounded-lg" />
+          <ShimmerBlock className="h-24 md:h-28 w-full rounded-lg" />
+        </div>
+        <div className="flex flex-col gap-2">
+          <ShimmerBlock className="h-3 w-3/4 rounded" />
+          <ShimmerBlock className="h-3 w-2/3 rounded" />
+          <ShimmerBlock className="h-3 w-1/2 rounded" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Single shimmer-block primitive used by the building state. Tailwind's
+// `animate-pulse` handles the breathing effect; the gradient gives the
+// blocks a subtle highlight so they look more like real surfaces than
+// flat grey rectangles.
+function ShimmerBlock({ className = "" }: { className?: string }) {
+  // `motion-safe:animate-pulse` disables the breathing animation for
+  // users who set `prefers-reduced-motion: reduce`, but the gradient
+  // surface stays so the layout still reads as a skeleton.
+  return (
+    <div
+      className={`motion-safe:animate-pulse ${className}`}
+      style={{
+        background:
+          "linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.10) 50%, rgba(255,255,255,0.04) 100%)",
+      }}
+    />
   );
 }
 
