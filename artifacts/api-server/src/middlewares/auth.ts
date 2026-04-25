@@ -17,6 +17,36 @@ if (JWKS_URL) {
   }
 }
 
+/**
+ * Decide whether a JWT's `iss` claim is one we accept.
+ *
+ *  - If `AUTH_ISSUER_URL` isn't configured, accept anything (signature
+ *    verification via JWKS is the actual security check).
+ *  - Accept exact string equality with `AUTH_ISSUER_URL`.
+ *  - Accept any URL whose origin (`protocol + host`) matches the
+ *    configured one. This tolerates the common Neon Auth case where
+ *    the JWT's `iss` is the bare host but `AUTH_ISSUER_URL` has the
+ *    Better Auth path appended (or vice versa).
+ *
+ * Origin equality is deliberately stricter than host-only — we still
+ * require the same scheme so an http impersonator can't pass for an
+ * https issuer.
+ */
+function isAcceptableIssuer(claimedIss: unknown): boolean {
+  if (!ISSUER) return true;
+  if (typeof claimedIss !== "string" || !claimedIss) return false;
+  if (claimedIss === ISSUER) return true;
+  try {
+    const expected = new URL(ISSUER);
+    const actual = new URL(claimedIss);
+    return (
+      expected.protocol === actual.protocol && expected.host === actual.host
+    );
+  } catch {
+    return false;
+  }
+}
+
 export type AuthedUser = {
   id: string;
   sub: string;
@@ -195,9 +225,26 @@ export async function tryAuth(
   const token = jwks ? extractToken(req) : null;
   if (jwks && token) {
     try {
-      const verifyOpts: Parameters<typeof jwtVerify>[2] = {};
-      if (ISSUER) verifyOpts.issuer = ISSUER;
-      const { payload } = await jwtVerify(token, jwks, verifyOpts);
+      // Don't pass `issuer` to jose's verifier. We do the iss check
+      // ourselves below with `isAcceptableIssuer` so we can tolerate
+      // the common Neon Auth case where the JWT's `iss` is the bare
+      // host (`https://<id>.neonauth.<region>.aws.neon.tech`) but the
+      // `AUTH_ISSUER_URL` env var was set to the same URL with the
+      // `/<db>/auth` Better Auth path appended (a natural mistake
+      // because the JWKS URL DOES include that path). Signature
+      // verification via JWKS is unaffected — that's the actual
+      // security boundary.
+      const { payload } = await jwtVerify(token, jwks, {});
+      if (!isAcceptableIssuer(payload.iss)) {
+        throw new Error(
+          `unexpected "iss" claim value: ${JSON.stringify(payload.iss)}`,
+        );
+      }
+      // Reject tokens with no subject — `ensureUser` would otherwise
+      // synthesize an `@unknown` email and provision a ghost row.
+      if (typeof payload.sub !== "string" || !payload.sub.trim()) {
+        throw new Error("token is missing a non-empty 'sub' claim");
+      }
       const user = await ensureUser(payload);
       (req as AuthedRequest).auth = { payload, user };
       return next();
