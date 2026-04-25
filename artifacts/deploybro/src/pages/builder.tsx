@@ -65,6 +65,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -378,6 +379,24 @@ export default function Builder() {
   const isPublishing =
     !!activeDeployment &&
     !TERMINAL_DEPLOYMENT_STATUSES.has(activeDeployment.status);
+
+  // Mirror the Files panel size gauge against the same server-advertised
+  // hard cap so the navbar Publish button can preflight-block instead of
+  // letting the user fire a publish that the pipeline will immediately
+  // reject. We pull from `useAppConfigValues` (same source as the gauge)
+  // so the two stay in sync, and `useProjectFiles` for the live total.
+  const { data: projectFiles = [] } = useProjectFiles(username, slug);
+  const { publishSizeLimitBytes: publishLimitBytes } = useAppConfigValues();
+  const totalProjectBytes = projectFiles.reduce(
+    (sum, f) => sum + (f.size ?? 0),
+    0,
+  );
+  const isOverPublishLimit = totalProjectBytes > publishLimitBytes;
+  const oversizeTooltip = (() => {
+    const usedMb = (totalProjectBytes / (1024 * 1024)).toFixed(1);
+    const limitMb = Math.round(publishLimitBytes / (1024 * 1024));
+    return `Project is ${usedMb} MB; limit is ${limitMb} MB. Delete files to publish.`;
+  })();
   // Prefer the freshest poll result; fall back to the project-level summary
   // so a fresh page-load with no in-flight deployment still renders the URL.
   // If the user has a verified custom domain, that takes priority over the
@@ -407,6 +426,15 @@ export default function Builder() {
             window.location.href = "/dashboard/billing";
           },
         },
+      });
+      return;
+    }
+    // Belt-and-suspenders: even if the disabled state slips (e.g. retry
+    // path in the History tab calls this directly), refuse to start a
+    // publish that the pipeline will immediately reject.
+    if (isOverPublishLimit) {
+      toast.error("Project is over the publish size limit", {
+        description: oversizeTooltip,
       });
       return;
     }
@@ -951,6 +979,31 @@ export default function Builder() {
                 {deploymentStepLabel(activeDeployment!.status)}
               </span>
             </button>
+          ) : isOverPublishLimit ? (
+            // Project is over the publish hard cap — block the action at
+            // the navbar so the user finds out before the pipeline starts
+            // and fails. We render a non-interactive Button (no dropdown)
+            // wrapped in a Tooltip explaining the actual numbers and the
+            // next step. Wrapping the disabled button in <span> keeps
+            // pointer events alive so Radix can show the tooltip.
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span tabIndex={0} className="inline-flex">
+                  <Button
+                    size="sm"
+                    className="bg-primary text-primary-foreground hover:bg-primary/90 h-8 px-3 md:px-4 font-medium rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled
+                    aria-disabled
+                    data-testid="publish-button-over-limit"
+                  >
+                    {liveDeploymentUrl ? "Republish" : "Publish"}
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs text-center">
+                {oversizeTooltip}
+              </TooltipContent>
+            </Tooltip>
           ) : (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
