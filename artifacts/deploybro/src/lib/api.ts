@@ -347,6 +347,7 @@ export function useCreateProject() {
 // ---- Publish / Deployments ----
 export type DeploymentStatus =
   | "queued"
+  | "validating"
   | "provisioning_db"
   | "creating_project"
   | "deploying"
@@ -384,6 +385,8 @@ export function deploymentStepLabel(s: DeploymentStatus): string {
   switch (s) {
     case "queued":
       return "Queued";
+    case "validating":
+      return "Validating files";
     case "provisioning_db":
       return "Provisioning DB";
     case "creating_project":

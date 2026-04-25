@@ -20,7 +20,11 @@ import {
   type VercelDeployment,
 } from "../lib/vercel";
 import { provisionAppDatabase, deleteBranch as neonDeleteBranch } from "../lib/neon";
-import { buildVercelPayload } from "../lib/deploy-payload";
+import {
+  buildVercelPayload,
+  BinaryFileNotSupportedError,
+  PayloadTooLargeError,
+} from "../lib/deploy-payload";
 import { encryptSecret, decryptSecret } from "../lib/secret-cipher";
 
 const router: IRouter = Router();
@@ -99,6 +103,24 @@ async function runPublishPipeline(args: {
     )[0];
     if (!project) throw new Error("Project disappeared mid-publish");
 
+    // ---------- 1b. Pre-flight: load files and validate the payload ----------
+    // We build the payload up front (before any cloud provisioning) so that
+    // binary-file or oversized-project rejections fail fast with a clear
+    // error and don't leave orphaned Neon branches or Vercel projects behind.
+    // The result is reused at step 5 — buildVercelPayload is pure.
+    await setStatus("validating");
+    const fileRows = await db
+      .select({
+        path: projectFilesTable.path,
+        content: projectFilesTable.content,
+      })
+      .from(projectFilesTable)
+      .where(eq(projectFilesTable.projectId, projectId));
+    if (fileRows.length === 0) {
+      throw new Error("Project has no files to deploy yet — run a build first");
+    }
+    const payload = buildVercelPayload(fileRows);
+
     // ---------- 2. Provision (or reuse) the Neon database ----------
     // `databaseUrl` is encrypted-at-rest. If a prior publish stored one we
     // decrypt for the in-memory pipeline; otherwise we provision fresh and
@@ -156,24 +178,14 @@ async function runPublishPipeline(args: {
     // ---------- 4. Push DATABASE_URL into the Vercel env ----------
     await upsertEnvVar(vercelProject.id, "DATABASE_URL", plainDatabaseUrl);
 
-    // ---------- 5. Build payload + create deployment ----------
+    // ---------- 5. Create the deployment ----------
+    // `payload` was already built and validated in step 1b.
     await setStatus("deploying");
     await db
       .update(projectsTable)
       .set({ publishStatus: "deploying" })
       .where(eq(projectsTable.id, projectId));
 
-    const fileRows = await db
-      .select({
-        path: projectFilesTable.path,
-        content: projectFilesTable.content,
-      })
-      .from(projectFilesTable)
-      .where(eq(projectFilesTable.projectId, projectId));
-    if (fileRows.length === 0) {
-      throw new Error("Project has no files to deploy yet — run a build first");
-    }
-    const payload = buildVercelPayload(fileRows);
     const deployment = await createDeployment(projectName, payload);
     createdInThisRun.vercelDeploymentId = deployment.id;
 
@@ -351,6 +363,7 @@ router.post(
     // publishes for the same project.
     const NON_TERMINAL = [
       "queued",
+      "validating",
       "provisioning_db",
       "creating_project",
       "deploying",

@@ -38,6 +38,73 @@ const DEFAULT_VERCEL_JSON = {
   rewrites: [{ source: "/(.*)", destination: "/index.html" }],
 };
 
+// Hard cap on the total size of the inlined payload we'll send to Vercel.
+// Vercel itself rejects requests well above 100MB; we leave a safety margin
+// so the user gets our friendly message instead of an opaque 413 / network
+// error mid-pipeline. Counted as the sum of the raw (pre-base64) file
+// contents — base64 inflates by ~4/3 but headers, JSON envelope, and other
+// fields take additional space so 90MB raw is comfortably under the limit.
+export const PAYLOAD_SIZE_LIMIT_BYTES = 90 * 1024 * 1024;
+
+// File extensions that are unambiguously binary (images, fonts, archives,
+// audio/video, compiled artifacts). The DB column for `content` is `text`,
+// so anything that arrived here has already been UTF-8 round-tripped and is
+// almost certainly corrupt — base64-encoding it again would just deploy a
+// broken asset. Reject up front with a clear message instead.
+const BINARY_EXTENSIONS = new Set([
+  // images
+  "png", "jpg", "jpeg", "gif", "webp", "ico", "bmp", "tiff", "tif", "avif", "heic",
+  // fonts
+  "woff", "woff2", "ttf", "otf", "eot",
+  // audio
+  "mp3", "wav", "ogg", "flac", "aac", "m4a",
+  // video
+  "mp4", "mov", "avi", "webm", "mkv",
+  // archives / binaries
+  "zip", "tar", "gz", "tgz", "rar", "7z", "pdf", "exe", "dll", "so", "dylib",
+  "wasm", "class", "jar",
+]);
+
+// Thrown when the project contains a file whose extension we know is binary.
+// Caught by the publish pipeline and surfaced verbatim to the user via the
+// deployments row's `errorMessage` column.
+export class BinaryFileNotSupportedError extends Error {
+  readonly path: string;
+  constructor(path: string) {
+    super(
+      `Binary uploads aren't supported yet — remove or replace "${path}" before publishing.`,
+    );
+    this.name = "BinaryFileNotSupportedError";
+    this.path = path;
+  }
+}
+
+// Thrown when the total raw size of project files exceeds our safe limit.
+export class PayloadTooLargeError extends Error {
+  readonly totalBytes: number;
+  readonly limitBytes: number;
+  constructor(totalBytes: number, limitBytes: number) {
+    const totalMb = (totalBytes / (1024 * 1024)).toFixed(1);
+    const limitMb = Math.floor(limitBytes / (1024 * 1024));
+    super(
+      `Project is too large to publish (${totalMb}MB; limit is ${limitMb}MB). Remove large files and try again.`,
+    );
+    this.name = "PayloadTooLargeError";
+    this.totalBytes = totalBytes;
+    this.limitBytes = limitBytes;
+  }
+}
+
+function extensionOf(path: string): string {
+  const idx = path.lastIndexOf(".");
+  if (idx < 0 || idx === path.length - 1) return "";
+  return path.slice(idx + 1).toLowerCase();
+}
+
+function isBinaryPath(path: string): boolean {
+  return BINARY_EXTENSIONS.has(extensionOf(path));
+}
+
 function toBase64(s: string): string {
   return Buffer.from(s, "utf8").toString("base64");
 }
@@ -56,6 +123,22 @@ function isStaticOnly(files: ProjectFileLite[]): boolean {
 export function buildVercelPayload(
   files: ProjectFileLite[],
 ): VercelInlinedFile[] {
+  // ---------- Pre-flight: reject binary files & oversized payloads ----------
+  // Run these checks before any base64 work so failures are fast and the
+  // error message references the offending path, not a partial payload.
+  let totalBytes = 0;
+  for (const f of files) {
+    if (isBinaryPath(f.path)) {
+      throw new BinaryFileNotSupportedError(f.path);
+    }
+    // Byte length, not character length — multi-byte UTF-8 characters
+    // count for what they actually take on the wire.
+    totalBytes += Buffer.byteLength(f.content, "utf8");
+    if (totalBytes > PAYLOAD_SIZE_LIMIT_BYTES) {
+      throw new PayloadTooLargeError(totalBytes, PAYLOAD_SIZE_LIMIT_BYTES);
+    }
+  }
+
   const present = new Set(files.map((f) => f.path));
 
   if (isStaticOnly(files)) {
