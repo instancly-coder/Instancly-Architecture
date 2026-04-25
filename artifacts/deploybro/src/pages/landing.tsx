@@ -285,6 +285,17 @@ export default function Landing() {
       r.readAsDataURL(file);
     });
 
+  // We always send the user to `/build/new` regardless of auth state.
+  // AuthGate already handles both branches: if the user is signed in
+  // it renders the page (which mints a project + opens the builder);
+  // if not, it stashes `/build/new` as the post-login destination and
+  // redirects to `/login`. After login, AuthGate consumes the stashed
+  // path on the next gated mount and lands them back on `/build/new`.
+  // This sidesteps the "is the user signed in yet?" race that calling
+  // `useUser()` here would introduce (and avoids touching the Stack
+  // provider from a page that may render before the provider mounts).
+  const goAfterSubmit = () => navigate("/build/new");
+
   const submit = async () => {
     const value = prompt.trim();
     // The user's typed prompt is the single most important thing to carry
@@ -338,14 +349,14 @@ export default function Landing() {
           );
           // Give the user a real beat to read the inline notice before
           // navigating — 1.2s blew by too fast to register as a warning.
-          setTimeout(() => navigate("/login"), 2500);
+          setTimeout(goAfterSubmit, 2500);
           return;
         }
       } else {
         try { tryStore(baseSettings); } catch { /* shrug */ }
       }
     } catch { /* sessionStorage may be unavailable in private mode — ignore */ }
-    navigate("/login");
+    goAfterSubmit();
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {

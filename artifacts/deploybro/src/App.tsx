@@ -21,6 +21,7 @@ import Library from "@/pages/library";
 import Profile from "@/pages/profile";
 import Project from "@/pages/project";
 import Builder from "@/pages/builder";
+import BuildNew from "@/pages/build-new";
 import Pricing from "@/pages/pricing";
 import Admin from "@/pages/admin";
 import AdminModels from "@/pages/admin/models";
@@ -84,6 +85,7 @@ function Router() {
       <Route path="/cookies" component={CookiePolicy} />
       <Route path="/dpa" component={DPA} />
       <Route path="/community" component={Community} />
+      <Route path="/build/new" component={gated(BuildNew)} />
       <Route path="/:username" component={Profile} />
       <Route path="/:username/:slug" component={Project} />
       <Route path="/:username/:slug/build" component={gated(Builder)} />

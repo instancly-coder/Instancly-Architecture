@@ -53,6 +53,17 @@ The in-builder code-generation flow (`POST /api/ai/build/:username/:slug`, SSE) 
 Required secret:
 - `ANTHROPIC_API_KEY` — Anthropic console API key. Without it `/ai/build` responds with an SSE `error` event and the builder shows "AI is not configured". Models used: `claude-haiku-4-5` (Free), `claude-sonnet-4-6` (default for Pro), `claude-opus-4-5` (Pro opt-in).
 
+The SSE stream emits granular `status` events ("Fetching reference URLs", "Connecting to Claude", "Saving generated files", "Recording build") in addition to `start`/`delta`/`usage`/`done`/`error`. The builder renders each `status` as a row in a per-prompt action checklist under the in-flight assistant bubble (spinner → check on completion, X on error) so the user can see exactly which phase is running.
+
+## Homepage prompt → builder flow
+
+A prompt typed on the landing page carries straight through to the builder, including through login if needed.
+
+- `landing.tsx` stashes the prompt + composer settings (model, plan mode, reference URLs, base64 images) in `sessionStorage` (`deploybro:initial-prompt`, `deploybro:initial-settings`), then either navigates to `/build/new` (if logged in) or sets `deploybro:after-login = "/build/new"` and navigates to `/login`.
+- `login.tsx`'s dev-bypass paths consume `deploybro:after-login` and redirect there. For real Stack OAuth, `AuthGate` consumes the key on the next gated mount and redirects.
+- `/build/new` (`pages/build-new.tsx`, gated) creates a project named from the prompt's first words, then redirects to `/<username>/<slug>/build?prompt=…`.
+- `builder.tsx`'s existing autostart effect picks up `?prompt=` + the stashed settings, hydrates the composer, and fires `handleSend` once.
+
 ## Publish to Vercel + Neon
 
 The Publish flow in the builder provisions a per-app Neon Postgres branch and deploys to Vercel. Pro-plan-gated. Pipeline runs in-process (no external job queue).

@@ -23,6 +23,21 @@ function AuthGateInner({ children }: { children: React.ReactNode }) {
         sessionStorage.setItem("deploybro:after-login", window.location.pathname);
       } catch {}
       navigate("/login");
+      return;
+    }
+    if (user) {
+      // Honour any "go here after login" target the homepage or login
+      // page stashed before we arrived. Always clear the key on read
+      // (one-shot) so a stale value can't bounce a future gated route
+      // mount to the wrong place. Only navigate when the target differs
+      // from the current path so we don't loop on it.
+      try {
+        const target = sessionStorage.getItem("deploybro:after-login");
+        if (target) {
+          sessionStorage.removeItem("deploybro:after-login");
+          if (target !== window.location.pathname) navigate(target);
+        }
+      } catch {}
     }
   }, [user, navigate]);
 

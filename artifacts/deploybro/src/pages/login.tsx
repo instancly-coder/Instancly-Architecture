@@ -11,17 +11,32 @@ export default function Login() {
   const [, setLocation] = useLocation();
   const [busy, setBusy] = useState<Provider | null>(null);
 
+  // Pull any "go here after login" target the homepage (or AuthGate)
+  // stashed before kicking us over to /login. We consume it on the
+  // dev-bypass paths; for real Stack OAuth the AuthGate that wraps
+  // every gated route reads it on the next mount.
+  const consumeAfterLogin = (): string => {
+    try {
+      const t = sessionStorage.getItem("deploybro:after-login");
+      if (t) {
+        sessionStorage.removeItem("deploybro:after-login");
+        return t;
+      }
+    } catch {}
+    return "/dashboard";
+  };
+
   const handleClick = async (provider: Provider) => {
     if (provider === "apple") {
       // Temporary dev bypass while we wire up real Apple sign-in.
       setBusy("apple");
-      setLocation("/dashboard");
+      setLocation(consumeAfterLogin());
       return;
     }
 
     if (!stackConfigured || !stackApp) {
       toast.message("Sign-in isn't configured yet — using the dev bypass.");
-      setLocation("/dashboard");
+      setLocation(consumeAfterLogin());
       return;
     }
 

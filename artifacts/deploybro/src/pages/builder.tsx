@@ -219,6 +219,16 @@ type PastBuild = {
   ago: string;
 };
 
+// One row in the per-prompt action checklist shown under the
+// in-flight assistant bubble. The active step has a spinner; finished
+// steps get a check mark; a failed step gets an X. We keep the list
+// short (steps are pruned on completion) so the UI never grows tall.
+type StreamStep = {
+  id: number;
+  label: string;
+  status: "in_progress" | "done" | "error";
+};
+
 function timeAgo(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
   const m = Math.floor(ms / 60000);
@@ -435,6 +445,13 @@ export default function Builder() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [phase, setPhase] = useState<string | undefined>(undefined);
   const [typed, setTyped] = useState("");
+  // Per-prompt action rows that show under the in-flight assistant bubble:
+  // each `status` SSE event closes out the previous step and starts a new
+  // one, so the user sees a granular checklist of what's happening
+  // ("Fetching reference URLs" → "Connecting to Claude" → "Generating
+  // code" → "Saving generated files" → "Done") rather than a single
+  // shimmering spinner that hides the actual phase.
+  const [streamSteps, setStreamSteps] = useState<StreamStep[]>([]);
   // The "Used $X · Remaining: $Y" line shown after a generation finishes.
   // Cleared when the user fires the next prompt so it always reflects the
   // most recent build.
@@ -458,6 +475,11 @@ export default function Builder() {
   const [refUrls, setRefUrls] = useState<string[]>([]);
   const abortRef = useRef<AbortController | null>(null);
   const autoSentRef = useRef(false);
+  // Tracks the pending "clear streaming UI" timeout from the last send
+  // so a brand-new send can cancel it. Without this, a stale timeout
+  // from the previous run can fire 600ms into the new run and wipe
+  // `phase` / `typed` / `streamSteps` mid-stream.
+  const cleanupTimerRef = useRef<number | null>(null);
 
   // Cancel any in-flight build stream when this component unmounts so the
   // server can close the upstream Claude connection and stop billing.
@@ -619,11 +641,37 @@ export default function Builder() {
       typeof overridePrompt === "string" ? overridePrompt : chatInput;
     if (!raw.trim() || isStreaming || !username || !slug) return;
     const prompt = raw.trim();
+    // Cancel any pending cleanup timer from the previous run so it
+    // can't fire 600ms into this new send and wipe the freshly-set
+    // phase / typed / streamSteps state.
+    if (cleanupTimerRef.current != null) {
+      window.clearTimeout(cleanupTimerRef.current);
+      cleanupTimerRef.current = null;
+    }
     setChatInput("");
     setIsStreaming(true);
     setPhase("Thinking");
     setTyped("");
     setLastUsage(null);
+    // Seed the action checklist with a single "Preparing your request"
+    // step. Server `status` events will close it out and push their own
+    // labels as the build pipeline moves through each phase.
+    let stepSeq = 0;
+    const nextStepId = () => ++stepSeq;
+    setStreamSteps([
+      { id: nextStepId(), label: "Preparing your request", status: "in_progress" },
+    ]);
+    const closeAndAdd = (label: string) =>
+      setStreamSteps((prev) => [
+        ...prev.map((s) =>
+          s.status === "in_progress" ? { ...s, status: "done" as const } : s,
+        ),
+        { id: nextStepId(), label, status: "in_progress" },
+      ]);
+    const finishAll = (status: "done" | "error") =>
+      setStreamSteps((prev) =>
+        prev.map((s) => (s.status === "in_progress" ? { ...s, status } : s)),
+      );
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -730,13 +778,27 @@ export default function Builder() {
         if (raf == null) raf = requestAnimationFrame(tick);
       };
 
+      // Track whether we've already pushed the "Generating code" step so
+      // the very first `delta` event swaps the spinner off "Connecting"
+      // even when the server didn't send a separate status for it.
+      let generatingPushed = false;
       for await (const evt of readSSE(res)) {
-        if (evt.event === "start") {
+        if (evt.event === "status" && typeof evt.data?.message === "string") {
+          closeAndAdd(evt.data.message.replace(/[…\.]+$/g, ""));
+        } else if (evt.event === "start") {
           setPhase("Streaming");
+          if (!generatingPushed) {
+            closeAndAdd("Generating code");
+            generatingPushed = true;
+          }
         } else if (evt.event === "delta" && evt.data?.text) {
           raw += evt.data.text;
           target = stripIncompleteFileBlocks(raw);
           schedule();
+          if (!generatingPushed) {
+            closeAndAdd("Generating code");
+            generatingPushed = true;
+          }
         } else if (evt.event === "usage") {
           // The server tells us exactly what this generation cost and what's
           // left in the balance, so we can show "Used $X · Remaining: $Y"
@@ -754,6 +816,7 @@ export default function Builder() {
         } else if (evt.event === "done") {
           if (evt.data?.ok) {
             setPhase("Done");
+            finishAll("done");
             const n = evt.data?.build?.filesChanged ?? 0;
             toast.success(
               n > 0
@@ -778,16 +841,24 @@ export default function Builder() {
       // Force the preview iframe to reload with the freshly-written files.
       setIframeKey((k) => k + 1);
     } catch (err) {
-      if ((err as { name?: string })?.name !== "AbortError") {
+      const aborted = (err as { name?: string })?.name === "AbortError";
+      finishAll(aborted ? "done" : "error");
+      if (!aborted) {
         toast.error(err instanceof Error ? err.message : "Build failed");
       }
     } finally {
       abortRef.current = null;
       setIsStreaming(false);
-      // Hold the final text briefly so the user sees it transition into history.
-      setTimeout(() => {
+      // Hold the final text briefly so the user sees it transition into
+      // history. We also clear the action checklist on the same beat so
+      // the completed checks fade out alongside the streaming bubble.
+      // The timer id is stored in a ref so a new send started inside
+      // this 600ms window can cancel it before it wipes fresh state.
+      cleanupTimerRef.current = window.setTimeout(() => {
+        cleanupTimerRef.current = null;
         setPhase(undefined);
         setTyped("");
+        setStreamSteps([]);
       }, 600);
     }
   };
@@ -957,6 +1028,7 @@ export default function Builder() {
             setChatInput={setChatInput}
             isStreaming={isStreaming}
             currentPhase={currentStep?.phase}
+            streamSteps={streamSteps}
             typed={typed}
             onSend={handleSend}
             openBuildId={openBuildId}
@@ -1213,6 +1285,7 @@ export default function Builder() {
           setChatInput={setChatInput}
           isStreaming={isStreaming}
           currentPhase={currentStep?.phase}
+          streamSteps={streamSteps}
           typed={typed}
           onSend={handleSend}
           openBuildId={openBuildId}
@@ -1266,6 +1339,7 @@ function ChatPanel({
   setChatInput,
   isStreaming,
   currentPhase,
+  streamSteps,
   typed,
   onSend,
   openBuildId,
@@ -1285,6 +1359,7 @@ function ChatPanel({
   setChatInput: (v: string) => void;
   isStreaming: boolean;
   currentPhase: string | undefined;
+  streamSteps: StreamStep[];
   typed: string;
   onSend: () => void;
   openBuildId: string | null;
@@ -1446,19 +1521,40 @@ function ChatPanel({
               <FileNoticeText text={typed} />
             </div>
 
-            {/* A tiny status line underneath. Only this part shimmers,
-                so the activity indicator is obvious without making the
-                whole message hard to read. */}
-            {isStreaming && (
-              <div className="flex items-center gap-2 pt-0.5">
-                <span className="relative flex h-1.5 w-1.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-60" />
-                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary" />
-                </span>
-                <span className="shimmer-text text-[11px] uppercase tracking-wider font-mono">
-                  {currentPhase ?? "Working"}…
-                </span>
-              </div>
+            {/* Granular per-prompt action checklist. Each row reflects a
+                phase of the build pipeline as it happens; the active row
+                spins, completed rows show a check, and any errored row
+                shows an X. Replaces the old single shimmer dot so the
+                user can see exactly what the system is doing. */}
+            {streamSteps.length > 0 && (
+              <ul className="space-y-1 pt-0.5">
+                {streamSteps.map((step) => (
+                  <li
+                    key={step.id}
+                    className="flex items-center gap-2 text-[11px] font-mono"
+                  >
+                    {step.status === "in_progress" ? (
+                      <Loader2 className="w-3 h-3 text-primary animate-spin shrink-0" />
+                    ) : step.status === "done" ? (
+                      <Check className="w-3 h-3 text-emerald-500 shrink-0" />
+                    ) : (
+                      <X className="w-3 h-3 text-destructive shrink-0" />
+                    )}
+                    <span
+                      className={
+                        step.status === "in_progress"
+                          ? "shimmer-text uppercase tracking-wider"
+                          : step.status === "error"
+                            ? "uppercase tracking-wider text-destructive"
+                            : "uppercase tracking-wider text-muted-foreground"
+                      }
+                    >
+                      {step.label}
+                      {step.status === "in_progress" ? "…" : ""}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
         )}

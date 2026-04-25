@@ -570,6 +570,7 @@ router.post(
             ]
           : textPart;
 
+      send("status", { message: "Connecting to Claude…" });
       stream = anthropic.messages.stream({
         model: modelInfo.id,
         max_tokens: 16_384,
@@ -610,7 +611,9 @@ router.post(
         return;
       }
 
+      send("status", { message: "Saving generated files…" });
       const written = await persistFiles();
+      send("status", { message: "Recording build…" });
       const { build: created, postBalance } = await persistBuild(
         "success",
         written.length,
