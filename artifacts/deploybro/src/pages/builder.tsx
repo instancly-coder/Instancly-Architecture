@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { BoxLogo } from "@/components/box-logo";
 import { Link, useParams } from "wouter";
 import {
-  ChevronRight,
   FolderTree,
   History,
   Settings as SettingsIcon,
@@ -444,7 +442,7 @@ export default function Builder() {
   const [activeTab, setActiveTab] = useState<TabKey>("preview");
   const [viewport, setViewport] = useState<"desktop" | "tablet" | "mobile">("desktop");
 
-  const liveUrl = `https://${slug}-${username}.deploybro.app`;
+  const liveUrl = `https://${slug}-${username}.deploybro.com`;
   const [urlValue, setUrlValue] = useState(liveUrl);
   const [iframeKey, setIframeKey] = useState(0);
 
@@ -1043,7 +1041,7 @@ export default function Builder() {
   });
 
   const copyUrl = () => {
-    navigator.clipboard.writeText(`${slug}-${username}.deploybro.app`);
+    navigator.clipboard.writeText(`${slug}-${username}.deploybro.com`);
     toast.success("URL copied");
   };
 
@@ -1054,13 +1052,16 @@ export default function Builder() {
       {/* Top Navbar */}
       <header className="h-12 border-b border-border bg-surface flex items-center justify-between px-3 md:px-4 shrink-0 relative z-50 gap-2">
         <div className="flex items-center gap-2 md:gap-3 min-w-0">
-          <Link href="/dashboard" className="hover:opacity-80 transition-opacity shrink-0">
-            <BoxLogo className="w-5 h-5 text-primary" />
+          <Link href="/dashboard" className="hover:opacity-80 transition-opacity shrink-0 flex items-center">
+            <img
+              src={brandLogoUrl}
+              alt="DeployBro"
+              className="h-5 w-auto select-none"
+              draggable={false}
+            />
           </Link>
           <div className="w-px h-4 bg-border hidden sm:block"></div>
           <div className="flex items-center text-sm font-mono text-secondary min-w-0">
-            <span className="hidden sm:inline">{username}</span>
-            <ChevronRight className="w-4 h-4 mx-1 hidden sm:inline" />
             <span className="text-foreground truncate">{slug}</span>
           </div>
           <div className="w-2 h-2 rounded-full bg-success ml-1 shrink-0" title="Live" />
