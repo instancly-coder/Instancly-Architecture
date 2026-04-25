@@ -1,4 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  getAppConfigQueryKey,
+  useAppConfig as useGeneratedAppConfig,
+} from "@workspace/api-client-react";
 import type { z } from "zod";
 import type {
   AdminCostByModel as GeneratedAdminCostByModel,
@@ -156,13 +160,20 @@ const FALLBACK_APP_CONFIG: AppConfig = {
 // fallbacks so consumers never see `undefined` even on the first paint.
 // The query is mounted once at the app root via <ConfigPrewarm/> so
 // any later consumer hits the warmed cache immediately.
+//
+// Delegates to the codegen'd hook from `@workspace/api-client-react` so
+// the URL, query key, and response type all flow from the OpenAPI spec
+// — adding the next public-config field becomes "edit the spec, run
+// codegen". The wrapper only layers on the cache-forever / fallback
+// behaviour the deploybro UI relies on.
 export function useAppConfig() {
-  return useQuery({
-    queryKey: ["config"],
-    queryFn: () => request<AppConfig>("/config"),
-    staleTime: Infinity,
-    gcTime: Infinity,
-    placeholderData: FALLBACK_APP_CONFIG,
+  return useGeneratedAppConfig({
+    query: {
+      queryKey: getAppConfigQueryKey(),
+      staleTime: Infinity,
+      gcTime: Infinity,
+      placeholderData: FALLBACK_APP_CONFIG,
+    },
   });
 }
 
