@@ -10,7 +10,6 @@ import { requireAuth, getAuthedUser } from "../middlewares/auth";
 import { logger } from "../lib/logger";
 import {
   addProjectDomain,
-  getProjectDomain,
   verifyProjectDomain,
   removeProjectDomain,
   getDomainConfig,
@@ -18,6 +17,10 @@ import {
   type VercelDomain,
   type VercelDomainConfig,
 } from "../lib/vercel";
+import {
+  refreshAndNotify,
+  reconcilePrimary,
+} from "../services/domains";
 
 const router: IRouter = Router();
 
@@ -182,82 +185,6 @@ function toResponse(row: typeof projectDomainsTable.$inferSelect): DomainRespons
   };
 }
 
-// Sync a single domain row from Vercel. Always swallows network errors so
-// a transient Vercel hiccup doesn't 500 a list/refresh — the row keeps its
-// last-known state and the UI shows it.
-async function refreshFromVercel(
-  vercelProjectId: string,
-  row: typeof projectDomainsTable.$inferSelect,
-): Promise<typeof projectDomainsTable.$inferSelect> {
-  let domain: VercelDomain | null = null;
-  let config: VercelDomainConfig | null = null;
-  try {
-    domain = await getProjectDomain(vercelProjectId, row.host);
-  } catch (err) {
-    logger.warn(
-      { err, host: row.host },
-      "getProjectDomain failed; keeping cached state",
-    );
-  }
-  try {
-    config = await getDomainConfig(row.host);
-  } catch (err) {
-    logger.warn(
-      { err, host: row.host },
-      "getDomainConfig failed; keeping cached misconfigured flag",
-    );
-  }
-
-  const verified = domain?.verified ?? row.verified;
-  const verificationRecords = domain?.verification ?? row.verificationRecords;
-  const misconfigured = config?.misconfigured ?? row.misconfigured;
-  // Only overwrite the cached resolver values when we actually got a
-  // fresh config back. A failed Vercel call shouldn't wipe the
-  // last-known DNS state we'd otherwise show in the UI.
-  const aValues = config ? config.aValues ?? null : row.aValues;
-  const cnames = config ? config.cnames ?? null : row.cnames;
-  const configuredBy = config
-    ? config.configuredBy ?? null
-    : row.configuredBy;
-
-  const [updated] = await db
-    .update(projectDomainsTable)
-    .set({
-      verified,
-      verificationRecords: verificationRecords ?? null,
-      misconfigured,
-      aValues,
-      cnames,
-      configuredBy,
-      lastCheckedAt: new Date(),
-    })
-    .where(eq(projectDomainsTable.id, row.id))
-    .returning();
-  return updated;
-}
-
-// If a verified domain exists, make sure projects.primaryCustomDomain
-// reflects the user-marked primary (or the oldest verified one if none is
-// marked yet). If no verified domains remain, clear the field so the
-// navbar chip falls back to the auto-generated `*.vercel.app` URL.
-//
-// Order by createdAt ASC so the fallback choice is deterministic — without
-// this, two verified domains could swap places between requests depending
-// on storage layout.
-async function reconcilePrimary(projectId: string): Promise<void> {
-  const rows = await db
-    .select()
-    .from(projectDomainsTable)
-    .where(eq(projectDomainsTable.projectId, projectId))
-    .orderBy(projectDomainsTable.createdAt);
-  const verified = rows.filter((r) => r.verified);
-  const primary = verified.find((r) => r.isPrimary) ?? verified[0] ?? null;
-  await db
-    .update(projectsTable)
-    .set({ primaryCustomDomain: primary ? primary.host : null })
-    .where(eq(projectsTable.id, projectId));
-}
-
 // ---------- GET list ----------
 router.get(
   "/projects/:username/:slug/domains",
@@ -290,8 +217,12 @@ router.get(
     if (row.project.vercelProjectId) {
       const stale = rows.filter((r) => !r.verified || r.misconfigured);
       if (stale.length > 0) {
+        // refreshAndNotify also fires the "your domain is live" email
+        // when this list call happens to be the moment a row flips to
+        // verified, so the user sees the email even if the cron didn't
+        // pick it up first.
         const refreshed = await Promise.all(
-          stale.map((r) => refreshFromVercel(row.project.vercelProjectId!, r)),
+          stale.map((r) => refreshAndNotify(row.project.vercelProjectId!, r)),
         );
         // Re-merge the refreshed rows back into the original ordering. We
         // mutate a copy rather than the array we're iterating to keep it
@@ -523,7 +454,7 @@ router.post(
         logger.warn({ err, host }, "verifyProjectDomain failed (non-400)");
       }
     }
-    const refreshed = await refreshFromVercel(
+    const refreshed = await refreshAndNotify(
       row.project.vercelProjectId,
       existing,
     );

@@ -36,6 +36,11 @@ export const projectDomainsTable = pgTable(
     cnames: jsonb("cnames").$type<string[]>(),
     configuredBy: text("configured_by"),
     lastCheckedAt: timestamp("last_checked_at", { withTimezone: true }),
+    // Set to a timestamp the first time we successfully send (or
+    // intentionally skip) the "your domain is live" email for this row.
+    // Used as an idempotency guard so the polling job doesn't email the
+    // user every cycle for a long-verified domain.
+    verifiedNotifiedAt: timestamp("verified_notified_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => ({
