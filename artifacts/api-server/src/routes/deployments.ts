@@ -127,10 +127,21 @@ async function runPublishPipeline(args: {
     // `string`. Narrow it here against the two values the schema's
     // CHECK / app code can actually produce — anything else is a bug
     // we'd want to surface immediately rather than silently mis-route
-    // through buildVercelPayload's text path.
+    // through buildVercelPayload's text path (which would corrupt
+    // binary uploads by re-encoding base64 as if it were source code).
     const typedFiles: ProjectFileLite[] = fileRows.map((r) => {
-      const enc = r.encoding === "base64" ? "base64" : "utf8";
-      return { path: r.path, content: r.content, encoding: enc };
+      if (r.encoding !== "utf8" && r.encoding !== "base64") {
+        logger.error(
+          { projectId, path: r.path, encoding: r.encoding },
+          "Unknown project_files.encoding value; refusing to deploy",
+        );
+        throw new Error(
+          `Cannot deploy: file ${r.path} has unsupported encoding "${r.encoding}". ` +
+            `Expected "utf8" or "base64". This is a data-integrity issue — ` +
+            `please contact support.`,
+        );
+      }
+      return { path: r.path, content: r.content, encoding: r.encoding };
     });
     const payload = buildVercelPayload(typedFiles);
 
