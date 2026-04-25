@@ -43,21 +43,60 @@ export default function Login() {
     try {
       setBusy(provider);
       const callbackURL = `${window.location.origin}/handler`;
-      const result = await authClient.signIn.social({
+      const result = (await authClient.signIn.social({
         provider,
         callbackURL,
-      });
-      // Better Auth returns `{ data: { url, redirect: true } }` for the
-      // OAuth flow. Most browsers will already have been navigated to
-      // the provider's consent screen by the SDK; if not (e.g. a popup-
-      // blocked context), fall back to a hard navigation here.
-      const url = (result as { data?: { url?: string } })?.data?.url;
-      if (url && typeof window !== "undefined" && window.location) {
-        window.location.href = url;
+      })) as {
+        data?: { url?: string; redirect?: boolean } | null;
+        error?: { message?: string; code?: string; status?: number } | null;
+      };
+
+      // Better Auth's client returns `{ data: null, error: {...} }` for
+      // failures (it does NOT throw). The most common production failure
+      // here is `INVALID_CALLBACKURL` — Neon's hosted auth instance has
+      // a trusted-origins allowlist; until our origin is added on Neon's
+      // side (Neon Console → Auth → Allowed callback URLs / Trusted
+      // origins), the OAuth handshake never starts. Surface that
+      // explicitly instead of silently doing nothing.
+      if (result.error) {
+        setBusy(null);
+        const isOriginIssue =
+          result.error.code === "INVALID_CALLBACKURL" ||
+          result.error.code === "INVALID_ORIGIN";
+        if (isOriginIssue) {
+          toast.error(
+            `This site (${window.location.origin}) isn't on the auth provider's allowed-origins list yet.`,
+            {
+              description:
+                "Add it in the Neon Console under Auth → Trusted origins / Allowed callback URLs, then try again.",
+              duration: 12_000,
+            },
+          );
+        } else {
+          toast.error(
+            result.error.message ?? `Failed to sign in with ${provider}.`,
+          );
+        }
+        return;
       }
+
+      const url = result.data?.url;
+      if (url && typeof window !== "undefined" && window.location) {
+        // Most browsers will already have been navigated by the SDK; if
+        // not (e.g. popup-blocked context), do a hard navigation here.
+        window.location.href = url;
+        return;
+      }
+
+      // Reached only if the SDK returned neither data.url nor an error
+      // — shouldn't happen, but don't leave the button spinning.
+      setBusy(null);
+      toast.error(`Couldn't start ${provider} sign-in. Please try again.`);
     } catch (err) {
       setBusy(null);
-      toast.error(err instanceof Error ? err.message : `Failed to sign in with ${provider}.`);
+      toast.error(
+        err instanceof Error ? err.message : `Failed to sign in with ${provider}.`,
+      );
     }
   };
 
