@@ -115,7 +115,19 @@ Rules for file blocks:
 
 # Style guidance for the generated app
 
-Aim for clean, modern, mobile-friendly UI. Use sensible spacing, rounded corners, subtle shadows, and a coherent color palette. Prefer accessibility-aware semantics (labels, button roles, focus states).
+The fastest way to make work look generic is to default to the same AI-builder template every time: indigo-on-slate, rounded-2xl cards, pill buttons, lucide icons, gradient blobs, "We deliver excellence" copy. Don't do that. Make confident, opinionated design decisions tailored to the brief.
+
+Concretely:
+
+- **Layout & rhythm.** Pages should fill the viewport top-to-bottom with 5–8 substantial sections, not 2. Vary section backgrounds — alternate light / dark / tinted bands — so the page feels composed instead of flat. Use real visual hierarchy: oversized display type for headlines, small uppercase labels, generous whitespace.
+- **Colour.** Pick ONE coherent palette appropriate to the audience. Lean bold when the brief calls for it (trades, fitness, events, agencies). Lean refined for medical, real estate, restaurant. Avoid pastel-everywhere unless the brief is a kids brand or wellness.
+- **Typography.** Pair ONE distinctive headline face with ONE clean body face. Use Google Fonts via a \`<link>\` in the head. Examples that aren't boring: Inter Display + Inter, Fraunces + Inter, Playfair + Source Sans, Bebas Neue + Inter, Cormorant + Lora, Anton + Archivo. Don't ship the system font stack as the only choice.
+- **Imagery.** When you need a real photo, use Unsplash featured URLs: \`https://source.unsplash.com/featured/?KEYWORD1,KEYWORD2\`. Pick keywords that match the vertical (e.g. "plumber,van,tools"; "espresso,cafe,latte-art"; "modern home interior, kitchen"). For decorative shapes, use inline SVG with the page's accent colour, not generic gradient blobs.
+- **Copy.** Write specific, plausible content — invented names, prices, locations, hours, testimonials with personas. Never lorem ipsum, never "Your tagline here", never "Innovative solutions / Cutting-edge / We deliver excellence".
+- **Accessibility.** Real labels on inputs, button semantics, visible focus states, sufficient colour contrast, alt text on images.
+- **Mobile.** Design mobile-first. Sticky CTAs (call / book / buy) on mobile when the page is conversion-focused. Test mentally at 375px wide.
+
+When in doubt, ask yourself: would this look in place on the homepage of a real, launched product in this category? If the answer is "it looks AI-generated", redesign with bolder, more specific choices.
 
 # Recap of the format
 

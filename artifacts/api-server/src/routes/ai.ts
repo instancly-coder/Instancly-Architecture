@@ -16,6 +16,7 @@ import {
   buildSystemPrompt,
 } from "../lib/components-catalog";
 import { parseFileBlocks, stripFileBlocks } from "../lib/file-blocks";
+import { enhancePrompt } from "../lib/prompt-enhancer";
 import { requireAuth, getAuthedUser } from "../middlewares/auth";
 
 const router: IRouter = Router();
@@ -567,11 +568,31 @@ router.post(
           ? "\n\nPLAN MODE IS ON: Begin your response with a numbered plan (3 to 7 short bullet points) describing exactly which files you will create or change and why. After the plan, write a line containing only '---' and then proceed with the implementation as normal."
           : "");
 
+      // Server-side prompt enhancement. For first-build cases where the
+      // user typed a terse brief (e.g. "plumber landing page"), we expand
+      // their prompt with structured design + content direction so Claude
+      // ships something that looks designed, not templated. For
+      // iterations or prompts with reference URLs / images / explicit
+      // structure, this is a no-op.
+      const enhanced = enhancePrompt({
+        prompt,
+        hasExistingFiles: existingFiles.length > 0,
+        hasReferenceUrls: urls.length > 0,
+        hasImages: images.length > 0,
+      });
+      if (enhanced.wasEnhanced) {
+        send("status", {
+          message: enhanced.vertical
+            ? `Expanding brief (${enhanced.vertical.replace("_", " ")})…`
+            : "Expanding brief…",
+        });
+      }
+
       // Compose the user message. If images were attached we send a
       // multi-part content array (text + image blocks) which Claude's
       // vision models accept natively. Otherwise we keep it as a string
       // for backward compatibility.
-      const textPart = `${filesContext}${urlContext}\n\n---\n\nUser request:\n${prompt}`;
+      const textPart = `${filesContext}${urlContext}\n\n---\n\nUser request:\n${enhanced.enhanced}`;
       const userContent =
         images.length > 0
           ? [
