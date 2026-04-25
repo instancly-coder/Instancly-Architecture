@@ -14,3 +14,25 @@ import * as zod from "zod";
 export const HealthCheckResponse = zod.object({
   status: zod.string(),
 });
+
+/**
+ * Returns the public, server-advertised limits used by the frontend Files panel size gauge and the per-file upload pre-flight. The server is the single source of truth for these caps.
+
+ * @summary App config
+ */
+export const appConfigResponsePublishSizeLimitBytesMin = 0;
+
+export const appConfigResponsePerFileUploadLimitBytesMin = 0;
+
+export const AppConfigResponse = zod.object({
+  publishSizeLimitBytes: zod
+    .number()
+    .min(appConfigResponsePublishSizeLimitBytesMin)
+    .describe(
+      "Maximum total payload size accepted by the publish endpoint, in bytes.",
+    ),
+  perFileUploadLimitBytes: zod
+    .number()
+    .min(appConfigResponsePerFileUploadLimitBytesMin)
+    .describe("Maximum size of a single uploaded file, in bytes."),
+});

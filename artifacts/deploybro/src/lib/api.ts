@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { AppConfig } from "@workspace/api-zod";
 
 const BASE = "/api";
 
@@ -169,10 +170,10 @@ export function useUserProjects(username: string | undefined) {
   });
 }
 
-export type ApiAppConfig = {
-  publishSizeLimitBytes: number;
-  perFileUploadLimitBytes: number;
-};
+// Re-exported from the shared API contract so existing callers that
+// imported `ApiAppConfig` from this module keep compiling. New code
+// should import `AppConfig` directly from `@workspace/api-zod`.
+export type ApiAppConfig = AppConfig;
 
 // Server-advertised limits for the Files panel size gauge and the
 // per-file upload pre-flight. The server is the single source of truth
@@ -180,7 +181,7 @@ export type ApiAppConfig = {
 // during the very first paint before the config query resolves, so the
 // bar doesn't briefly show "X / 0 MB". They're intentionally generous
 // enough that nothing renders as "over" in that window.
-const FALLBACK_APP_CONFIG: ApiAppConfig = {
+const FALLBACK_APP_CONFIG: AppConfig = {
   publishSizeLimitBytes: 90 * 1024 * 1024,
   perFileUploadLimitBytes: 10 * 1024 * 1024,
 };
@@ -193,18 +194,18 @@ const FALLBACK_APP_CONFIG: ApiAppConfig = {
 export function useAppConfig() {
   return useQuery({
     queryKey: ["config"],
-    queryFn: () => request<ApiAppConfig>("/config"),
+    queryFn: () => request<AppConfig>("/config"),
     staleTime: Infinity,
     gcTime: Infinity,
     placeholderData: FALLBACK_APP_CONFIG,
   });
 }
 
-// Convenience wrapper that always returns a non-nullable ApiAppConfig
+// Convenience wrapper that always returns a non-nullable AppConfig
 // by collapsing the loading state into the fallback. Use this when the
 // caller just wants the numbers (gauge widths, pre-flight bounds) and
 // has no need to distinguish "loading" from "loaded".
-export function useAppConfigValues(): ApiAppConfig {
+export function useAppConfigValues(): AppConfig {
   const { data } = useAppConfig();
   return data ?? FALLBACK_APP_CONFIG;
 }

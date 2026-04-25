@@ -13,7 +13,7 @@ import type {
   UseQueryResult,
 } from "@tanstack/react-query";
 
-import type { HealthStatus } from "./api.schemas";
+import type { AppConfig, HealthStatus } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
 import type { ErrorType } from "../custom-fetch";
@@ -92,6 +92,73 @@ export function useHealthCheck<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getHealthCheckQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns the public, server-advertised limits used by the frontend Files panel size gauge and the per-file upload pre-flight. The server is the single source of truth for these caps.
+
+ * @summary App config
+ */
+export const getAppConfigUrl = () => {
+  return `/api/config`;
+};
+
+export const appConfig = async (options?: RequestInit): Promise<AppConfig> => {
+  return customFetch<AppConfig>(getAppConfigUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAppConfigQueryKey = () => {
+  return [`/api/config`] as const;
+};
+
+export const getAppConfigQueryOptions = <
+  TData = Awaited<ReturnType<typeof appConfig>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof appConfig>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getAppConfigQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof appConfig>>> = ({
+    signal,
+  }) => appConfig({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof appConfig>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AppConfigQueryResult = NonNullable<
+  Awaited<ReturnType<typeof appConfig>>
+>;
+export type AppConfigQueryError = ErrorType<unknown>;
+
+/**
+ * @summary App config
+ */
+
+export function useAppConfig<
+  TData = Awaited<ReturnType<typeof appConfig>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof appConfig>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAppConfigQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

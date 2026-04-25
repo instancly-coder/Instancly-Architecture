@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: config
+    description: Public app configuration
 paths:
   /healthz:
     get:
@@ -24,6 +26,22 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /config:
+    get:
+      operationId: appConfig
+      tags: [config]
+      summary: App config
+      description: >
+        Returns the public, server-advertised limits used by the frontend
+        Files panel size gauge and the per-file upload pre-flight. The
+        server is the single source of truth for these caps.
+      responses:
+        "200":
+          description: App config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppConfig"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +51,17 @@ components:
           type: string
       required:
         - status
-
+    AppConfig:
+      type: object
+      properties:
+        publishSizeLimitBytes:
+          type: integer
+          minimum: 0
+          description: Maximum total payload size accepted by the publish endpoint, in bytes.
+        perFileUploadLimitBytes:
+          type: integer
+          minimum: 0
+          description: Maximum size of a single uploaded file, in bytes.
+      required:
+        - publishSizeLimitBytes
+        - perFileUploadLimitBytes
