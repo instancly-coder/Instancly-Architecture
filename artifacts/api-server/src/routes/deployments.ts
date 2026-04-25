@@ -19,7 +19,7 @@ import {
   cancelDeployment as vercelCancelDeployment,
   type VercelDeployment,
 } from "../lib/vercel";
-import { provisionAppDatabase, deleteBranch as neonDeleteBranch } from "../lib/neon";
+import { deleteBranch as neonDeleteBranch } from "../lib/neon";
 import {
   buildVercelPayload,
   PayloadTooLargeError,
@@ -172,24 +172,20 @@ async function runPublishPipeline(args: {
       }
     }
 
-    if (!plainDatabaseUrl || !neonBranchId) {
-      await setStatus("provisioning_db");
-      const provisioned = await provisionAppDatabase(`${slug}-${username}`);
-      plainDatabaseUrl = provisioned.connectionUri;
-      neonBranchId = provisioned.branchId;
-      neonRoleName = provisioned.roleName;
-      neonProjectId = process.env.NEON_PARENT_PROJECT_ID ?? null;
-      createdInThisRun.neonBranchId = neonBranchId;
-      await db
-        .update(projectsTable)
-        .set({
-          databaseUrl: encryptSecret(plainDatabaseUrl),
-          neonBranchId,
-          neonRoleName,
-          neonProjectId,
-          publishStatus: "provisioning",
-        })
-        .where(eq(projectsTable.id, projectId));
+    // DB provisioning is now opt-in: the user clicks "Create database" in
+    // the builder's Database tab to call the dedicated provision endpoint.
+    // The publish flow no longer auto-provisions on first publish — if no
+    // databaseUrl is stored we just skip the DATABASE_URL env var below
+    // and the deployment ships without one. Re-publishes still reuse a
+    // pre-existing branch (the decrypt block above).
+    if (!plainDatabaseUrl) {
+      logger.info(
+        { projectId },
+        "Skipping DB provisioning: no project database (opt-in via Database tab)",
+      );
+      neonBranchId = null;
+      neonRoleName = null;
+      neonProjectId = null;
     }
 
     // ---------- 3. Get or create the Vercel project ----------
@@ -206,7 +202,12 @@ async function runPublishPipeline(args: {
     }
 
     // ---------- 4. Push DATABASE_URL into the Vercel env ----------
-    await upsertEnvVar(vercelProject.id, "DATABASE_URL", plainDatabaseUrl);
+    // Skipped when the project has no opted-in database — the deployed
+    // app simply ships without a DATABASE_URL env var. Once the user
+    // creates one from the Database tab, the next publish will pick it up.
+    if (plainDatabaseUrl) {
+      await upsertEnvVar(vercelProject.id, "DATABASE_URL", plainDatabaseUrl);
+    }
 
     // ---------- 5. Create the deployment ----------
     // `payload` was already built and validated in step 1b.
@@ -372,11 +373,13 @@ router.post(
     }
 
     // Required server config — fail fast with a clear message rather than
-    // letting the pipeline blow up two steps in.
+    // letting the pipeline blow up two steps in. Vercel + the encryption
+    // key are needed for every publish; Neon is only needed if the project
+    // already has an encrypted databaseUrl that the pipeline must decrypt
+    // and reuse (provisioning is opt-in via the Database tab, not the
+    // publish flow). DB-less publishes therefore work without Neon vars.
     const missing: string[] = [];
     if (!process.env.VERCEL_API_TOKEN) missing.push("VERCEL_API_TOKEN");
-    if (!process.env.NEON_API_KEY) missing.push("NEON_API_KEY");
-    if (!process.env.NEON_PARENT_PROJECT_ID) missing.push("NEON_PARENT_PROJECT_ID");
     if (!process.env.DATABASE_URL_ENC_KEY) missing.push("DATABASE_URL_ENC_KEY");
     if (missing.length > 0) {
       res.status(503).json({

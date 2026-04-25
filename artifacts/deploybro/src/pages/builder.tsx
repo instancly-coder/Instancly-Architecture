@@ -105,6 +105,9 @@ import {
   deploymentStepLabel,
   TERMINAL_DEPLOYMENT_STATUSES,
   ApiError,
+  useProjectDbInfo,
+  useProjectDbTables,
+  useProvisionProjectDb,
   type ApiBuild,
   type ApiDeployment,
 } from "@/lib/api";
@@ -3014,25 +3017,6 @@ function IntegrationsView() {
 
 /* ------------------------------- Database ------------------------------- */
 
-type DbTable = {
-  name: string;
-  schema: string;
-  rows: number;
-  exact: boolean;
-  size: string;
-  sizeBytes: number;
-  lastChange: string | null;
-};
-
-type DbInfo = {
-  provider: string;
-  host: string;
-  database: string;
-  size: string;
-  version: string;
-  connectionString: string;
-};
-
 function relativeTime(iso: string | null): string {
   if (!iso) return "—";
   const t = new Date(iso).getTime();
@@ -3049,38 +3033,40 @@ function relativeTime(iso: string | null): string {
 }
 
 function DatabaseView() {
-  const [info, setInfo] = useState<DbInfo | null>(null);
-  const [tables, setTables] = useState<DbTable[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const params = useParams();
+  const { username, slug } = params;
+  const infoQuery = useProjectDbInfo(username, slug);
+  const tablesQuery = useProjectDbTables(username, slug);
+  const provision = useProvisionProjectDb(username, slug);
 
-  const load = async () => {
-    setLoading(true);
-    setError(null);
+  const info = infoQuery.data;
+  const tablesPayload = tablesQuery.data;
+  const tables = tablesPayload?.tables ?? null;
+
+  const provisioned = info?.provisioned === true;
+  const initialLoading = infoQuery.isLoading || tablesQuery.isLoading;
+  const loading = infoQuery.isFetching || tablesQuery.isFetching;
+  const error =
+    (infoQuery.error instanceof Error ? infoQuery.error.message : null) ??
+    (tablesQuery.error instanceof Error ? tablesQuery.error.message : null);
+
+  const reload = () => {
+    void infoQuery.refetch();
+    void tablesQuery.refetch();
+  };
+
+  const handleCreate = async () => {
+    if (provision.isPending) return;
     try {
-      const [infoRes, tablesRes] = await Promise.all([
-        fetch("/api/db/info"),
-        fetch("/api/db/tables"),
-      ]);
-      if (!infoRes.ok) throw new Error(`info: ${infoRes.status}`);
-      if (!tablesRes.ok) throw new Error(`tables: ${tablesRes.status}`);
-      const i = await infoRes.json();
-      const t = await tablesRes.json();
-      setInfo(i);
-      setTables(t.tables ?? []);
+      await provision.mutateAsync();
+      toast.success("Database created");
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
+      toast.error(e instanceof Error ? e.message : "Could not create database");
     }
   };
 
-  useEffect(() => {
-    load();
-  }, []);
-
   const copyConnString = async () => {
-    if (!info) return;
+    if (!provisioned) return;
     try {
       await navigator.clipboard.writeText(info.connectionString);
       toast.success("Masked URL copied (real password is in your secrets)");
@@ -3092,12 +3078,66 @@ function DatabaseView() {
   const totalRows = tables?.reduce((s, t) => s + t.rows, 0) ?? 0;
   const publicTables = tables?.filter((t) => t.schema === "public") ?? [];
 
+  // ---- Loading shell while we figure out provisioning state ----
+  if (initialLoading && !info) {
+    return (
+      <PaneShell
+        title="Database"
+        subtitle="Checking your project database…"
+      >
+        <div className="rounded-xl border border-border bg-surface px-6 py-16 text-center text-sm text-secondary flex items-center justify-center gap-2">
+          <Loader2 className="w-4 h-4 animate-spin" /> Loading…
+        </div>
+      </PaneShell>
+    );
+  }
+
+  // ---- Empty state: no DB yet, prompt user to opt in ----
+  if (info && info.provisioned === false) {
+    return (
+      <PaneShell
+        title="Database"
+        subtitle="Each project gets its own isolated Postgres database when you turn one on."
+      >
+        <div className="rounded-2xl border border-border bg-surface px-6 py-12 text-center flex flex-col items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+            <Database className="w-6 h-6" />
+          </div>
+          <div className="space-y-1 max-w-md">
+            <div className="text-base font-medium">No database yet</div>
+            <div className="text-sm text-secondary">
+              Spin up a dedicated Postgres database for this project. We'll
+              provision it on Neon and wire <span className="font-mono">DATABASE_URL</span>
+              {" "}into your next deploy automatically.
+            </div>
+          </div>
+          <Button
+            onClick={handleCreate}
+            disabled={provision.isPending}
+            className="h-10 bg-primary text-primary-foreground hover:bg-primary/90"
+          >
+            {provision.isPending ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Creating…
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4 mr-2" /> Create database
+              </>
+            )}
+          </Button>
+        </div>
+      </PaneShell>
+    );
+  }
+
+  // ---- Provisioned: show the project's own DB ----
   return (
     <PaneShell
       title="Database"
       subtitle={
-        info
-          ? `Live ${info.provider === "neon" ? "Neon" : "Postgres"} database · ${info.database} · ${info.host}`
+        provisioned
+          ? `Your project's Neon database · ${info.database}${info.host ? ` · ${info.host}` : ""}`
           : "Connecting to your Postgres database…"
       }
       actions={
@@ -3106,7 +3146,7 @@ function DatabaseView() {
             size="sm"
             variant="outline"
             className="border-border h-8"
-            onClick={load}
+            onClick={reload}
             disabled={loading}
           >
             <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${loading ? "animate-spin" : ""}`} />
@@ -3131,28 +3171,28 @@ function DatabaseView() {
           label="Total Rows"
           value={tables ? totalRows.toLocaleString() : "—"}
         />
-        <KpiCard label="Storage" value={info?.size ?? "—"} />
-        <KpiCard label="Provider" value={info?.provider === "neon" ? "Neon" : info?.provider ?? "—"} />
+        <KpiCard label="Storage" value={provisioned ? info.size || "—" : "—"} />
+        <KpiCard label="Provider" value={provisioned ? "Neon" : "—"} />
       </div>
 
       <div>
         <SectionHeader
           title="Connection"
           hint={
-            info
+            provisioned
               ? `Connected · ${info.version?.split(" ").slice(0, 2).join(" ") ?? "PostgreSQL"}`
               : "Looking up host…"
           }
         />
         <div className="flex flex-col sm:flex-row gap-2">
           <div className="flex-1 bg-surface border border-border rounded-lg px-4 py-2.5 font-mono text-xs text-secondary truncate">
-            {info?.connectionString ?? "Loading…"}
+            {provisioned ? info.connectionString : "Loading…"}
           </div>
           <Button
             variant="outline"
             onClick={copyConnString}
             className="border-border h-10"
-            disabled={!info}
+            disabled={!provisioned}
           >
             <Copy className="w-4 h-4 mr-2" /> Copy
           </Button>

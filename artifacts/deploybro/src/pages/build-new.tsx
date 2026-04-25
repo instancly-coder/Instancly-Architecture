@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { Loader2 } from "lucide-react";
 import logoUrl from "@assets/download_1776989236348.png";
 import { useCreateProject, useMe } from "@/lib/api";
+import { randomProjectName } from "@/lib/random-name";
 import { toast } from "sonner";
 
 const PROMPT_KEY = "deploybro:initial-prompt";
@@ -14,11 +15,11 @@ const ME_ERROR_RETRY_BUDGET = 2;
 
 function nameFromPrompt(prompt: string): string {
   const cleaned = prompt.replace(/\s+/g, " ").trim();
-  if (!cleaned) return "Untitled project";
+  if (!cleaned) return randomProjectName();
   const firstSentence = cleaned.split(/[.!?\n]/)[0] ?? cleaned;
   const words = firstSentence.split(" ").slice(0, 6).join(" ");
   const trimmed = (words || cleaned.slice(0, 50)).slice(0, 50).trim();
-  return trimmed || "Untitled project";
+  return trimmed || randomProjectName();
 }
 
 export default function BuildNew() {

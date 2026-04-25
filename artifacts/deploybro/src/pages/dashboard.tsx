@@ -20,22 +20,7 @@ import {
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 
-// Walks the existing project list to pick the next free
-// "Untitled project N" name, so the dashboard doesn't fill up with
-// a stack of identically-named cards. The server still slugifies the
-// name and auto-suffixes the URL slug if anything collides, so this
-// is purely cosmetic — but it makes the list scannable.
-function nextUntitledName(existing: ReadonlyArray<{ name: string }>): string {
-  const used = new Set<number>();
-  for (const p of existing) {
-    const m = /^Untitled project(?:\s+(\d+))?$/i.exec(p.name.trim());
-    if (m) used.add(m[1] ? Number(m[1]) : 1);
-  }
-  if (!used.has(1)) return "Untitled project";
-  let n = 2;
-  while (used.has(n)) n++;
-  return `Untitled project ${n}`;
-}
+import { randomProjectName } from "@/lib/random-name";
 
 function timeAgo(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
@@ -70,7 +55,7 @@ export default function Dashboard() {
     if (createProject.isPending) return;
     try {
       const created = await createProject.mutateAsync({
-        name: nextUntitledName(projects),
+        name: randomProjectName(),
       });
       // The API echoes back the owner — fall back to that if `me`
       // hasn't hydrated yet (e.g. first visit after a fresh dev-bypass).

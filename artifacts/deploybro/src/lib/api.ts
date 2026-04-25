@@ -656,3 +656,72 @@ export function useSetPrimaryDomain(
     },
   });
 }
+
+// ---- Per-project database (Database tab) ----
+
+export type ApiProjectDbInfo =
+  | { provisioned: false }
+  | {
+      provisioned: true;
+      provider: "neon";
+      host: string;
+      database: string;
+      size: string;
+      version: string;
+      connectionString: string;
+    };
+
+export type ApiProjectDbTable = {
+  schema: string;
+  name: string;
+  rows: number;
+  exact: boolean;
+  size: string;
+  lastChange: string | null;
+};
+
+export type ApiProjectDbTables = {
+  provisioned: boolean;
+  tables: ApiProjectDbTable[];
+};
+
+export function useProjectDbInfo(
+  username: string | undefined,
+  slug: string | undefined,
+) {
+  return useQuery({
+    queryKey: ["projects", username, slug, "db", "info"],
+    enabled: !!username && !!slug,
+    queryFn: () =>
+      request<ApiProjectDbInfo>(`/projects/${username}/${slug}/db/info`),
+  });
+}
+
+export function useProjectDbTables(
+  username: string | undefined,
+  slug: string | undefined,
+) {
+  return useQuery({
+    queryKey: ["projects", username, slug, "db", "tables"],
+    enabled: !!username && !!slug,
+    queryFn: () =>
+      request<ApiProjectDbTables>(`/projects/${username}/${slug}/db/tables`),
+  });
+}
+
+export function useProvisionProjectDb(
+  username: string | undefined,
+  slug: string | undefined,
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      request<{ provisioned: true; alreadyProvisioned: boolean }>(
+        `/projects/${username}/${slug}/db/provision`,
+        { method: "POST" },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["projects", username, slug, "db"] });
+    },
+  });
+}
