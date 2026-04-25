@@ -1,12 +1,58 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { and, desc, eq, ne, sql } from "drizzle-orm";
+import { and, desc, eq, ne, sql, inArray } from "drizzle-orm";
 import {
   db,
   usersTable,
   projectsTable,
+  projectDomainsTable,
   transactionsTable,
 } from "@workspace/db";
 import { authConfigured, getAuthedUser } from "../middlewares/auth";
+import { removeProjectDomain } from "../lib/vercel";
+import { logger } from "../lib/logger";
+
+// Best-effort cleanup of every custom domain attached to a Vercel project
+// before the local DB rows are dropped. We have to do this BEFORE
+// deletion because once the projects row goes the FK cascade also wipes
+// `project_domains`, and we'd no longer know which hosts to detach.
+//
+// Vercel's "remove domain from project" endpoint is the only way to free
+// a hostname for re-use — without this call the same domain can never be
+// re-added (Vercel returns 409). We swallow individual failures so that
+// a transient Vercel outage doesn't block the user from deleting their
+// own project; the orphan can be reaped manually if needed.
+async function detachVercelDomainsForProjects(
+  projectIds: ReadonlyArray<string>,
+): Promise<void> {
+  if (projectIds.length === 0) return;
+
+  // Pull every (vercelProjectId, host) pair we need to detach in one query.
+  // Joining keeps us from issuing N selects when a user deletes their
+  // whole account.
+  const rows = await db
+    .select({
+      vercelProjectId: projectsTable.vercelProjectId,
+      host: projectDomainsTable.host,
+    })
+    .from(projectDomainsTable)
+    .innerJoin(
+      projectsTable,
+      eq(projectsTable.id, projectDomainsTable.projectId),
+    )
+    .where(inArray(projectDomainsTable.projectId, [...projectIds]));
+
+  for (const r of rows) {
+    if (!r.vercelProjectId) continue;
+    try {
+      await removeProjectDomain(r.vercelProjectId, r.host);
+    } catch (err) {
+      logger.warn(
+        { err, host: r.host, vercelProjectId: r.vercelProjectId },
+        "removeProjectDomain failed during project teardown; skipping",
+      );
+    }
+  }
+}
 
 const RESERVED_USERNAMES = new Set([
   "admin", "api", "www", "dashboard", "explore", "settings", "billing",
@@ -247,11 +293,31 @@ router.delete("/me/projects/:slug", async (req: Request, res: Response): Promise
     return;
   }
   const slug = String(req.params.slug);
+
+  // Look up the project first so we can detach its custom domains from
+  // Vercel BEFORE the FK cascade wipes the project_domains rows. If the
+  // project doesn't exist we 404 without touching anything.
+  const target = (
+    await db
+      .select({ id: projectsTable.id })
+      .from(projectsTable)
+      .where(and(eq(projectsTable.userId, user.id), eq(projectsTable.slug, slug)))
+      .limit(1)
+  )[0];
+  if (!target) {
+    res.status(404).json({ status: "error", message: "Project not found" });
+    return;
+  }
+
+  await detachVercelDomainsForProjects([target.id]);
+
   const result = await db
     .delete(projectsTable)
     .where(and(eq(projectsTable.userId, user.id), eq(projectsTable.slug, slug)))
     .returning({ id: projectsTable.id });
   if (result.length === 0) {
+    // Race: project was deleted between our check and the delete. Treat
+    // as already-gone (the domains were detached above; no harm done).
     res.status(404).json({ status: "error", message: "Project not found" });
     return;
   }
@@ -264,6 +330,17 @@ router.delete("/me", async (req: Request, res: Response): Promise<void> => {
     res.status(401).json({ status: "error", message: "Unauthenticated" });
     return;
   }
+  // Same teardown path as single-project delete, but for every project
+  // the user owns. Run domain detachment first so the Vercel side is
+  // clean before the FK cascade wipes the project_domains rows.
+  const userProjectIds = (
+    await db
+      .select({ id: projectsTable.id })
+      .from(projectsTable)
+      .where(eq(projectsTable.userId, user.id))
+  ).map((r) => r.id);
+  await detachVercelDomainsForProjects(userProjectIds);
+
   // Cascade-delete projects, transactions, then the user. Builds cascade via projects FK.
   await db.delete(projectsTable).where(eq(projectsTable.userId, user.id));
   await db.delete(transactionsTable).where(eq(transactionsTable.userId, user.id));
