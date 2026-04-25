@@ -202,8 +202,41 @@ export async function tryAuth(
       (req as AuthedRequest).auth = { payload, user };
       return next();
     } catch (err) {
-      logger.debug({ err }, "JWT verification failed");
+      // Promoted from `debug` to `warn` because silent JWT verification
+      // failures are the #1 cause of "I'm logged in but every API call
+      // 401s" reports. Emits issuer/audience hints and decoded `iss`
+      // when available so misconfigured `AUTH_ISSUER_URL` env vars are
+      // self-diagnosing in the logs. Token contents themselves are
+      // intentionally never logged.
+      let decodedIss: string | undefined;
+      try {
+        const parts = token.split(".");
+        if (parts.length === 3) {
+          const payloadJson = JSON.parse(
+            Buffer.from(parts[1], "base64url").toString("utf8"),
+          ) as { iss?: unknown };
+          if (typeof payloadJson.iss === "string") {
+            decodedIss = payloadJson.iss;
+          }
+        }
+      } catch {
+        // ignore — we'll just log without the iss hint
+      }
+      logger.warn(
+        {
+          errMessage: err instanceof Error ? err.message : String(err),
+          expectedIssuer: ISSUER ?? null,
+          tokenIssuer: decodedIss ?? null,
+          tokenLength: token.length,
+        },
+        "JWT verification failed — request will be treated as unauthenticated",
+      );
     }
+  } else if (jwks && !token) {
+    logger.debug(
+      { hasCookie: Boolean((req as Request & { cookies?: Record<string, string> }).cookies?.["auth_token"]), hasAuthHeader: Boolean(req.headers.authorization) },
+      "No bearer token on request",
+    );
   }
 
   if (DEV_BYPASS_ENABLED) {
