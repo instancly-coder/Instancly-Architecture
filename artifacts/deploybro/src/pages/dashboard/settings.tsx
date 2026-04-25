@@ -6,13 +6,11 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { useMe, useUpdateMe } from "@/lib/api";
-import { useUser } from "@stackframe/react";
-import { stackConfigured } from "@/stack";
+import { authClient, authConfigured } from "@/auth";
 
 export default function SettingsPage() {
   const { data: user, isLoading } = useMe();
   const update = useUpdateMe();
-  const stackUser = stackConfigured ? useUser() : null;
 
   const [displayName, setDisplayName] = useState("");
   const [bio, setBio] = useState("");
@@ -41,10 +39,12 @@ export default function SettingsPage() {
       if (!res.ok && res.status !== 204) {
         throw new Error(`Backend cleanup failed (${res.status})`);
       }
-      if (stackUser) {
-        await stackUser.delete().catch(() => {
-          // Stack user deletion failed; backend record is already gone.
-        });
+      if (authConfigured && authClient) {
+        // The backend account row is already gone; sign the user out of the
+        // hosted auth instance so the next visit lands them at /login. We
+        // intentionally don't try to delete the upstream Better Auth user
+        // here — that's a separate admin-API concern.
+        await authClient.signOut().catch(() => {});
       }
       toast.success("Account deleted.");
       window.location.href = "/";
@@ -110,8 +110,8 @@ export default function SettingsPage() {
                 className="bg-surface border-border text-muted-foreground max-w-md"
               />
               <p className="text-xs text-secondary">
-                {stackConfigured
-                  ? "Manage your email and password from the account menu."
+                {authConfigured
+                  ? "Email is managed by your sign-in provider."
                   : "Email is locked in dev mode."}
               </p>
             </div>

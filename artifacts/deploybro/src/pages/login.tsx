@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { useState } from "react";
 import logoUrl from "@assets/download_1776989236348.png";
-import { stackApp, stackConfigured } from "@/stack";
+import { authClient, authConfigured } from "@/auth";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -12,9 +12,9 @@ export default function Login() {
   const [busy, setBusy] = useState<Provider | null>(null);
 
   // Pull any "go here after login" target the homepage (or AuthGate)
-  // stashed before kicking us over to /login. We consume it on the
-  // dev-bypass paths; for real Stack OAuth the AuthGate that wraps
-  // every gated route reads it on the next mount.
+  // stashed before kicking us over to /login. The dev-bypass paths
+  // consume it inline; real OAuth lets the post-callback handler
+  // (`/handler`) read the same key once we land back here.
   const consumeAfterLogin = (): string => {
     try {
       const t = sessionStorage.getItem("deploybro:after-login");
@@ -34,7 +34,7 @@ export default function Login() {
       return;
     }
 
-    if (!stackConfigured || !stackApp) {
+    if (!authConfigured || !authClient) {
       toast.message("Sign-in isn't configured yet — using the dev bypass.");
       setLocation(consumeAfterLogin());
       return;
@@ -42,7 +42,19 @@ export default function Login() {
 
     try {
       setBusy(provider);
-      await stackApp.signInWithOAuth(provider);
+      const callbackURL = `${window.location.origin}/handler`;
+      const result = await authClient.signIn.social({
+        provider,
+        callbackURL,
+      });
+      // Better Auth returns `{ data: { url, redirect: true } }` for the
+      // OAuth flow. Most browsers will already have been navigated to
+      // the provider's consent screen by the SDK; if not (e.g. a popup-
+      // blocked context), fall back to a hard navigation here.
+      const url = (result as { data?: { url?: string } })?.data?.url;
+      if (url && typeof window !== "undefined" && window.location) {
+        window.location.href = url;
+      }
     } catch (err) {
       setBusy(null);
       toast.error(err instanceof Error ? err.message : `Failed to sign in with ${provider}.`);

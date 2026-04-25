@@ -91,6 +91,26 @@ Internals:
 - `lib/deploy-payload.ts` — base64-inlines project files, synthesises `package.json`/`vite.config.ts`/`vercel.json` when missing, switches to a static-only build when no `package.json` and no JSX is detected.
 - Pipeline polls Vercel every 3s for up to 10 minutes; failures sanitise error messages before persisting and run best-effort cleanup of any cloud resources that were created during this attempt (cancel in-flight Vercel deployment → delete net-new Vercel project → delete net-new Neon branch). Cleanup errors are logged but never mask the original failure.
 
-## Auth (none yet)
+## Auth (Better Auth via Neon's hosted instance)
 
-API uses a hardcoded `ME = "johndoe"` constant in `routes/me.ts`. Replace with real auth before publishing.
+Sign-in is powered by Neon's hosted Better Auth project. The browser talks
+directly to Neon's auth server for OAuth (Google, GitHub) and session
+management; the API server only ever sees a JWT.
+
+Frontend (`artifacts/deploybro`):
+- `src/auth.ts` — instantiates `createAuthClient({ baseURL: VITE_NEON_AUTH_BASE_URL, fetchOptions: { credentials: "include" } })`. Exports `authClient`, `authConfigured`, `authBaseURL`, and `fetchAuthJwt()` (GETs `<baseURL>/token` for a fresh signed JWT).
+- `pages/login.tsx` — `authClient.signIn.social({ provider, callbackURL: <origin>/handler })` for Google/GitHub. Apple stays as a dev-only bypass.
+- `pages/handler.tsx` — post-OAuth landing page: waits for `useSession()` to confirm, syncs the JWT cookie, then forwards to the stashed `deploybro:after-login` target (or `/dashboard`).
+- `components/auth-gate.tsx` — wraps every gated route; `useSession()`-based redirect to `/login` when signed out.
+- `components/session-sync.tsx` — globally mounted; whenever `useSession()` resolves to a user, fetches a JWT from Neon and POSTs it to `/api/auth/session` so the API cookie is set / refreshed (every ~10 min while the tab is open).
+
+Backend (`artifacts/api-server`):
+- `middlewares/auth.ts` — `tryAuth` verifies the JWT against `AUTH_JWKS_URL` (cached `createRemoteJWKSet`), optionally enforces `AUTH_ISSUER_URL`, and lazily upserts the local user from the standard claims (`sub`, `email`, `name`, `picture`). In development with no token, falls through to a stable `demo` user so the app is exercisable without provider config.
+- `routes/auth.ts` — `GET /auth/config`, `GET /auth/whoami`, `POST /auth/session` (sets the `auth_token` cookie used by `tryAuth`'s cookie fallback), `POST /auth/sign-out`.
+
+Required env vars / secrets:
+- `VITE_NEON_AUTH_BASE_URL` — base URL of Neon's hosted Better Auth instance (e.g. `https://ep-…neonauth.…neon.tech/<db>/auth`). The JWKS lives at `<base>/.well-known/jwks.json` and the JWT issuance endpoint at `<base>/token`.
+- `AUTH_JWKS_URL` — full JWKS URL (typically `<VITE_NEON_AUTH_BASE_URL>/.well-known/jwks.json`).
+- `AUTH_ISSUER_URL` — should match Better Auth's `iss` claim, which defaults to its baseURL (= `VITE_NEON_AUTH_BASE_URL`). Leave unset to skip strict issuer validation.
+
+Obsolete (safe to delete from secrets): `VITE_STACK_PROJECT_ID`, `VITE_STACK_PUBLISHABLE_CLIENT_KEY`.

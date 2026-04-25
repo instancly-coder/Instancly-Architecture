@@ -76,6 +76,6 @@
     "zod": "catalog:"
   },
   "dependencies": {
-    "@stackframe/react": "^2.8.85"
+    "better-auth": "^1.6.9"
   }
 }

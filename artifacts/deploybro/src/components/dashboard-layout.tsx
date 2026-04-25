@@ -19,8 +19,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import logoUrl from "@assets/download_1776989236348.png";
 import { useMe } from "@/lib/api";
-import { useUser } from "@stackframe/react";
-import { stackConfigured } from "@/stack";
+import { authClient, authConfigured } from "@/auth";
 
 const NAV = [
   { href: "/dashboard", label: "Projects", icon: LayoutDashboard },
@@ -34,15 +33,13 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const [open, setOpen] = useState(false);
   const { data: me } = useMe();
-  const stackUser = stackConfigured ? useUser() : null;
-
   const initial = (me?.displayName?.[0] ?? me?.username?.[0] ?? "?").toUpperCase();
   const displayName = me?.displayName ?? "—";
   const username = me?.username ?? "loading";
 
   const signOut = async () => {
-    if (stackUser) {
-      await stackUser.signOut();
+    if (authConfigured && authClient) {
+      await authClient.signOut().catch(() => {});
     }
     await fetch("/api/auth/sign-out", { method: "POST", credentials: "include" }).catch(() => {});
     window.location.href = "/";

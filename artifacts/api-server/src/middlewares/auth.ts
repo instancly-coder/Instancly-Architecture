@@ -112,8 +112,8 @@ async function ensureUser(payload: JWTPayload): Promise<AuthedUser> {
 /**
  * In development, when no real auth token is present we fall back to a
  * stable "demo" user so the product is fully usable without a configured
- * Stack Auth (Google/Apple/GitHub). Real tokens still take precedence and
- * production never hits this path.
+ * upstream auth provider (Better Auth via Neon's hosted instance). Real
+ * tokens still take precedence and production never hits this path.
  */
 const DEV_BYPASS_ENABLED = process.env.NODE_ENV !== "production";
 const DEV_BYPASS_EMAIL = "demo@deploybro.local";

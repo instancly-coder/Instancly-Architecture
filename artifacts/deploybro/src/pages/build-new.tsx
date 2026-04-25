@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { Loader2 } from "lucide-react";
 import logoUrl from "@assets/download_1776989236348.png";
@@ -6,6 +6,11 @@ import { useCreateProject, useMe } from "@/lib/api";
 import { toast } from "sonner";
 
 const PROMPT_KEY = "deploybro:initial-prompt";
+// Cap how long we'll wait for `useMe` to recover from a transient 401
+// (auth cookie still being set by SessionSync) before giving up and
+// bouncing the user to the dashboard. Keeps us from hanging forever on
+// genuinely-broken sessions.
+const ME_ERROR_RETRY_BUDGET = 2;
 
 function nameFromPrompt(prompt: string): string {
   const cleaned = prompt.replace(/\s+/g, " ").trim();
@@ -27,15 +32,39 @@ export default function BuildNew() {
   // and bails. We also keep a local ref so a single mount can't fire
   // the mutation twice (e.g. if React batches rerenders).
   const startedRef = useRef(false);
+  // Keep showing the splash through a couple of transient `useMe` 401s
+  // (the cookie that SessionSync sets after Better Auth sign-in lands a
+  // moment later than the gate's first /api/me hit). Only bounce to
+  // /dashboard if the error keeps repeating after a couple of retries.
+  const [errorAttempts, setErrorAttempts] = useState(0);
+
+  useEffect(() => {
+    if (!me.isError) {
+      if (errorAttempts !== 0) setErrorAttempts(0);
+      return;
+    }
+    if (errorAttempts >= ME_ERROR_RETRY_BUDGET) return;
+    const t = setTimeout(() => {
+      setErrorAttempts((n) => n + 1);
+      void me.refetch?.();
+    }, 600);
+    return () => clearTimeout(t);
+  }, [me, errorAttempts]);
 
   useEffect(() => {
     if (startedRef.current) return;
 
     // Wait for `useMe` to resolve before deciding what to do. While it
-    // is loading we just keep showing the splash; once it errors out we
-    // bounce to the dashboard rather than spinning indefinitely.
+    // is loading or transiently failing we keep showing the splash;
+    // only after we've exhausted our retry budget do we give up and
+    // bounce to the dashboard.
     if (me.isLoading) return;
-    if (me.isError || !me.data?.username) {
+    if (me.isError) {
+      if (errorAttempts < ME_ERROR_RETRY_BUDGET) return;
+      navigate("/dashboard");
+      return;
+    }
+    if (!me.data?.username) {
       navigate("/dashboard");
       return;
     }
@@ -88,7 +117,7 @@ export default function BuildNew() {
         },
       },
     );
-  }, [me.isLoading, me.isError, me.data?.username, createProject, navigate]);
+  }, [me.isLoading, me.isError, me.data?.username, errorAttempts, createProject, navigate]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-foreground">
