@@ -146,7 +146,12 @@ function computeDnsMismatch(
     };
   }
 
-  const aValues = (row.aValues ?? []).filter((v) => v.length > 0);
+  // Trim defensively in case Vercel ever returns a value with surrounding
+  // whitespace; an exact-string compare to "76.76.21.21" would otherwise
+  // miss and produce a noisy false-positive callout.
+  const aValues = (row.aValues ?? [])
+    .map((v) => v.trim())
+    .filter((v) => v.length > 0);
   if (aValues.length > 0) {
     if (aValues.some((v) => v === VERCEL_A_TARGET)) return null;
     return {
