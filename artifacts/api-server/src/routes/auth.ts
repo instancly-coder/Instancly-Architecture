@@ -28,7 +28,11 @@ router.post("/auth/session", (req: Request, res: Response) => {
     return;
   }
   res.cookie("auth_token", token, {
-    httpOnly: false,
+    // The frontend never reads this cookie — it just calls /api/auth/session
+    // with a fresh JWT and lets the server store it. Keeping it httpOnly
+    // means an XSS in the SPA can't exfiltrate the bearer token.
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
     maxAge: 1000 * 60 * 60 * 24 * 30,
@@ -37,7 +41,12 @@ router.post("/auth/session", (req: Request, res: Response) => {
 });
 
 router.post("/auth/sign-out", (_req: Request, res: Response) => {
-  res.clearCookie("auth_token", { path: "/" });
+  res.clearCookie("auth_token", {
+    path: "/",
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+  });
   res.json({ ok: true });
 });
 

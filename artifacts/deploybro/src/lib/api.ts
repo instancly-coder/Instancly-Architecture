@@ -96,6 +96,12 @@ export function useMe() {
   return useQuery({
     queryKey: ["me"],
     queryFn: () => request<ApiMe>("/me"),
+    // Cap to a single retry so callers (e.g. <BuildNew>) that have their
+    // own bounded retry loop don't end up stacking 3 default react-query
+    // retries with backoff on top of their own budget. A genuine 401 is
+    // surfaced quickly; transient races (the auth cookie landing milliseconds
+    // after the gate's first call) still get a second chance.
+    retry: 1,
   });
 }
 

@@ -23,7 +23,13 @@ function SessionSyncInner() {
   useEffect(() => {
     let cancelled = false;
 
-    const pushJwt = async () => {
+    // When `/token` (or the subsequent /api/auth/session POST) fails on a
+    // fresh push, retry once shortly after — the most common cause is a
+    // race against Better Auth still finalising the session cookie on the
+    // auth server's domain right after the OAuth callback. Without this,
+    // the next ~10 minutes of API calls would silently 401 until the
+    // periodic refresh fires.
+    const pushJwt = async (attempt = 0): Promise<void> => {
       if (!userId) {
         await fetch("/api/auth/sign-out", {
           method: "POST",
@@ -32,22 +38,40 @@ function SessionSyncInner() {
         return;
       }
       const token = await fetchAuthJwt();
-      if (cancelled || !token) return;
-      await fetch("/api/auth/session", {
+      if (cancelled) return;
+      if (!token) {
+        if (attempt < 2) {
+          window.setTimeout(() => {
+            if (!cancelled) void pushJwt(attempt + 1);
+          }, 800 * (attempt + 1));
+        }
+        return;
+      }
+      const res = await fetch("/api/auth/session", {
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ token }),
-      }).catch(() => {
-        // ignore — backend will treat as anonymous on next request
-      });
+      }).catch(() => null);
+      if (cancelled) return;
+      if (!res || !res.ok) {
+        if (attempt < 2) {
+          window.setTimeout(() => {
+            if (!cancelled) void pushJwt(attempt + 1);
+          }, 800 * (attempt + 1));
+        }
+      }
     };
 
     void pushJwt();
-    const interval = userId ? setInterval(pushJwt, REFRESH_MS) : null;
+    const interval = userId
+      ? window.setInterval(() => {
+          void pushJwt();
+        }, REFRESH_MS)
+      : null;
     return () => {
       cancelled = true;
-      if (interval) clearInterval(interval);
+      if (interval !== null) window.clearInterval(interval);
     };
   }, [userId]);
 
