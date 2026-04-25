@@ -28,6 +28,13 @@ export const projectDomainsTable = pgTable(
     isPrimary: boolean("is_primary").default(false).notNull(),
     verificationRecords: jsonb("verification_records").$type<DomainVerificationRecord[]>(),
     misconfigured: boolean("misconfigured").default(false).notNull(),
+    // Resolver-side DNS values Vercel sees right now. We persist these so
+    // the UI can tell the user "your CNAME is pointing at X, expected Y"
+    // without having to re-fetch from Vercel on every render. Null until
+    // the first config refresh succeeds.
+    aValues: jsonb("a_values").$type<string[]>(),
+    cnames: jsonb("cnames").$type<string[]>(),
+    configuredBy: text("configured_by"),
     lastCheckedAt: timestamp("last_checked_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },

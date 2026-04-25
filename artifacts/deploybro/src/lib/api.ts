@@ -500,6 +500,12 @@ export type ApiDomainSuggestedRecord = {
   value: string;
 };
 
+export type ApiDomainDnsMismatch = {
+  recordType: "CNAME" | "A";
+  expected: string;
+  actual: string[];
+};
+
 export type ApiProjectDomain = {
   id: string;
   host: string;
@@ -508,6 +514,14 @@ export type ApiProjectDomain = {
   misconfigured: boolean;
   verificationRecords: ApiDomainVerificationRecord[];
   suggestedRecords: ApiDomainSuggestedRecord[];
+  // Resolver-side DNS the server learned from Vercel. `null` until a
+  // refresh has succeeded at least once.
+  aValues: string[] | null;
+  cnames: string[] | null;
+  configuredBy: string | null;
+  // Pre-computed mismatch hint for the UI: present when the user's DNS
+  // points somewhere clearly other than the expected Vercel target.
+  dnsMismatch: ApiDomainDnsMismatch | null;
   createdAt: string;
   lastCheckedAt: string | null;
 };

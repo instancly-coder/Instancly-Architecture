@@ -3199,6 +3199,50 @@ function DomainsView() {
                   </div>
                 </div>
 
+                {/* When Vercel can see DNS but it's pointing somewhere
+                    else, surface the explicit "your CNAME points at X,
+                    expected Y" hint. This is the most common cause of
+                    a stuck domain and the actionable info the user
+                    needs to fix their registrar — far more useful than
+                    a generic "Misconfigured" badge. */}
+                {d.dnsMismatch && (
+                  <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs">
+                    <div className="flex items-start gap-2 text-destructive">
+                      <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium">
+                          Your {d.dnsMismatch.recordType} record is
+                          pointing somewhere unexpected
+                        </div>
+                        <div className="mt-1.5 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 font-mono text-[11px] text-foreground">
+                          <div>
+                            <span className="text-secondary uppercase tracking-wide text-[9px] mr-1.5">
+                              We see
+                            </span>
+                            {d.dnsMismatch.actual.map((v, i) => (
+                              <span key={i} className="break-all">
+                                {v}
+                                {i < d.dnsMismatch!.actual.length - 1 && ", "}
+                              </span>
+                            ))}
+                          </div>
+                          <div>
+                            <span className="text-secondary uppercase tracking-wide text-[9px] mr-1.5">
+                              Expected
+                            </span>
+                            <span className="break-all">{d.dnsMismatch.expected}</span>
+                          </div>
+                        </div>
+                        <div className="mt-1.5 text-secondary text-[11px]">
+                          Update the {d.dnsMismatch.recordType} record at
+                          your registrar to point at{" "}
+                          <span className="font-mono">{d.dnsMismatch.expected}</span>.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* DNS instructions: show until the domain is verified.
                     Combine the suggested CNAME/A record with any TXT
                     verification challenges Vercel has issued so the user
@@ -3223,6 +3267,26 @@ function DomainsView() {
                     ))}
                   </div>
                 )}
+
+                {/* Verified-but-misconfigured edge case: ownership is
+                    proven (TXT verification passed) but the live DNS
+                    no longer points at us — usually because the user
+                    changed it after verifying. Show the same mismatch
+                    block above; here we add a fallback "current DNS"
+                    line for cases where we have values but no clean
+                    mismatch (e.g. multiple A records, partial match). */}
+                {d.verified &&
+                  d.misconfigured &&
+                  !d.dnsMismatch &&
+                  ((d.aValues && d.aValues.length > 0) ||
+                    (d.cnames && d.cnames.length > 0)) && (
+                    <div className="text-[11px] font-mono text-secondary mt-1">
+                      Current DNS:{" "}
+                      {d.cnames && d.cnames.length > 0
+                        ? `CNAME ${d.cnames.join(", ")}`
+                        : `A ${d.aValues!.join(", ")}`}
+                    </div>
+                  )}
               </div>
             );
           })}

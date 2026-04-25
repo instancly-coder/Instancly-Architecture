@@ -76,6 +76,12 @@ function suggestedDnsRecords(host: string): Array<{
 }
 
 // Shape the DB row + Vercel state into the JSON the frontend renders.
+type DnsMismatch = {
+  recordType: "CNAME" | "A";
+  expected: string;
+  actual: string[];
+};
+
 type DomainResponse = {
   id: string;
   host: string;
@@ -89,9 +95,69 @@ type DomainResponse = {
     reason: string;
   }>;
   suggestedRecords: Array<{ type: "CNAME" | "A"; name: string; value: string }>;
+  // Resolver-side DNS values, surfaced verbatim so the UI can show "we
+  // see CNAME xyz.cloudfront.net" alongside the expected target. Null
+  // when we haven't been able to refresh from Vercel yet.
+  aValues: string[] | null;
+  cnames: string[] | null;
+  configuredBy: string | null;
+  // Pre-computed for the UI: when present, the user's DNS clearly
+  // points somewhere other than the expected Vercel target. We only
+  // emit this when there's actual data to compare — a row that's
+  // simply not yet in DNS shows the suggested-records list instead.
+  dnsMismatch: DnsMismatch | null;
   createdAt: string;
   lastCheckedAt: string | null;
 };
+
+// Vercel's documented canonical targets — used to compare against
+// whatever the user's DNS actually contains. Lowercased for direct
+// comparison after we strip a trailing dot from CNAME values.
+const VERCEL_CNAME_TARGET = "cname.vercel-dns.com";
+const VERCEL_A_TARGET = "76.76.21.21";
+
+// Decide whether the current DNS values constitute a clear "pointing
+// at the wrong place" mismatch (vs. just "no DNS yet"). The check is
+// driven by what record type the user is actually using — this avoids
+// the apex-vs-subdomain heuristic getting it wrong for multi-label
+// public suffixes like `example.co.uk` (where a naive label count says
+// "subdomain" but the domain is really an apex).
+//
+// Rules:
+//   - If misconfigured AND user has CNAME records → compare against
+//     `cname.vercel-dns.com`. If none match, that's the mismatch.
+//   - Else if misconfigured AND user has A records → compare against
+//     `76.76.21.21`. If none match, that's the mismatch.
+//   - Else → no callout (user has no DNS yet, or DNS matches).
+function computeDnsMismatch(
+  row: typeof projectDomainsTable.$inferSelect,
+): DnsMismatch | null {
+  if (!row.misconfigured) return null;
+
+  const cnames = (row.cnames ?? [])
+    .map((c) => c.replace(/\.$/, "").toLowerCase())
+    .filter((c) => c.length > 0);
+  if (cnames.length > 0) {
+    if (cnames.some((c) => c === VERCEL_CNAME_TARGET)) return null;
+    return {
+      recordType: "CNAME",
+      expected: VERCEL_CNAME_TARGET,
+      actual: cnames,
+    };
+  }
+
+  const aValues = (row.aValues ?? []).filter((v) => v.length > 0);
+  if (aValues.length > 0) {
+    if (aValues.some((v) => v === VERCEL_A_TARGET)) return null;
+    return {
+      recordType: "A",
+      expected: VERCEL_A_TARGET,
+      actual: aValues,
+    };
+  }
+
+  return null;
+}
 
 function toResponse(row: typeof projectDomainsTable.$inferSelect): DomainResponse {
   return {
@@ -102,6 +168,10 @@ function toResponse(row: typeof projectDomainsTable.$inferSelect): DomainRespons
     misconfigured: row.misconfigured,
     verificationRecords: row.verificationRecords ?? [],
     suggestedRecords: suggestedDnsRecords(row.host),
+    aValues: row.aValues ?? null,
+    cnames: row.cnames ?? null,
+    configuredBy: row.configuredBy ?? null,
+    dnsMismatch: computeDnsMismatch(row),
     createdAt: row.createdAt.toISOString(),
     lastCheckedAt: row.lastCheckedAt?.toISOString() ?? null,
   };
@@ -136,6 +206,14 @@ async function refreshFromVercel(
   const verified = domain?.verified ?? row.verified;
   const verificationRecords = domain?.verification ?? row.verificationRecords;
   const misconfigured = config?.misconfigured ?? row.misconfigured;
+  // Only overwrite the cached resolver values when we actually got a
+  // fresh config back. A failed Vercel call shouldn't wipe the
+  // last-known DNS state we'd otherwise show in the UI.
+  const aValues = config ? config.aValues ?? null : row.aValues;
+  const cnames = config ? config.cnames ?? null : row.cnames;
+  const configuredBy = config
+    ? config.configuredBy ?? null
+    : row.configuredBy;
 
   const [updated] = await db
     .update(projectDomainsTable)
@@ -143,6 +221,9 @@ async function refreshFromVercel(
       verified,
       verificationRecords: verificationRecords ?? null,
       misconfigured,
+      aValues,
+      cnames,
+      configuredBy,
       lastCheckedAt: new Date(),
     })
     .where(eq(projectDomainsTable.id, row.id))
@@ -365,6 +446,12 @@ router.post(
         verified: vercelDomain.verified,
         verificationRecords: vercelDomain.verification ?? null,
         misconfigured: initialConfig?.misconfigured ?? false,
+        // Persist the resolver values from the initial config probe so
+        // the very first response back to the UI can already include a
+        // dnsMismatch hint when applicable.
+        aValues: initialConfig?.aValues ?? null,
+        cnames: initialConfig?.cnames ?? null,
+        configuredBy: initialConfig?.configuredBy ?? null,
         lastCheckedAt: new Date(),
         // First-added domain that lands verified becomes primary
         // automatically. Otherwise the user can promote one later.
