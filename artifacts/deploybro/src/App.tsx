@@ -7,7 +7,12 @@ import {
 } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NeonAuthUIProvider } from "@neondatabase/neon-js/auth/react/ui";
-import "@neondatabase/neon-js/ui/css";
+// NOTE: don't import "@neondatabase/neon-js/ui/css" here — that path is
+// the SDK's full standalone Tailwind v4 build (4000+ classes) which
+// would obliterate our own Tailwind. The Tailwind-extension version
+// (theme tokens + safelist for the auth UI) is imported in `index.css`
+// via `@import "@neondatabase/neon-js/ui/tailwind"` so it composes
+// into our single Tailwind build instead of fighting it.
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";

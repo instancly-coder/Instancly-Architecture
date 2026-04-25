@@ -1,5 +1,11 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+/* Neon Auth UI's Tailwind extension — theme tokens + class safelist
+ * for the SDK's <AuthView>/<AuthCallback>. MUST come AFTER the
+ * tailwindcss import so it composes into the same build. Importing
+ * `@neondatabase/neon-js/ui/css` from JS instead would ship a second
+ * full Tailwind build that fights with this one (see App.tsx). */
+@import "@neondatabase/neon-js/ui/tailwind";
 @plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:is(.dark *));
