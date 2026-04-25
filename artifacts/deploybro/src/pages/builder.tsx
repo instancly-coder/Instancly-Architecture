@@ -91,6 +91,7 @@ import {
   useProjectFiles,
   useUploadProjectFile,
   useDeleteProjectFile,
+  PUBLISH_SIZE_LIMIT_BYTES,
   usePublishProject,
   useDeployments,
   useDeploymentStatus,
@@ -2149,6 +2150,84 @@ function ViewportPicker({
   );
 }
 
+// Format a byte count as a short, human-friendly string. Used both in
+// the per-file row and in the "X / 90 MB" project-size gauge so the
+// units agree at a glance.
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+// Tiny gauge that lives in the Explorer footer. Shows current total
+// project size against the publish hard cap, with a colored bar so
+// users notice when they're getting close. Rendered identically in
+// the desktop sidebar and the mobile dropdown so the warning is
+// reachable from both.
+function ProjectSizeGauge({
+  totalBytes,
+  pct,
+  state,
+}: {
+  totalBytes: number;
+  pct: number;
+  state: "ok" | "warn" | "over";
+}) {
+  const barColor =
+    state === "over"
+      ? "bg-red-500"
+      : state === "warn"
+      ? "bg-amber-500"
+      : "bg-primary/60";
+  const textColor =
+    state === "over"
+      ? "text-red-500"
+      : state === "warn"
+      ? "text-amber-500"
+      : "text-secondary";
+  // Cap the rendered bar width at 100% so an oversized project doesn't
+  // overflow the container, but keep the numeric label honest.
+  const barWidth = Math.min(100, pct);
+  const limitMb = Math.round(PUBLISH_SIZE_LIMIT_BYTES / 1024 / 1024);
+  return (
+    <div
+      className="px-3 py-2 border-t border-border bg-surface"
+      title={
+        state === "over"
+          ? `Over the ${limitMb}MB publish limit — the next publish will fail until you free space.`
+          : state === "warn"
+          ? `Approaching the ${limitMb}MB publish limit. Consider deleting unused assets.`
+          : `Project size — publish hard cap is ${limitMb}MB.`
+      }
+    >
+      <div className="flex items-center justify-between text-[10px] font-mono mb-1">
+        <span className="uppercase tracking-wider text-secondary">
+          Project size
+        </span>
+        <span className={textColor}>
+          {formatBytes(totalBytes)} / {limitMb} MB
+        </span>
+      </div>
+      <div className="h-1 rounded-full bg-surface-raised overflow-hidden">
+        <div
+          className={`h-full ${barColor} transition-all`}
+          style={{ width: `${barWidth}%` }}
+        />
+      </div>
+      {state === "over" && (
+        <div className="mt-1.5 text-[10px] text-red-500 leading-snug">
+          Over the publish limit — delete an asset to deploy again.
+        </div>
+      )}
+      {state === "warn" && (
+        <div className="mt-1.5 text-[10px] text-amber-500 leading-snug">
+          Getting close to the publish limit.
+        </div>
+      )}
+    </div>
+  );
+}
+
 function FilesPane({
   username,
   slug,
@@ -2171,20 +2250,24 @@ function FilesPane({
   const tree = files.map((f) => {
     const segments = f.path.split("/");
     const group = segments.length > 1 ? segments.slice(0, -1).join("/") : "";
-    const size =
-      f.size < 1024
-        ? `${f.size} B`
-        : f.size < 1024 * 1024
-        ? `${(f.size / 1024).toFixed(1)} KB`
-        : `${(f.size / 1024 / 1024).toFixed(1)} MB`;
     return {
       path: f.path,
       group,
-      size,
+      sizeBytes: f.size,
+      size: formatBytes(f.size),
       encoding: f.encoding,
       contentType: f.contentType,
     };
   });
+  // Sum the byte size of every file so we can show a live "X / 90 MB"
+  // gauge in the Explorer footer. The publish pipeline rejects anything
+  // above PUBLISH_SIZE_LIMIT_BYTES, and the user previously only learned
+  // they were over the cap *after* hitting Publish — this surfaces the
+  // problem while they can still prune.
+  const totalBytes = files.reduce((sum, f) => sum + (f.size ?? 0), 0);
+  const sizePct = (totalBytes / PUBLISH_SIZE_LIMIT_BYTES) * 100;
+  const sizeState: "ok" | "warn" | "over" =
+    sizePct >= 100 ? "over" : sizePct >= 80 ? "warn" : "ok";
 
   // Walks a FileList and uploads each entry sequentially. Sequential
   // (not Promise.all) so the API server's 30MB body cap isn't blown by
@@ -2288,6 +2371,14 @@ function FilesPane({
                 >
                   <Icon className="w-3.5 h-3.5 shrink-0" />
                   <span className="truncate flex-1">{name}</span>
+                  {/* Per-file size makes "what's eating my budget?"
+                      a one-glance answer when the project size gauge
+                      goes amber. Hidden when active row already shows
+                      file metadata in the editor header to keep the
+                      row compact. */}
+                  <span className="text-[9px] font-mono text-secondary/60 shrink-0">
+                    {f.size}
+                  </span>
                   {isBinary && (
                     <span className="text-[9px] font-mono px-1 rounded bg-surface text-secondary">
                       bin
@@ -2337,8 +2428,8 @@ function FilesPane({
           if (uploadInputRef.current) uploadInputRef.current.value = "";
         }}
       />
-      <div className="hidden md:flex w-64 border-r border-border bg-surface overflow-y-auto shrink-0 flex-col">
-        <div className="flex items-center justify-between px-3 py-2 border-b border-border gap-2">
+      <div className="hidden md:flex w-64 border-r border-border bg-surface shrink-0 flex-col">
+        <div className="flex items-center justify-between px-3 py-2 border-b border-border gap-2 shrink-0">
           <div className="text-[10px] uppercase tracking-wider font-mono text-secondary">
             Explorer
           </div>
@@ -2359,11 +2450,19 @@ function FilesPane({
           </div>
         </div>
         {uploadError && (
-          <div className="mx-2 my-1 px-2 py-1.5 rounded text-[10px] text-red-500 bg-red-500/10 border border-red-500/20 break-words">
+          <div className="mx-2 my-1 px-2 py-1.5 rounded text-[10px] text-red-500 bg-red-500/10 border border-red-500/20 break-words shrink-0">
             {uploadError}
           </div>
         )}
-        {TreeBody}
+        {/* Tree + gauge: tree scrolls, gauge stays pinned to the
+            sidebar bottom so the size warning is always visible
+            even when the file list is long. */}
+        <div className="flex-1 overflow-y-auto min-h-0">{TreeBody}</div>
+        <ProjectSizeGauge
+          totalBytes={totalBytes}
+          pct={sizePct}
+          state={sizeState}
+        />
       </div>
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         <div className="md:hidden border-b border-border bg-surface relative">
@@ -2392,8 +2491,8 @@ function FilesPane({
                 className="fixed inset-0 z-20 bg-background/60 backdrop-blur-sm"
                 onClick={() => setMobileTreeOpen(false)}
               />
-              <div className="absolute left-2 right-2 top-full mt-1 z-30 rounded-lg border border-border bg-surface shadow-2xl max-h-[60vh] overflow-y-auto">
-                <div className="flex items-center justify-between px-3 py-2 border-b border-border sticky top-0 bg-surface">
+              <div className="absolute left-2 right-2 top-full mt-1 z-30 rounded-lg border border-border bg-surface shadow-2xl max-h-[60vh] flex flex-col overflow-hidden">
+                <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-surface shrink-0">
                   <div className="text-[10px] uppercase tracking-wider font-mono text-secondary">
                     Explorer
                   </div>
@@ -2401,7 +2500,14 @@ function FilesPane({
                     {tree.length} files
                   </span>
                 </div>
-                {TreeBody}
+                <div className="flex-1 overflow-y-auto min-h-0">{TreeBody}</div>
+                {/* Mobile gauge mirrors the desktop one so users on
+                    small screens get the same publish-size warning. */}
+                <ProjectSizeGauge
+                  totalBytes={totalBytes}
+                  pct={sizePct}
+                  state={sizeState}
+                />
               </div>
             </>
           )}

@@ -169,6 +169,13 @@ export function useUserProjects(username: string | undefined) {
   });
 }
 
+// Hard cap the publish pipeline enforces on the total deflated payload
+// uploaded to Vercel. Mirrors `PAYLOAD_SIZE_LIMIT_BYTES` in
+// `artifacts/api-server/src/lib/deploy-payload.ts` — keep these two
+// constants in sync. The Files panel uses this to render a live size
+// gauge so users can prune before the next publish fails.
+export const PUBLISH_SIZE_LIMIT_BYTES = 90 * 1024 * 1024;
+
 export type ApiProjectFile = {
   path: string;
   size: number;
