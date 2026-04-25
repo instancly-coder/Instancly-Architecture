@@ -7,6 +7,14 @@ import {
   projectDomainsTable,
   transactionsTable,
 } from "@workspace/db";
+import {
+  GetMeResponse,
+  UpdateMeResponse,
+  ListMyProjectsResponse,
+  ListMyTransactionsResponse,
+  RenameMyProjectResponse,
+  CreateMyProjectResponse,
+} from "@workspace/api-zod";
 import { authConfigured, getAuthedUser } from "../middlewares/auth";
 import { removeProjectDomain } from "../lib/vercel";
 import { logger } from "../lib/logger";
@@ -84,13 +92,12 @@ async function getMe(req: Request) {
   return null;
 }
 
-router.get("/me", async (req: Request, res: Response): Promise<void> => {
-  const user = await getMe(req);
-  if (!user) {
-    res.status(401).json({ status: "error", message: "Unauthenticated" });
-    return;
-  }
-  res.json({
+// Trim the raw users row down to the public Me shape. The `Me` schema is
+// the single source of truth for what leaves this endpoint — anything
+// added later (e.g. internal flags, billing internals) must be opted-in
+// through the schema, not leaked by spreading the raw row.
+function toMe(user: typeof usersTable.$inferSelect): typeof GetMeResponse._type {
+  return GetMeResponse.parse({
     id: user.id,
     username: user.username,
     displayName: user.displayName,
@@ -101,12 +108,21 @@ router.get("/me", async (req: Request, res: Response): Promise<void> => {
     status: user.status,
     signupDate: user.createdAt.toISOString().slice(0, 10),
   });
+}
+
+router.get("/me", async (req: Request, res: Response): Promise<void> => {
+  const user = await getMe(req);
+  if (!user) {
+    res.status(401).json({ status: "error", message: "Unauthenticated" });
+    return;
+  }
+  res.json(toMe(user));
 });
 
 router.get("/me/projects", async (req: Request, res: Response): Promise<void> => {
   const user = await getMe(req);
   if (!user) {
-    res.json([]);
+    res.json(ListMyProjectsResponse.parse([]));
     return;
   }
   const rows = await db
@@ -125,13 +141,20 @@ router.get("/me/projects", async (req: Request, res: Response): Promise<void> =>
     .from(projectsTable)
     .where(eq(projectsTable.userId, user.id))
     .orderBy(desc(projectsTable.lastBuiltAt));
-  res.json(rows.map((r) => ({ ...r, buildsCount: Number(r.buildsCount) })));
+  const data = ListMyProjectsResponse.parse(
+    rows.map((r) => ({
+      ...r,
+      lastBuiltAt: r.lastBuiltAt.toISOString(),
+      buildsCount: Number(r.buildsCount),
+    })),
+  );
+  res.json(data);
 });
 
 router.get("/me/transactions", async (req: Request, res: Response): Promise<void> => {
   const user = await getMe(req);
   if (!user) {
-    res.json([]);
+    res.json(ListMyTransactionsResponse.parse([]));
     return;
   }
   const rows = await db
@@ -139,7 +162,16 @@ router.get("/me/transactions", async (req: Request, res: Response): Promise<void
     .from(transactionsTable)
     .where(eq(transactionsTable.userId, user.id))
     .orderBy(desc(transactionsTable.createdAt));
-  res.json(rows.map((r) => ({ ...r, amount: Number(r.amount) })));
+  const data = ListMyTransactionsResponse.parse(
+    rows.map((r) => ({
+      id: r.id,
+      amount: Number(r.amount),
+      status: r.status,
+      method: r.method,
+      createdAt: r.createdAt.toISOString(),
+    })),
+  );
+  res.json(data);
 });
 
 router.patch("/me", async (req: Request, res: Response): Promise<void> => {
@@ -191,17 +223,9 @@ router.patch("/me", async (req: Request, res: Response): Promise<void> => {
   }
 
   if (Object.keys(updates).length === 0) {
-    res.json({
-      id: user.id,
-      username: user.username,
-      displayName: user.displayName,
-      email: user.email,
-      bio: user.bio,
-      plan: user.plan,
-      balance: Number(user.balance),
-      status: user.status,
-      signupDate: user.createdAt.toISOString().slice(0, 10),
-    });
+    // No-op update — return the current row through the same shape so the
+    // frontend cache lands on a Me-shaped value either way.
+    res.json(UpdateMeResponse.parse(toMe(user)));
     return;
   }
 
@@ -211,17 +235,7 @@ router.patch("/me", async (req: Request, res: Response): Promise<void> => {
     .where(eq(usersTable.id, user.id))
     .returning();
 
-  res.json({
-    id: updated.id,
-    username: updated.username,
-    displayName: updated.displayName,
-    email: updated.email,
-    bio: updated.bio,
-    plan: updated.plan,
-    balance: Number(updated.balance),
-    status: updated.status,
-    signupDate: updated.createdAt.toISOString().slice(0, 10),
-  });
+  res.json(UpdateMeResponse.parse(toMe(updated)));
 });
 
 router.patch("/me/projects/:slug", async (req: Request, res: Response): Promise<void> => {
@@ -283,7 +297,12 @@ router.patch("/me/projects/:slug", async (req: Request, res: Response): Promise<
     res.status(404).json({ status: "error", message: "Project not found" });
     return;
   }
-  res.json({ ...updated, buildsCount: 0 });
+  const data = RenameMyProjectResponse.parse({
+    ...updated,
+    lastBuiltAt: updated.lastBuiltAt.toISOString(),
+    buildsCount: 0,
+  });
+  res.json(data);
 });
 
 router.delete("/me/projects/:slug", async (req: Request, res: Response): Promise<void> => {
@@ -393,7 +412,15 @@ router.post("/me/projects", async (req: Request, res: Response): Promise<void> =
     })
     .returning();
 
-  res.status(201).json({ ...created, ownerUsername: user.username });
+  // Stick to the documented CreateProjectResponse shape — the raw row has
+  // internal Neon/Vercel fields the schema deliberately excludes.
+  const data = CreateMyProjectResponse.parse({
+    id: created.id,
+    slug: created.slug,
+    name: created.name,
+    ownerUsername: user.username,
+  });
+  res.status(201).json(data);
 });
 
 export default router;

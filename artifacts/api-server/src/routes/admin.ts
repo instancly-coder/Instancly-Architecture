@@ -8,6 +8,13 @@ import {
   transactionsTable,
 } from "@workspace/db";
 import { authConfigured, getAuthedUser } from "../middlewares/auth";
+import {
+  GetAdminMeResponse,
+  GetAdminStatsResponse,
+  ListAdminRecentBuildsResponse,
+  ListAdminUsersResponse,
+  ListAdminCostByModelResponse,
+} from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
@@ -36,7 +43,7 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction): Pr
 
 router.get("/admin/me", async (req: Request, res: Response): Promise<void> => {
   if (DEV_ADMIN_ALLOWED) {
-    res.json({ isAdmin: true, configured: false });
+    res.json(GetAdminMeResponse.parse({ isAdmin: true, configured: false }));
     return;
   }
   const user = getAuthedUser(req);
@@ -44,7 +51,7 @@ router.get("/admin/me", async (req: Request, res: Response): Promise<void> => {
     !!user &&
     ADMIN_USERNAMES.length > 0 &&
     ADMIN_USERNAMES.includes(user.username.toLowerCase());
-  res.json({ isAdmin, configured: true });
+  res.json(GetAdminMeResponse.parse({ isAdmin, configured: true }));
 });
 
 router.get("/admin/stats", requireAdmin, async (_req: Request, res: Response): Promise<void> => {
@@ -70,13 +77,15 @@ router.get("/admin/stats", requireAdmin, async (_req: Request, res: Response): P
     .select({ spend: sql<number>`coalesce(sum(${buildsTable.cost}), 0)` })
     .from(buildsTable);
 
-  res.json({
-    totalUsers: Number(totalUsers),
-    totalProjects: Number(totalProjects),
-    buildsToday: Number(buildsToday),
-    revenueGbp: Number(revenue),
-    spendGbp: Number(spend),
-  });
+  res.json(
+    GetAdminStatsResponse.parse({
+      totalUsers: Number(totalUsers),
+      totalProjects: Number(totalProjects),
+      buildsToday: Number(buildsToday),
+      revenueGbp: Number(revenue),
+      spendGbp: Number(spend),
+    }),
+  );
 });
 
 router.get("/admin/recent-builds", requireAdmin, async (_req: Request, res: Response): Promise<void> => {
@@ -95,7 +104,15 @@ router.get("/admin/recent-builds", requireAdmin, async (_req: Request, res: Resp
     .innerJoin(usersTable, eq(usersTable.id, projectsTable.userId))
     .orderBy(desc(buildsTable.createdAt))
     .limit(20);
-  res.json(rows.map((r) => ({ ...r, cost: Number(r.cost) })));
+  res.json(
+    ListAdminRecentBuildsResponse.parse(
+      rows.map((r) => ({
+        ...r,
+        cost: Number(r.cost),
+        createdAt: r.createdAt.toISOString(),
+      })),
+    ),
+  );
 });
 
 router.get("/admin/users", requireAdmin, async (_req: Request, res: Response): Promise<void> => {
@@ -112,11 +129,17 @@ router.get("/admin/users", requireAdmin, async (_req: Request, res: Response): P
     .from(usersTable)
     .orderBy(desc(usersTable.createdAt));
   res.json(
-    rows.map((r) => ({
-      ...r,
-      balance: Number(r.balance),
-      signupDate: r.createdAt.toISOString().slice(0, 10),
-    })),
+    ListAdminUsersResponse.parse(
+      rows.map((r) => ({
+        id: r.id,
+        username: r.username,
+        email: r.email,
+        plan: r.plan,
+        balance: Number(r.balance),
+        status: r.status,
+        signupDate: r.createdAt.toISOString().slice(0, 10),
+      })),
+    ),
   );
 });
 
@@ -128,7 +151,11 @@ router.get("/admin/cost-by-model", requireAdmin, async (_req: Request, res: Resp
     })
     .from(buildsTable)
     .groupBy(buildsTable.model);
-  res.json(rows.map((r) => ({ model: r.model, total: Number(r.total) })));
+  res.json(
+    ListAdminCostByModelResponse.parse(
+      rows.map((r) => ({ model: r.model, total: Number(r.total) })),
+    ),
+  );
 });
 
 export default router;

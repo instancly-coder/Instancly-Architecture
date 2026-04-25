@@ -8,6 +8,12 @@ import {
 import { and, asc, eq, sql } from "drizzle-orm";
 import { contentTypeFor, sanitizePath } from "../lib/file-blocks";
 import { requireAuth, getAuthedUser } from "../middlewares/auth";
+import {
+  ListProjectFilesResponse,
+  GetProjectFileResponse,
+  UploadProjectFileResponse,
+  DeleteProjectFileResponse,
+} from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
@@ -54,13 +60,15 @@ router.get(
       .where(eq(projectFilesTable.projectId, project.id))
       .orderBy(asc(projectFilesTable.path));
     res.json(
-      rows.map((r) => ({
-        path: r.path,
-        size: r.size,
-        encoding: r.encoding,
-        contentType: r.contentType,
-        updatedAt: r.updatedAt.toISOString(),
-      })),
+      ListProjectFilesResponse.parse(
+        rows.map((r) => ({
+          path: r.path,
+          size: r.size,
+          encoding: r.encoding,
+          contentType: r.contentType,
+          updatedAt: r.updatedAt.toISOString(),
+        })),
+      ),
     );
   },
 );
@@ -111,12 +119,14 @@ router.get(
       res.status(404).json({ status: "error", message: "File not found" });
       return;
     }
-    res.json({
-      path,
-      content: row.content,
-      encoding: row.encoding,
-      contentType: row.contentType,
-    });
+    res.json(
+      GetProjectFileResponse.parse({
+        path,
+        content: row.content,
+        encoding: row.encoding,
+        contentType: row.contentType,
+      }),
+    );
   },
 );
 
@@ -192,7 +202,7 @@ router.post(
         ? rawCt.slice(0, 200)
         : contentTypeFor(path);
 
-    await db
+    const [upserted] = await db
       .insert(projectFilesTable)
       .values({
         projectId: project.id,
@@ -211,14 +221,18 @@ router.post(
           size: buf.length,
           updatedAt: sql`now()`,
         },
-      });
+      })
+      .returning({ updatedAt: projectFilesTable.updatedAt });
 
-    res.json({
-      path,
-      size: buf.length,
-      encoding: "base64",
-      contentType,
-    });
+    res.json(
+      UploadProjectFileResponse.parse({
+        path,
+        size: buf.length,
+        encoding: "base64",
+        contentType,
+        updatedAt: upserted.updatedAt.toISOString(),
+      }),
+    );
   },
 );
 
@@ -266,7 +280,7 @@ router.delete(
       res.status(404).json({ status: "error", message: "File not found" });
       return;
     }
-    res.json({ status: "ok", path });
+    res.json(DeleteProjectFileResponse.parse({ status: "ok", path }));
   },
 );
 

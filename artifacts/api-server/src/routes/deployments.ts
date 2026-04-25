@@ -26,6 +26,12 @@ import {
   type ProjectFileLite,
 } from "../lib/deploy-payload";
 import { encryptSecret, decryptSecret } from "../lib/secret-cipher";
+import {
+  PublishProjectResponse,
+  ListProjectDeploymentsResponse,
+  GetProjectDeploymentResponse,
+  GetPublishStatusResponse,
+} from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
@@ -418,10 +424,12 @@ router.post(
     });
 
     if (txResult.kind === "alreadyRunning") {
-      res.status(202).json({
-        deploymentId: txResult.deploymentId,
-        alreadyRunning: true,
-      });
+      res.status(202).json(
+        PublishProjectResponse.parse({
+          deploymentId: txResult.deploymentId,
+          alreadyRunning: true,
+        }),
+      );
       return;
     }
     const created = { id: txResult.deploymentId };
@@ -434,7 +442,9 @@ router.post(
       slug,
     });
 
-    res.status(202).json({ deploymentId: created.id });
+    res.status(202).json(
+      PublishProjectResponse.parse({ deploymentId: created.id }),
+    );
   },
 );
 
@@ -462,15 +472,17 @@ router.get(
       .orderBy(desc(deploymentsTable.createdAt))
       .limit(50);
     res.json(
-      rows.map((d) => ({
-        id: d.id,
-        status: d.status,
-        liveUrl: d.liveUrl,
-        vercelInspectorUrl: d.vercelInspectorUrl,
-        errorMessage: d.errorMessage,
-        createdAt: d.createdAt.toISOString(),
-        finishedAt: d.finishedAt?.toISOString() ?? null,
-      })),
+      ListProjectDeploymentsResponse.parse(
+        rows.map((d) => ({
+          id: d.id,
+          status: d.status,
+          liveUrl: d.liveUrl,
+          vercelInspectorUrl: d.vercelInspectorUrl,
+          errorMessage: d.errorMessage,
+          createdAt: d.createdAt.toISOString(),
+          finishedAt: d.finishedAt?.toISOString() ?? null,
+        })),
+      ),
     );
   },
 );
@@ -509,15 +521,17 @@ router.get(
       res.status(404).json({ status: "error", message: "Deployment not found" });
       return;
     }
-    res.json({
-      id: d.id,
-      status: d.status,
-      liveUrl: d.liveUrl,
-      vercelInspectorUrl: d.vercelInspectorUrl,
-      errorMessage: d.errorMessage,
-      createdAt: d.createdAt.toISOString(),
-      finishedAt: d.finishedAt?.toISOString() ?? null,
-    });
+    res.json(
+      GetProjectDeploymentResponse.parse({
+        id: d.id,
+        status: d.status,
+        liveUrl: d.liveUrl,
+        vercelInspectorUrl: d.vercelInspectorUrl,
+        errorMessage: d.errorMessage,
+        createdAt: d.createdAt.toISOString(),
+        finishedAt: d.finishedAt?.toISOString() ?? null,
+      }),
+    );
   },
 );
 
@@ -539,12 +553,14 @@ router.get(
       res.status(403).json({ status: "error", message: "Forbidden" });
       return;
     }
-    res.json({
-      publishStatus: row.project.publishStatus,
-      liveUrl: row.project.liveUrl,
-      lastPublishedAt: row.project.lastPublishedAt?.toISOString() ?? null,
-      primaryCustomDomain: row.project.primaryCustomDomain,
-    });
+    res.json(
+      GetPublishStatusResponse.parse({
+        publishStatus: row.project.publishStatus,
+        liveUrl: row.project.liveUrl,
+        lastPublishedAt: row.project.lastPublishedAt?.toISOString() ?? null,
+        primaryCustomDomain: row.project.primaryCustomDomain,
+      }),
+    );
   },
 );
 

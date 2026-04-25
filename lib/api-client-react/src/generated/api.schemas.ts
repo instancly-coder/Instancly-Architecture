@@ -21,3 +21,302 @@ export interface AppConfig {
    */
   perFileUploadLimitBytes: number;
 }
+
+export interface Me {
+  id: string;
+  username: string;
+  displayName: string;
+  email: string;
+  bio: string;
+  plan: string;
+  balance: number;
+  status: string;
+  /** YYYY-MM-DD signup date. */
+  signupDate: string;
+}
+
+export interface User {
+  id: string;
+  username: string;
+  displayName: string;
+  email: string;
+  bio: string;
+  avatarUrl: string | null;
+  plan: string;
+  balance: number;
+  status: string;
+  signupDate: string;
+  publicProjects: number;
+  totalClones: number;
+}
+
+export interface UpdateMeBody {
+  username?: string;
+  displayName?: string;
+  bio?: string;
+}
+
+export interface Transaction {
+  id: string;
+  amount: number;
+  status: string;
+  method: string;
+  createdAt: string;
+}
+
+export interface ProjectListItem {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  framework: string;
+  status: string;
+  isPublic: boolean;
+  clones: number;
+  lastBuiltAt: string;
+  createdAt?: string;
+  buildsCount: number;
+}
+
+export interface ProjectOwner {
+  id: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  framework: string;
+  status: string;
+  isPublic: boolean;
+  clones: number;
+  createdAt: string;
+  lastBuiltAt: string;
+  owner: ProjectOwner;
+  buildsCount: number;
+  lastBuildAt: string | null;
+}
+
+export interface Build {
+  id: string;
+  projectId: string;
+  number: number;
+  prompt: string;
+  aiMessage: string;
+  durationSec: number;
+  cost: number;
+  filesChanged: number;
+  tokensIn: number;
+  tokensOut: number;
+  model: string;
+  status: string;
+  createdAt: string;
+}
+
+export interface CreateBuildBody {
+  prompt: string;
+  model?: string;
+}
+
+export interface CreateProjectBody {
+  name: string;
+  description?: string;
+  framework?: string;
+}
+
+export interface CreateProjectResponse {
+  id: string;
+  slug: string;
+  name: string;
+  ownerUsername: string;
+}
+
+export interface RenameProjectBody {
+  name: string;
+}
+
+export interface ExploreItem {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  framework: string;
+  clones: number;
+  lastBuiltAt: string;
+  author: string;
+  authorDisplayName: string;
+}
+
+export type FileEncoding = (typeof FileEncoding)[keyof typeof FileEncoding];
+
+export const FileEncoding = {
+  utf8: "utf8",
+  base64: "base64",
+} as const;
+
+export interface ProjectFile {
+  path: string;
+  size: number;
+  encoding: FileEncoding;
+  contentType: string | null;
+  updatedAt: string;
+}
+
+export interface ProjectFileContent {
+  path: string;
+  content: string;
+  encoding: FileEncoding;
+  contentType: string | null;
+}
+
+export interface UploadProjectFileBody {
+  path: string;
+  contentBase64: string;
+  contentType?: string;
+}
+
+export type DeleteProjectFileResponseStatus =
+  (typeof DeleteProjectFileResponseStatus)[keyof typeof DeleteProjectFileResponseStatus];
+
+export const DeleteProjectFileResponseStatus = {
+  ok: "ok",
+} as const;
+
+export interface DeleteProjectFileResponse {
+  status: DeleteProjectFileResponseStatus;
+  path: string;
+}
+
+export type DeploymentStatus =
+  (typeof DeploymentStatus)[keyof typeof DeploymentStatus];
+
+export const DeploymentStatus = {
+  queued: "queued",
+  validating: "validating",
+  provisioning_db: "provisioning_db",
+  creating_project: "creating_project",
+  deploying: "deploying",
+  polling: "polling",
+  live: "live",
+  failed: "failed",
+} as const;
+
+export interface Deployment {
+  id: string;
+  status: DeploymentStatus;
+  liveUrl: string | null;
+  vercelInspectorUrl: string | null;
+  errorMessage: string | null;
+  createdAt: string;
+  finishedAt: string | null;
+}
+
+export interface PublishResponse {
+  deploymentId: string;
+  alreadyRunning?: boolean;
+}
+
+export interface PublishStatus {
+  publishStatus: string;
+  liveUrl: string | null;
+  lastPublishedAt: string | null;
+  primaryCustomDomain: string | null;
+}
+
+export interface DomainVerificationRecord {
+  type: string;
+  domain: string;
+  value: string;
+  reason: string;
+}
+
+export type DnsRecordType = (typeof DnsRecordType)[keyof typeof DnsRecordType];
+
+export const DnsRecordType = {
+  CNAME: "CNAME",
+  A: "A",
+} as const;
+
+export interface DomainSuggestedRecord {
+  type: DnsRecordType;
+  name: string;
+  value: string;
+}
+
+export interface DomainDnsMismatch {
+  recordType: DnsRecordType;
+  expected: string;
+  actual: string[];
+}
+
+export interface ProjectDomain {
+  id: string;
+  host: string;
+  verified: boolean;
+  isPrimary: boolean;
+  misconfigured: boolean;
+  verificationRecords: DomainVerificationRecord[];
+  suggestedRecords: DomainSuggestedRecord[];
+  aValues: string[] | null;
+  cnames: string[] | null;
+  configuredBy: string | null;
+  dnsMismatch: DomainDnsMismatch | null;
+  createdAt: string;
+  lastCheckedAt: string | null;
+}
+
+export interface AddDomainBody {
+  host: string;
+}
+
+export interface SetPrimaryDomainResponse {
+  status: string;
+}
+
+export interface AdminMe {
+  isAdmin: boolean;
+  configured: boolean;
+}
+
+export interface AdminStats {
+  totalUsers: number;
+  totalProjects: number;
+  buildsToday: number;
+  revenueGbp: number;
+  spendGbp: number;
+}
+
+export interface AdminRecentBuild {
+  id: string;
+  duration: number;
+  cost: number;
+  status: string;
+  createdAt: string;
+  project: string;
+  username: string;
+}
+
+export interface AdminUser {
+  id: string;
+  username: string;
+  email: string;
+  plan: string;
+  balance: number;
+  status: string;
+  signupDate: string;
+}
+
+export interface AdminCostByModel {
+  model: string;
+  total: number;
+}
+
+export type ExploreParams = {
+  q?: string;
+  framework?: string;
+  sort?: string;
+};

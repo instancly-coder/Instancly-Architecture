@@ -36,3 +36,647 @@ export const AppConfigResponse = zod.object({
     .min(appConfigResponsePerFileUploadLimitBytesMin)
     .describe("Maximum size of a single uploaded file, in bytes."),
 });
+
+/**
+ * @summary Get the current user
+ */
+export const GetMeResponse = zod.object({
+  id: zod.string(),
+  username: zod.string(),
+  displayName: zod.string(),
+  email: zod.string(),
+  bio: zod.string(),
+  plan: zod.string(),
+  balance: zod.number(),
+  status: zod.string(),
+  signupDate: zod.string().describe("YYYY-MM-DD signup date."),
+});
+
+/**
+ * @summary Update profile fields
+ */
+export const UpdateMeBody = zod.object({
+  username: zod.string().optional(),
+  displayName: zod.string().optional(),
+  bio: zod.string().optional(),
+});
+
+export const UpdateMeResponse = zod.object({
+  id: zod.string(),
+  username: zod.string(),
+  displayName: zod.string(),
+  email: zod.string(),
+  bio: zod.string(),
+  plan: zod.string(),
+  balance: zod.number(),
+  status: zod.string(),
+  signupDate: zod.string().describe("YYYY-MM-DD signup date."),
+});
+
+/**
+ * @summary List projects owned by the current user
+ */
+export const ListMyProjectsResponseItem = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  slug: zod.string(),
+  description: zod.string(),
+  framework: zod.string(),
+  status: zod.string(),
+  isPublic: zod.boolean(),
+  clones: zod.number(),
+  lastBuiltAt: zod.string().datetime({}),
+  createdAt: zod.string().datetime({}).optional(),
+  buildsCount: zod.number(),
+});
+export const ListMyProjectsResponse = zod.array(ListMyProjectsResponseItem);
+
+/**
+ * @summary Create a new project
+ */
+export const CreateMyProjectBody = zod.object({
+  name: zod.string(),
+  description: zod.string().optional(),
+  framework: zod.string().optional(),
+});
+
+export const CreateMyProjectResponse = zod.object({
+  id: zod.string(),
+  slug: zod.string(),
+  name: zod.string(),
+  ownerUsername: zod.string(),
+});
+
+/**
+ * @summary Rename a project (and re-slug it)
+ */
+export const RenameMyProjectParams = zod.object({
+  slug: zod.string(),
+});
+
+export const RenameMyProjectBody = zod.object({
+  name: zod.string(),
+});
+
+export const RenameMyProjectResponse = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  slug: zod.string(),
+  description: zod.string(),
+  framework: zod.string(),
+  status: zod.string(),
+  isPublic: zod.boolean(),
+  clones: zod.number(),
+  lastBuiltAt: zod.string().datetime({}),
+  createdAt: zod.string().datetime({}).optional(),
+  buildsCount: zod.number(),
+});
+
+/**
+ * @summary Delete a project
+ */
+export const DeleteMyProjectParams = zod.object({
+  slug: zod.string(),
+});
+
+/**
+ * @summary List the current user's transactions
+ */
+export const ListMyTransactionsResponseItem = zod.object({
+  id: zod.string(),
+  amount: zod.number(),
+  status: zod.string(),
+  method: zod.string(),
+  createdAt: zod.string().datetime({}),
+});
+export const ListMyTransactionsResponse = zod.array(
+  ListMyTransactionsResponseItem,
+);
+
+/**
+ * @summary Get a public user profile
+ */
+export const GetUserParams = zod.object({
+  username: zod.string(),
+});
+
+export const GetUserResponse = zod.object({
+  id: zod.string(),
+  username: zod.string(),
+  displayName: zod.string(),
+  email: zod.string(),
+  bio: zod.string(),
+  avatarUrl: zod.string().nullable(),
+  plan: zod.string(),
+  balance: zod.number(),
+  status: zod.string(),
+  signupDate: zod.string(),
+  publicProjects: zod.number(),
+  totalClones: zod.number(),
+});
+
+/**
+ * @summary List a user's projects
+ */
+export const ListUserProjectsParams = zod.object({
+  username: zod.string(),
+});
+
+export const ListUserProjectsResponseItem = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  slug: zod.string(),
+  description: zod.string(),
+  framework: zod.string(),
+  status: zod.string(),
+  isPublic: zod.boolean(),
+  clones: zod.number(),
+  lastBuiltAt: zod.string().datetime({}),
+  createdAt: zod.string().datetime({}).optional(),
+  buildsCount: zod.number(),
+});
+export const ListUserProjectsResponse = zod.array(ListUserProjectsResponseItem);
+
+/**
+ * @summary Get a project by owner + slug
+ */
+export const GetProjectParams = zod.object({
+  username: zod.string(),
+  slug: zod.string(),
+});
+
+export const GetProjectResponse = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  slug: zod.string(),
+  description: zod.string(),
+  framework: zod.string(),
+  status: zod.string(),
+  isPublic: zod.boolean(),
+  clones: zod.number(),
+  createdAt: zod.string().datetime({}),
+  lastBuiltAt: zod.string().datetime({}),
+  owner: zod.object({
+    id: zod.string(),
+    username: zod.string(),
+    displayName: zod.string(),
+    avatarUrl: zod.string().nullable(),
+  }),
+  buildsCount: zod.number(),
+  lastBuildAt: zod.string().datetime({}).nullable(),
+});
+
+/**
+ * @summary List builds for a project
+ */
+export const ListProjectBuildsParams = zod.object({
+  username: zod.string(),
+  slug: zod.string(),
+});
+
+export const ListProjectBuildsResponseItem = zod.object({
+  id: zod.string(),
+  projectId: zod.string(),
+  number: zod.number(),
+  prompt: zod.string(),
+  aiMessage: zod.string(),
+  durationSec: zod.number(),
+  cost: zod.number(),
+  filesChanged: zod.number(),
+  tokensIn: zod.number(),
+  tokensOut: zod.number(),
+  model: zod.string(),
+  status: zod.string(),
+  createdAt: zod.string().datetime({}),
+});
+export const ListProjectBuildsResponse = zod.array(
+  ListProjectBuildsResponseItem,
+);
+
+/**
+ * @summary Kick off a new build
+ */
+export const CreateProjectBuildParams = zod.object({
+  username: zod.string(),
+  slug: zod.string(),
+});
+
+export const CreateProjectBuildBody = zod.object({
+  prompt: zod.string(),
+  model: zod.string().optional(),
+});
+
+export const CreateProjectBuildResponse = zod.object({
+  id: zod.string(),
+  projectId: zod.string(),
+  number: zod.number(),
+  prompt: zod.string(),
+  aiMessage: zod.string(),
+  durationSec: zod.number(),
+  cost: zod.number(),
+  filesChanged: zod.number(),
+  tokensIn: zod.number(),
+  tokensOut: zod.number(),
+  model: zod.string(),
+  status: zod.string(),
+  createdAt: zod.string().datetime({}),
+});
+
+/**
+ * @summary List file metadata for a project
+ */
+export const ListProjectFilesParams = zod.object({
+  username: zod.string(),
+  slug: zod.string(),
+});
+
+export const ListProjectFilesResponseItem = zod.object({
+  path: zod.string(),
+  size: zod.number(),
+  encoding: zod.enum(["utf8", "base64"]),
+  contentType: zod.string().nullable(),
+  updatedAt: zod.string().datetime({}),
+});
+export const ListProjectFilesResponse = zod.array(ListProjectFilesResponseItem);
+
+/**
+ * @summary Upload a binary asset
+ */
+export const UploadProjectFileParams = zod.object({
+  username: zod.string(),
+  slug: zod.string(),
+});
+
+export const UploadProjectFileBody = zod.object({
+  path: zod.string(),
+  contentBase64: zod.string(),
+  contentType: zod.string().optional(),
+});
+
+export const UploadProjectFileResponse = zod.object({
+  path: zod.string(),
+  size: zod.number(),
+  encoding: zod.enum(["utf8", "base64"]),
+  contentType: zod.string().nullable(),
+  updatedAt: zod.string().datetime({}),
+});
+
+/**
+ * @summary Read a single file's contents
+ */
+export const GetProjectFileParams = zod.object({
+  username: zod.string(),
+  slug: zod.string(),
+  path: zod.string(),
+});
+
+export const GetProjectFileResponse = zod.object({
+  path: zod.string(),
+  content: zod.string(),
+  encoding: zod.enum(["utf8", "base64"]),
+  contentType: zod.string().nullable(),
+});
+
+/**
+ * @summary Delete a single file from a project
+ */
+export const DeleteProjectFileParams = zod.object({
+  username: zod.string(),
+  slug: zod.string(),
+  path: zod.string(),
+});
+
+export const DeleteProjectFileResponse = zod.object({
+  status: zod.enum(["ok"]),
+  path: zod.string(),
+});
+
+/**
+ * @summary Start a publish pipeline
+ */
+export const PublishProjectParams = zod.object({
+  username: zod.string(),
+  slug: zod.string(),
+});
+
+export const PublishProjectResponse = zod.object({
+  deploymentId: zod.string(),
+  alreadyRunning: zod.boolean().optional(),
+});
+
+/**
+ * @summary List deployments for a project
+ */
+export const ListProjectDeploymentsParams = zod.object({
+  username: zod.string(),
+  slug: zod.string(),
+});
+
+export const ListProjectDeploymentsResponseItem = zod.object({
+  id: zod.string(),
+  status: zod.enum([
+    "queued",
+    "validating",
+    "provisioning_db",
+    "creating_project",
+    "deploying",
+    "polling",
+    "live",
+    "failed",
+  ]),
+  liveUrl: zod.string().nullable(),
+  vercelInspectorUrl: zod.string().nullable(),
+  errorMessage: zod.string().nullable(),
+  createdAt: zod.string().datetime({}),
+  finishedAt: zod.string().datetime({}).nullable(),
+});
+export const ListProjectDeploymentsResponse = zod.array(
+  ListProjectDeploymentsResponseItem,
+);
+
+/**
+ * @summary Get a single deployment
+ */
+export const GetProjectDeploymentParams = zod.object({
+  username: zod.string(),
+  slug: zod.string(),
+  id: zod.string(),
+});
+
+export const GetProjectDeploymentResponse = zod.object({
+  id: zod.string(),
+  status: zod.enum([
+    "queued",
+    "validating",
+    "provisioning_db",
+    "creating_project",
+    "deploying",
+    "polling",
+    "live",
+    "failed",
+  ]),
+  liveUrl: zod.string().nullable(),
+  vercelInspectorUrl: zod.string().nullable(),
+  errorMessage: zod.string().nullable(),
+  createdAt: zod.string().datetime({}),
+  finishedAt: zod.string().datetime({}).nullable(),
+});
+
+/**
+ * @summary Get the current publish status for a project
+ */
+export const GetPublishStatusParams = zod.object({
+  username: zod.string(),
+  slug: zod.string(),
+});
+
+export const GetPublishStatusResponse = zod.object({
+  publishStatus: zod.string(),
+  liveUrl: zod.string().nullable(),
+  lastPublishedAt: zod.string().datetime({}).nullable(),
+  primaryCustomDomain: zod.string().nullable(),
+});
+
+/**
+ * @summary List custom domains attached to a project
+ */
+export const ListProjectDomainsParams = zod.object({
+  username: zod.string(),
+  slug: zod.string(),
+});
+
+export const ListProjectDomainsResponseItem = zod.object({
+  id: zod.string(),
+  host: zod.string(),
+  verified: zod.boolean(),
+  isPrimary: zod.boolean(),
+  misconfigured: zod.boolean(),
+  verificationRecords: zod.array(
+    zod.object({
+      type: zod.string(),
+      domain: zod.string(),
+      value: zod.string(),
+      reason: zod.string(),
+    }),
+  ),
+  suggestedRecords: zod.array(
+    zod.object({
+      type: zod.enum(["CNAME", "A"]),
+      name: zod.string(),
+      value: zod.string(),
+    }),
+  ),
+  aValues: zod.array(zod.string()).nullable(),
+  cnames: zod.array(zod.string()).nullable(),
+  configuredBy: zod.string().nullable(),
+  dnsMismatch: zod.union([
+    zod.object({
+      recordType: zod.enum(["CNAME", "A"]),
+      expected: zod.string(),
+      actual: zod.array(zod.string()),
+    }),
+    zod.null(),
+  ]),
+  createdAt: zod.string().datetime({}),
+  lastCheckedAt: zod.string().datetime({}).nullable(),
+});
+export const ListProjectDomainsResponse = zod.array(
+  ListProjectDomainsResponseItem,
+);
+
+/**
+ * @summary Attach a custom domain
+ */
+export const AddProjectDomainParams = zod.object({
+  username: zod.string(),
+  slug: zod.string(),
+});
+
+export const AddProjectDomainBody = zod.object({
+  host: zod.string(),
+});
+
+export const AddProjectDomainResponse = zod.object({
+  id: zod.string(),
+  host: zod.string(),
+  verified: zod.boolean(),
+  isPrimary: zod.boolean(),
+  misconfigured: zod.boolean(),
+  verificationRecords: zod.array(
+    zod.object({
+      type: zod.string(),
+      domain: zod.string(),
+      value: zod.string(),
+      reason: zod.string(),
+    }),
+  ),
+  suggestedRecords: zod.array(
+    zod.object({
+      type: zod.enum(["CNAME", "A"]),
+      name: zod.string(),
+      value: zod.string(),
+    }),
+  ),
+  aValues: zod.array(zod.string()).nullable(),
+  cnames: zod.array(zod.string()).nullable(),
+  configuredBy: zod.string().nullable(),
+  dnsMismatch: zod.union([
+    zod.object({
+      recordType: zod.enum(["CNAME", "A"]),
+      expected: zod.string(),
+      actual: zod.array(zod.string()),
+    }),
+    zod.null(),
+  ]),
+  createdAt: zod.string().datetime({}),
+  lastCheckedAt: zod.string().datetime({}).nullable(),
+});
+
+/**
+ * @summary Remove a custom domain
+ */
+export const RemoveProjectDomainParams = zod.object({
+  username: zod.string(),
+  slug: zod.string(),
+  host: zod.string(),
+});
+
+/**
+ * @summary Re-check verification + DNS state for a domain
+ */
+export const VerifyProjectDomainParams = zod.object({
+  username: zod.string(),
+  slug: zod.string(),
+  host: zod.string(),
+});
+
+export const VerifyProjectDomainResponse = zod.object({
+  id: zod.string(),
+  host: zod.string(),
+  verified: zod.boolean(),
+  isPrimary: zod.boolean(),
+  misconfigured: zod.boolean(),
+  verificationRecords: zod.array(
+    zod.object({
+      type: zod.string(),
+      domain: zod.string(),
+      value: zod.string(),
+      reason: zod.string(),
+    }),
+  ),
+  suggestedRecords: zod.array(
+    zod.object({
+      type: zod.enum(["CNAME", "A"]),
+      name: zod.string(),
+      value: zod.string(),
+    }),
+  ),
+  aValues: zod.array(zod.string()).nullable(),
+  cnames: zod.array(zod.string()).nullable(),
+  configuredBy: zod.string().nullable(),
+  dnsMismatch: zod.union([
+    zod.object({
+      recordType: zod.enum(["CNAME", "A"]),
+      expected: zod.string(),
+      actual: zod.array(zod.string()),
+    }),
+    zod.null(),
+  ]),
+  createdAt: zod.string().datetime({}),
+  lastCheckedAt: zod.string().datetime({}).nullable(),
+});
+
+/**
+ * @summary Promote a verified domain to primary
+ */
+export const SetPrimaryProjectDomainParams = zod.object({
+  username: zod.string(),
+  slug: zod.string(),
+  host: zod.string(),
+});
+
+export const SetPrimaryProjectDomainResponse = zod.object({
+  status: zod.string(),
+});
+
+/**
+ * @summary Explore public projects
+ */
+export const ExploreQueryParams = zod.object({
+  q: zod.string().optional(),
+  framework: zod.string().optional(),
+  sort: zod.string().optional(),
+});
+
+export const ExploreResponseItem = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  slug: zod.string(),
+  description: zod.string(),
+  framework: zod.string(),
+  clones: zod.number(),
+  lastBuiltAt: zod.string().datetime({}),
+  author: zod.string(),
+  authorDisplayName: zod.string(),
+});
+export const ExploreResponse = zod.array(ExploreResponseItem);
+
+/**
+ * @summary Whether the current user is an admin
+ */
+export const GetAdminMeResponse = zod.object({
+  isAdmin: zod.boolean(),
+  configured: zod.boolean(),
+});
+
+/**
+ * @summary Aggregate platform stats
+ */
+export const GetAdminStatsResponse = zod.object({
+  totalUsers: zod.number(),
+  totalProjects: zod.number(),
+  buildsToday: zod.number(),
+  revenueGbp: zod.number(),
+  spendGbp: zod.number(),
+});
+
+/**
+ * @summary Recent builds across all projects
+ */
+export const ListAdminRecentBuildsResponseItem = zod.object({
+  id: zod.string(),
+  duration: zod.number(),
+  cost: zod.number(),
+  status: zod.string(),
+  createdAt: zod.string().datetime({}),
+  project: zod.string(),
+  username: zod.string(),
+});
+export const ListAdminRecentBuildsResponse = zod.array(
+  ListAdminRecentBuildsResponseItem,
+);
+
+/**
+ * @summary All registered users
+ */
+export const ListAdminUsersResponseItem = zod.object({
+  id: zod.string(),
+  username: zod.string(),
+  email: zod.string(),
+  plan: zod.string(),
+  balance: zod.number(),
+  status: zod.string(),
+  signupDate: zod.string(),
+});
+export const ListAdminUsersResponse = zod.array(ListAdminUsersResponseItem);
+
+/**
+ * @summary AI cost broken down by model
+ */
+export const ListAdminCostByModelResponseItem = zod.object({
+  model: zod.string(),
+  total: zod.number(),
+});
+export const ListAdminCostByModelResponse = zod.array(
+  ListAdminCostByModelResponseItem,
+);

@@ -6,6 +6,11 @@ import {
   projectsTable,
   buildsTable,
 } from "@workspace/db";
+import {
+  GetProjectResponse,
+  ListProjectBuildsResponse,
+  CreateProjectBuildResponse,
+} from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
@@ -35,26 +40,28 @@ router.get("/projects/:username/:slug", async (req: Request, res: Response): Pro
     .from(buildsTable)
     .where(eq(buildsTable.projectId, project.id));
 
-  res.json({
-    id: project.id,
-    name: project.name,
-    slug: project.slug,
-    description: project.description,
-    framework: project.framework,
-    status: project.status,
-    isPublic: project.isPublic,
-    clones: project.clones,
-    createdAt: project.createdAt,
-    lastBuiltAt: project.lastBuiltAt,
-    owner: {
-      id: user.id,
-      username: user.username,
-      displayName: user.displayName,
-      avatarUrl: user.avatarUrl,
-    },
-    buildsCount: Number(counts?.builds ?? 0),
-    lastBuildAt: counts?.lastBuild ?? null,
-  });
+  res.json(
+    GetProjectResponse.parse({
+      id: project.id,
+      name: project.name,
+      slug: project.slug,
+      description: project.description,
+      framework: project.framework,
+      status: project.status,
+      isPublic: project.isPublic,
+      clones: project.clones,
+      createdAt: project.createdAt.toISOString(),
+      lastBuiltAt: project.lastBuiltAt.toISOString(),
+      owner: {
+        id: user.id,
+        username: user.username,
+        displayName: user.displayName,
+        avatarUrl: user.avatarUrl,
+      },
+      buildsCount: Number(counts?.builds ?? 0),
+      lastBuildAt: counts?.lastBuild ? counts.lastBuild.toISOString() : null,
+    }),
+  );
 });
 
 router.get("/projects/:username/:slug/builds", async (req: Request, res: Response): Promise<void> => {
@@ -70,7 +77,15 @@ router.get("/projects/:username/:slug/builds", async (req: Request, res: Respons
     .where(eq(buildsTable.projectId, row.project.id))
     .orderBy(desc(buildsTable.number));
 
-  res.json(builds.map((b) => ({ ...b, cost: Number(b.cost) })));
+  res.json(
+    ListProjectBuildsResponse.parse(
+      builds.map((b) => ({
+        ...b,
+        cost: Number(b.cost),
+        createdAt: b.createdAt.toISOString(),
+      })),
+    ),
+  );
 });
 
 router.post("/projects/:username/:slug/builds", async (req: Request, res: Response): Promise<void> => {
@@ -114,7 +129,13 @@ router.post("/projects/:username/:slug/builds", async (req: Request, res: Respon
     .set({ lastBuiltAt: new Date() })
     .where(eq(projectsTable.id, row.project.id));
 
-  res.status(201).json({ ...created, cost: Number(created.cost) });
+  res.status(201).json(
+    CreateProjectBuildResponse.parse({
+      ...created,
+      cost: Number(created.cost),
+      createdAt: created.createdAt.toISOString(),
+    }),
+  );
 });
 
 export default router;

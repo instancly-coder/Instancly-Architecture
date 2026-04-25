@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { desc, eq, ilike, or, sql, and } from "drizzle-orm";
 import { db, projectsTable, usersTable } from "@workspace/db";
+import { ExploreResponse } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
@@ -48,7 +49,14 @@ router.get("/explore", async (req, res) => {
     .orderBy(order)
     .limit(48);
 
-  res.json(rows);
+  res.json(
+    ExploreResponse.parse(
+      rows.map((r) => ({
+        ...r,
+        lastBuiltAt: r.lastBuiltAt.toISOString(),
+      })),
+    ),
+  );
 });
 
 export default router;

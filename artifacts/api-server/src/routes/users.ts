@@ -1,6 +1,10 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { eq, sql, desc } from "drizzle-orm";
 import { db, usersTable, projectsTable } from "@workspace/db";
+import {
+  GetUserResponse,
+  ListUserProjectsResponse,
+} from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
@@ -20,20 +24,22 @@ router.get("/users/:username", async (req: Request, res: Response): Promise<void
     .from(projectsTable)
     .where(eq(projectsTable.userId, user.id));
 
-  res.json({
-    id: user.id,
-    username: user.username,
-    displayName: user.displayName,
-    email: user.email,
-    bio: user.bio,
-    avatarUrl: user.avatarUrl,
-    plan: user.plan,
-    balance: Number(user.balance),
-    status: user.status,
-    signupDate: user.createdAt.toISOString().slice(0, 10),
-    publicProjects: Number(stats?.publicProjects ?? 0),
-    totalClones: Number(stats?.totalClones ?? 0),
-  });
+  res.json(
+    GetUserResponse.parse({
+      id: user.id,
+      username: user.username,
+      displayName: user.displayName,
+      email: user.email,
+      bio: user.bio,
+      avatarUrl: user.avatarUrl,
+      plan: user.plan,
+      balance: Number(user.balance),
+      status: user.status,
+      signupDate: user.createdAt.toISOString().slice(0, 10),
+      publicProjects: Number(stats?.publicProjects ?? 0),
+      totalClones: Number(stats?.totalClones ?? 0),
+    }),
+  );
 });
 
 router.get("/users/:username/projects", async (req: Request, res: Response): Promise<void> => {
@@ -62,7 +68,16 @@ router.get("/users/:username/projects", async (req: Request, res: Response): Pro
     .where(eq(projectsTable.userId, user.id))
     .orderBy(desc(projectsTable.lastBuiltAt));
 
-  res.json(rows.map((r) => ({ ...r, buildsCount: Number(r.buildsCount) })));
+  res.json(
+    ListUserProjectsResponse.parse(
+      rows.map((r) => ({
+        ...r,
+        lastBuiltAt: r.lastBuiltAt.toISOString(),
+        createdAt: r.createdAt.toISOString(),
+        buildsCount: Number(r.buildsCount),
+      })),
+    ),
+  );
 });
 
 export default router;

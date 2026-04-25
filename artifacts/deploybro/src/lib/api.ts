@@ -1,5 +1,39 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { AppConfig } from "@workspace/api-zod";
+import type { z } from "zod";
+import type {
+  AdminCostByModel as GeneratedAdminCostByModel,
+  AdminMe,
+  AdminRecentBuild as GeneratedAdminRecentBuild,
+  AdminStats as GeneratedAdminStats,
+  AdminUser as GeneratedAdminUser,
+  AppConfig,
+  Build,
+  CreateProjectResponse,
+  Deployment,
+  DeploymentStatus,
+  DomainDnsMismatch,
+  DomainSuggestedRecord,
+  DomainVerificationRecord,
+  ExploreItem,
+  Me,
+  Project,
+  ProjectDomain,
+  ProjectFile,
+  ProjectFileContent,
+  ProjectListItem,
+  PublishResponse,
+  PublishStatus,
+  SetPrimaryDomainResponse,
+  Transaction,
+  User,
+} from "@workspace/api-zod";
+// `UpdateMeBody` and `DeleteProjectFileResponse` are also zod schema names —
+// pull them as values and infer the shapes, since the same identifiers
+// aren't re-exported as types from `@workspace/api-zod`.
+import {
+  DeleteProjectFileResponse as DeleteProjectFileResponseSchema,
+  UpdateMeBody as UpdateMeBodySchema,
+} from "@workspace/api-zod";
 
 const BASE = "/api";
 
@@ -43,94 +77,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 // ---- Types ----
-export type ApiUser = {
-  id: string;
-  username: string;
-  displayName: string;
-  email: string;
-  bio: string;
-  avatarUrl: string | null;
-  plan: string;
-  balance: number;
-  status: string;
-  signupDate: string;
-  publicProjects: number;
-  totalClones: number;
-};
+// All `Api*` shapes below are aliases of the OpenAPI-derived types from
+// `@workspace/api-zod`. Keeping the `Api*` names preserves the existing
+// import surface (builder.tsx, dashboard.tsx) while making the spec the
+// single source of truth.
+export type ApiUser = User;
+export type ApiMe = Me;
+export type ApiProjectListItem = ProjectListItem;
+export type ApiProject = Project;
+export type ApiBuild = Build;
+export type ApiExploreItem = ExploreItem;
+export type ApiTransaction = Transaction;
 
-export type ApiMe = Omit<ApiUser, "publicProjects" | "totalClones" | "avatarUrl">;
-
-export type ApiProjectListItem = {
-  id: string;
-  name: string;
-  slug: string;
-  description: string;
-  framework: string;
-  status: string;
-  isPublic: boolean;
-  clones: number;
-  lastBuiltAt: string;
-  createdAt?: string;
-  buildsCount: number;
-};
-
-export type ApiProject = {
-  id: string;
-  name: string;
-  slug: string;
-  description: string;
-  framework: string;
-  status: string;
-  isPublic: boolean;
-  clones: number;
-  createdAt: string;
-  lastBuiltAt: string;
-  owner: { id: string; username: string; displayName: string; avatarUrl: string | null };
-  buildsCount: number;
-  lastBuildAt: string | null;
-};
-
-export type ApiBuild = {
-  id: string;
-  projectId: string;
-  number: number;
-  prompt: string;
-  aiMessage: string;
-  durationSec: number;
-  cost: number;
-  filesChanged: number;
-  tokensIn: number;
-  tokensOut: number;
-  model: string;
-  status: string;
-  createdAt: string;
-};
-
-export type ApiExploreItem = {
-  id: string;
-  name: string;
-  slug: string;
-  description: string;
-  framework: string;
-  clones: number;
-  lastBuiltAt: string;
-  author: string;
-  authorDisplayName: string;
-};
-
-export type ApiTransaction = {
-  id: string;
-  amount: number;
-  status: string;
-  method: string;
-  createdAt: string;
-};
-
-export type UpdateMeBody = Partial<{
-  username: string;
-  displayName: string;
-  bio: string;
-}>;
+export type UpdateMeBody = z.infer<typeof UpdateMeBodySchema>;
 
 // ---- Hooks ----
 export function useMe() {
@@ -210,29 +169,18 @@ export function useAppConfigValues(): AppConfig {
   return data ?? FALLBACK_APP_CONFIG;
 }
 
-export type ApiProjectFile = {
-  path: string;
-  size: number;
-  // "utf8" for source code, "base64" for binary uploads (images,
-  // fonts, favicons, etc.). The Files panel uses this to show a
-  // binary badge and to switch the editor over to a preview pane.
-  encoding: "utf8" | "base64";
-  // Browser-supplied MIME type captured at upload time. Null for
-  // AI-generated text files; the iframe preview falls back to an
-  // extension-derived type in that case.
-  contentType: string | null;
-  updatedAt: string;
-};
+// "utf8" for source code, "base64" for binary uploads (images,
+// fonts, favicons, etc.). The Files panel uses this to show a
+// binary badge and to switch the editor over to a preview pane.
+// `contentType` is the browser-supplied MIME type captured at upload
+// time — null for AI-generated text files (the iframe preview falls
+// back to an extension-derived type in that case).
+export type ApiProjectFile = ProjectFile;
 
-export type ApiProjectFileContent = {
-  path: string;
-  // For utf8 files this is the source string. For base64 files this
-  // is the raw base64 of the bytes — combine with `contentType` to
-  // build a `data:` URL for an <img> preview.
-  content: string;
-  encoding: "utf8" | "base64";
-  contentType: string | null;
-};
+// For utf8 files `content` is the source string. For base64 files
+// it's the raw base64 of the bytes — combine with `contentType` to
+// build a `data:` URL for an <img> preview.
+export type ApiProjectFileContent = ProjectFileContent;
 
 export function useProjectFiles(
   username: string | undefined,
@@ -332,7 +280,7 @@ export function useDeleteProjectFile(
   return useMutation({
     mutationFn: async (path: string) => {
       if (!username || !slug) throw new Error("Project not loaded");
-      return request<{ status: "ok"; path: string }>(
+      return request<z.infer<typeof DeleteProjectFileResponseSchema>>(
         `/projects/${username}/${slug}/files/${path}`,
         { method: "DELETE" },
       );
@@ -393,37 +341,15 @@ export function useCreateBuild(username: string | undefined, slug: string | unde
 }
 
 // ---- Admin ----
-export type AdminStats = {
-  totalUsers: number;
-  totalProjects: number;
-  buildsToday: number;
-  revenueGbp: number;
-  spendGbp: number;
-};
-export type AdminRecentBuild = {
-  id: string;
-  duration: number;
-  cost: number;
-  status: string;
-  createdAt: string;
-  project: string;
-  username: string;
-};
-export type AdminUser = {
-  id: string;
-  username: string;
-  email: string;
-  plan: string;
-  balance: number;
-  status: string;
-  signupDate: string;
-};
-export type AdminCostByModel = { model: string; total: number };
+export type AdminStats = GeneratedAdminStats;
+export type AdminRecentBuild = GeneratedAdminRecentBuild;
+export type AdminUser = GeneratedAdminUser;
+export type AdminCostByModel = GeneratedAdminCostByModel;
 
 export function useIsAdmin() {
   return useQuery({
     queryKey: ["admin", "me"],
-    queryFn: () => request<{ isAdmin: boolean; configured: boolean }>("/admin/me"),
+    queryFn: () => request<AdminMe>("/admin/me"),
     retry: false,
   });
 }
@@ -480,7 +406,7 @@ export function useCreateProject() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: { name: string; description?: string; framework?: string }) =>
-      request<{ id: string; slug: string; name: string; ownerUsername: string }>(`/me/projects`, {
+      request<CreateProjectResponse>(`/me/projects`, {
         method: "POST",
         body: JSON.stringify(body),
       }),
@@ -491,34 +417,14 @@ export function useCreateProject() {
 }
 
 // ---- Publish / Deployments ----
-export type DeploymentStatus =
-  | "queued"
-  | "validating"
-  | "provisioning_db"
-  | "creating_project"
-  | "deploying"
-  | "polling"
-  | "live"
-  | "failed";
+export type { DeploymentStatus };
 
-export type ApiDeployment = {
-  id: string;
-  status: DeploymentStatus;
-  liveUrl: string | null;
-  vercelInspectorUrl: string | null;
-  errorMessage: string | null;
-  createdAt: string;
-  finishedAt: string | null;
-};
+export type ApiDeployment = Deployment;
 
-export type ApiPublishStatus = {
-  publishStatus: string;
-  liveUrl: string | null;
-  lastPublishedAt: string | null;
-  // The user's verified custom domain that should replace `liveUrl` in the
-  // navbar chip. Null when no custom domain is set or none have verified.
-  primaryCustomDomain: string | null;
-};
+// `primaryCustomDomain` is the user's verified custom domain that should
+// replace `liveUrl` in the navbar chip. Null when no custom domain is set
+// or none have verified.
+export type ApiPublishStatus = PublishStatus;
 
 export const TERMINAL_DEPLOYMENT_STATUSES: ReadonlySet<DeploymentStatus> = new Set([
   "live",
@@ -555,7 +461,7 @@ export function usePublishProject(
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () =>
-      request<{ deploymentId: string; alreadyRunning?: boolean }>(
+      request<PublishResponse>(
         `/projects/${username}/${slug}/publish`,
         { method: "POST" },
       ),
@@ -633,44 +539,14 @@ export function usePublishStatus(
 }
 
 // ---- Custom domains ----
-export type ApiDomainVerificationRecord = {
-  type: string;
-  domain: string;
-  value: string;
-  reason: string;
-};
-
-export type ApiDomainSuggestedRecord = {
-  type: "CNAME" | "A";
-  name: string;
-  value: string;
-};
-
-export type ApiDomainDnsMismatch = {
-  recordType: "CNAME" | "A";
-  expected: string;
-  actual: string[];
-};
-
-export type ApiProjectDomain = {
-  id: string;
-  host: string;
-  verified: boolean;
-  isPrimary: boolean;
-  misconfigured: boolean;
-  verificationRecords: ApiDomainVerificationRecord[];
-  suggestedRecords: ApiDomainSuggestedRecord[];
-  // Resolver-side DNS the server learned from Vercel. `null` until a
-  // refresh has succeeded at least once.
-  aValues: string[] | null;
-  cnames: string[] | null;
-  configuredBy: string | null;
-  // Pre-computed mismatch hint for the UI: present when the user's DNS
-  // points somewhere clearly other than the expected Vercel target.
-  dnsMismatch: ApiDomainDnsMismatch | null;
-  createdAt: string;
-  lastCheckedAt: string | null;
-};
+export type ApiDomainVerificationRecord = DomainVerificationRecord;
+export type ApiDomainSuggestedRecord = DomainSuggestedRecord;
+export type ApiDomainDnsMismatch = DomainDnsMismatch;
+// `aValues`/`cnames` are the resolver-side DNS values the server learned
+// from Vercel — null until a refresh has succeeded at least once.
+// `dnsMismatch` is a pre-computed hint for the UI: present when the user's
+// DNS points somewhere clearly other than the expected Vercel target.
+export type ApiProjectDomain = ProjectDomain;
 
 export function useProjectDomains(
   username: string | undefined,
@@ -753,7 +629,7 @@ export function useSetPrimaryDomain(
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (host: string) =>
-      request<{ status: string }>(
+      request<SetPrimaryDomainResponse>(
         `/projects/${username}/${slug}/domains/${encodeURIComponent(host)}/primary`,
         { method: "POST" },
       ),

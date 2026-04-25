@@ -55,18 +55,13 @@ export default defineConfig({
       mode: "split",
       clean: true,
       prettier: true,
-      override: {
-        zod: {
-          coerce: {
-            query: ['boolean', 'number', 'string'],
-            param: ['boolean', 'number', 'string'],
-            body: ['bigint', 'date'],
-            response: ['bigint', 'date'],
-          },
-        },
-        useDates: true,
-        useBigInt: true,
-      },
+      // Generated TypeScript types use plain `string` for date-time fields
+      // and plain `number` for integers. This matches the JSON wire format
+      // exactly — server routes ISO-string their dates before res.json,
+      // and the frontend reads them back as strings. Zod still validates
+      // shape and required fields without trying to coerce dates into Date
+      // objects, which keeps the runtime value identical to the inferred
+      // type on both sides.
     },
   },
 });

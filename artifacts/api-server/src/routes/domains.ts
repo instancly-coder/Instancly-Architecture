@@ -21,6 +21,12 @@ import {
   refreshAndNotify,
   reconcilePrimary,
 } from "../services/domains";
+import {
+  ListProjectDomainsResponse,
+  AddProjectDomainResponse,
+  VerifyProjectDomainResponse,
+  SetPrimaryProjectDomainResponse,
+} from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
@@ -238,7 +244,7 @@ router.get(
       }
     }
 
-    res.json(rows.map(toResponse));
+    res.json(ListProjectDomainsResponse.parse(rows.map(toResponse)));
   },
 );
 
@@ -397,7 +403,7 @@ router.post(
 
     await reconcilePrimary(row.project.id);
 
-    res.status(201).json(toResponse(created));
+    res.status(201).json(AddProjectDomainResponse.parse(toResponse(created)));
   },
 );
 
@@ -459,7 +465,7 @@ router.post(
       existing,
     );
     await reconcilePrimary(row.project.id);
-    res.json(toResponse(refreshed));
+    res.json(VerifyProjectDomainResponse.parse(toResponse(refreshed)));
   },
 );
 
@@ -517,7 +523,7 @@ router.post(
         .where(eq(projectDomainsTable.id, target.id));
     });
     await reconcilePrimary(row.project.id);
-    res.json({ status: "ok" });
+    res.json(SetPrimaryProjectDomainResponse.parse({ status: "ok" }));
   },
 );
 

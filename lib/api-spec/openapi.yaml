@@ -12,6 +12,24 @@ tags:
     description: Health operations
   - name: config
     description: Public app configuration
+  - name: me
+    description: The currently authenticated user
+  - name: users
+    description: Public user profiles
+  - name: projects
+    description: Project resources
+  - name: builds
+    description: Project build history
+  - name: files
+    description: Project file contents
+  - name: explore
+    description: Explore feed
+  - name: deployments
+    description: Project publish pipeline
+  - name: domains
+    description: Custom domains attached to a project
+  - name: admin
+    description: Admin dashboard endpoints
 paths:
   /healthz:
     get:
@@ -42,6 +60,623 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AppConfig"
+  /me:
+    get:
+      operationId: getMe
+      tags: [me]
+      summary: Get the current user
+      responses:
+        "200":
+          description: The current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Me"
+    patch:
+      operationId: updateMe
+      tags: [me]
+      summary: Update profile fields
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMeBody"
+      responses:
+        "200":
+          description: The updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Me"
+  /me/projects:
+    get:
+      operationId: listMyProjects
+      tags: [me, projects]
+      summary: List projects owned by the current user
+      responses:
+        "200":
+          description: Project list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProjectListItem"
+    post:
+      operationId: createMyProject
+      tags: [me, projects]
+      summary: Create a new project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProjectBody"
+      responses:
+        "200":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateProjectResponse"
+  /me/projects/{slug}:
+    patch:
+      operationId: renameMyProject
+      tags: [me, projects]
+      summary: Rename a project (and re-slug it)
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenameProjectBody"
+      responses:
+        "200":
+          description: The updated project list row
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectListItem"
+    delete:
+      operationId: deleteMyProject
+      tags: [me, projects]
+      summary: Delete a project
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Deleted
+  /me/transactions:
+    get:
+      operationId: listMyTransactions
+      tags: [me]
+      summary: List the current user's transactions
+      responses:
+        "200":
+          description: Transactions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Transaction"
+  /users/{username}:
+    get:
+      operationId: getUser
+      tags: [users]
+      summary: Get a public user profile
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+  /users/{username}/projects:
+    get:
+      operationId: listUserProjects
+      tags: [users, projects]
+      summary: List a user's projects
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Project list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProjectListItem"
+  /projects/{username}/{slug}:
+    get:
+      operationId: getProject
+      tags: [projects]
+      summary: Get a project by owner + slug
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema: { type: string }
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Project detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+  /projects/{username}/{slug}/builds:
+    get:
+      operationId: listProjectBuilds
+      tags: [projects, builds]
+      summary: List builds for a project
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema: { type: string }
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Builds
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Build"
+    post:
+      operationId: createProjectBuild
+      tags: [projects, builds]
+      summary: Kick off a new build
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema: { type: string }
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBuildBody"
+      responses:
+        "200":
+          description: Created build
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Build"
+  /projects/{username}/{slug}/files:
+    get:
+      operationId: listProjectFiles
+      tags: [projects, files]
+      summary: List file metadata for a project
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema: { type: string }
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Files
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProjectFile"
+  /projects/{username}/{slug}/files/upload:
+    post:
+      operationId: uploadProjectFile
+      tags: [projects, files]
+      summary: Upload a binary asset
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema: { type: string }
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadProjectFileBody"
+      responses:
+        "200":
+          description: Uploaded file metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectFile"
+  /projects/{username}/{slug}/files/{path}:
+    get:
+      operationId: getProjectFile
+      tags: [projects, files]
+      summary: Read a single file's contents
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema: { type: string }
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+        - name: path
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: File contents
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectFileContent"
+    delete:
+      operationId: deleteProjectFile
+      tags: [projects, files]
+      summary: Delete a single file from a project
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema: { type: string }
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+        - name: path
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteProjectFileResponse"
+  /projects/{username}/{slug}/publish:
+    post:
+      operationId: publishProject
+      tags: [projects, deployments]
+      summary: Start a publish pipeline
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema: { type: string }
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Pipeline accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublishResponse"
+  /projects/{username}/{slug}/deployments:
+    get:
+      operationId: listProjectDeployments
+      tags: [projects, deployments]
+      summary: List deployments for a project
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema: { type: string }
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Deployments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Deployment"
+  /projects/{username}/{slug}/deployments/{id}:
+    get:
+      operationId: getProjectDeployment
+      tags: [projects, deployments]
+      summary: Get a single deployment
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema: { type: string }
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Deployment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Deployment"
+  /projects/{username}/{slug}/publish-status:
+    get:
+      operationId: getPublishStatus
+      tags: [projects, deployments]
+      summary: Get the current publish status for a project
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema: { type: string }
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Publish status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublishStatus"
+  /projects/{username}/{slug}/domains:
+    get:
+      operationId: listProjectDomains
+      tags: [projects, domains]
+      summary: List custom domains attached to a project
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema: { type: string }
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Domains
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProjectDomain"
+    post:
+      operationId: addProjectDomain
+      tags: [projects, domains]
+      summary: Attach a custom domain
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema: { type: string }
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddDomainBody"
+      responses:
+        "200":
+          description: Created domain
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectDomain"
+  /projects/{username}/{slug}/domains/{host}:
+    delete:
+      operationId: removeProjectDomain
+      tags: [projects, domains]
+      summary: Remove a custom domain
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema: { type: string }
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+        - name: host
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Removed
+  /projects/{username}/{slug}/domains/{host}/verify:
+    post:
+      operationId: verifyProjectDomain
+      tags: [projects, domains]
+      summary: Re-check verification + DNS state for a domain
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema: { type: string }
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+        - name: host
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Refreshed domain
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectDomain"
+  /projects/{username}/{slug}/domains/{host}/primary:
+    post:
+      operationId: setPrimaryProjectDomain
+      tags: [projects, domains]
+      summary: Promote a verified domain to primary
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema: { type: string }
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+        - name: host
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SetPrimaryDomainResponse"
+  /explore:
+    get:
+      operationId: explore
+      tags: [explore]
+      summary: Explore public projects
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema: { type: string }
+        - name: framework
+          in: query
+          required: false
+          schema: { type: string }
+        - name: sort
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ExploreItem"
+  /admin/me:
+    get:
+      operationId: getAdminMe
+      tags: [admin]
+      summary: Whether the current user is an admin
+      responses:
+        "200":
+          description: Admin marker
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminMe"
+  /admin/stats:
+    get:
+      operationId: getAdminStats
+      tags: [admin]
+      summary: Aggregate platform stats
+      responses:
+        "200":
+          description: Stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminStats"
+  /admin/recent-builds:
+    get:
+      operationId: listAdminRecentBuilds
+      tags: [admin]
+      summary: Recent builds across all projects
+      responses:
+        "200":
+          description: Builds
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminRecentBuild"
+  /admin/users:
+    get:
+      operationId: listAdminUsers
+      tags: [admin]
+      summary: All registered users
+      responses:
+        "200":
+          description: Users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminUser"
+  /admin/cost-by-model:
+    get:
+      operationId: listAdminCostByModel
+      tags: [admin]
+      summary: AI cost broken down by model
+      responses:
+        "200":
+          description: Cost rows
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminCostByModel"
 components:
   schemas:
     HealthStatus:
@@ -65,3 +700,543 @@ components:
       required:
         - publishSizeLimitBytes
         - perFileUploadLimitBytes
+    Me:
+      type: object
+      properties:
+        id: { type: string }
+        username: { type: string }
+        displayName: { type: string }
+        email: { type: string }
+        bio: { type: string }
+        plan: { type: string }
+        balance: { type: number }
+        status: { type: string }
+        signupDate:
+          type: string
+          description: YYYY-MM-DD signup date.
+      required:
+        - id
+        - username
+        - displayName
+        - email
+        - bio
+        - plan
+        - balance
+        - status
+        - signupDate
+    User:
+      type: object
+      properties:
+        id: { type: string }
+        username: { type: string }
+        displayName: { type: string }
+        email: { type: string }
+        bio: { type: string }
+        avatarUrl:
+          type: string
+          nullable: true
+        plan: { type: string }
+        balance: { type: number }
+        status: { type: string }
+        signupDate: { type: string }
+        publicProjects: { type: integer }
+        totalClones: { type: integer }
+      required:
+        - id
+        - username
+        - displayName
+        - email
+        - bio
+        - avatarUrl
+        - plan
+        - balance
+        - status
+        - signupDate
+        - publicProjects
+        - totalClones
+    UpdateMeBody:
+      type: object
+      properties:
+        username: { type: string }
+        displayName: { type: string }
+        bio: { type: string }
+    Transaction:
+      type: object
+      properties:
+        id: { type: string }
+        amount: { type: number }
+        status: { type: string }
+        method: { type: string }
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - amount
+        - status
+        - method
+        - createdAt
+    ProjectListItem:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        slug: { type: string }
+        description: { type: string }
+        framework: { type: string }
+        status: { type: string }
+        isPublic: { type: boolean }
+        clones: { type: integer }
+        lastBuiltAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        buildsCount: { type: integer }
+      required:
+        - id
+        - name
+        - slug
+        - description
+        - framework
+        - status
+        - isPublic
+        - clones
+        - lastBuiltAt
+        - buildsCount
+    ProjectOwner:
+      type: object
+      properties:
+        id: { type: string }
+        username: { type: string }
+        displayName: { type: string }
+        avatarUrl:
+          type: string
+          nullable: true
+      required:
+        - id
+        - username
+        - displayName
+        - avatarUrl
+    Project:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        slug: { type: string }
+        description: { type: string }
+        framework: { type: string }
+        status: { type: string }
+        isPublic: { type: boolean }
+        clones: { type: integer }
+        createdAt:
+          type: string
+          format: date-time
+        lastBuiltAt:
+          type: string
+          format: date-time
+        owner:
+          $ref: "#/components/schemas/ProjectOwner"
+        buildsCount: { type: integer }
+        lastBuildAt:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - name
+        - slug
+        - description
+        - framework
+        - status
+        - isPublic
+        - clones
+        - createdAt
+        - lastBuiltAt
+        - owner
+        - buildsCount
+        - lastBuildAt
+    Build:
+      type: object
+      properties:
+        id: { type: string }
+        projectId: { type: string }
+        number: { type: integer }
+        prompt: { type: string }
+        aiMessage: { type: string }
+        durationSec: { type: integer }
+        cost: { type: number }
+        filesChanged: { type: integer }
+        tokensIn: { type: integer }
+        tokensOut: { type: integer }
+        model: { type: string }
+        status: { type: string }
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - projectId
+        - number
+        - prompt
+        - aiMessage
+        - durationSec
+        - cost
+        - filesChanged
+        - tokensIn
+        - tokensOut
+        - model
+        - status
+        - createdAt
+    CreateBuildBody:
+      type: object
+      properties:
+        prompt: { type: string }
+        model: { type: string }
+      required:
+        - prompt
+    CreateProjectBody:
+      type: object
+      properties:
+        name: { type: string }
+        description: { type: string }
+        framework: { type: string }
+      required:
+        - name
+    CreateProjectResponse:
+      type: object
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        name: { type: string }
+        ownerUsername: { type: string }
+      required:
+        - id
+        - slug
+        - name
+        - ownerUsername
+    RenameProjectBody:
+      type: object
+      properties:
+        name: { type: string }
+      required:
+        - name
+    ExploreItem:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        slug: { type: string }
+        description: { type: string }
+        framework: { type: string }
+        clones: { type: integer }
+        lastBuiltAt:
+          type: string
+          format: date-time
+        author: { type: string }
+        authorDisplayName: { type: string }
+      required:
+        - id
+        - name
+        - slug
+        - description
+        - framework
+        - clones
+        - lastBuiltAt
+        - author
+        - authorDisplayName
+    FileEncoding:
+      type: string
+      enum: [utf8, base64]
+    ProjectFile:
+      type: object
+      properties:
+        path: { type: string }
+        size: { type: integer }
+        encoding:
+          $ref: "#/components/schemas/FileEncoding"
+        contentType:
+          type: string
+          nullable: true
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - path
+        - size
+        - encoding
+        - contentType
+        - updatedAt
+    ProjectFileContent:
+      type: object
+      properties:
+        path: { type: string }
+        content: { type: string }
+        encoding:
+          $ref: "#/components/schemas/FileEncoding"
+        contentType:
+          type: string
+          nullable: true
+      required:
+        - path
+        - content
+        - encoding
+        - contentType
+    UploadProjectFileBody:
+      type: object
+      properties:
+        path: { type: string }
+        contentBase64: { type: string }
+        contentType: { type: string }
+      required:
+        - path
+        - contentBase64
+    DeleteProjectFileResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        path: { type: string }
+      required:
+        - status
+        - path
+    DeploymentStatus:
+      type: string
+      enum:
+        - queued
+        - validating
+        - provisioning_db
+        - creating_project
+        - deploying
+        - polling
+        - live
+        - failed
+    Deployment:
+      type: object
+      properties:
+        id: { type: string }
+        status:
+          $ref: "#/components/schemas/DeploymentStatus"
+        liveUrl:
+          type: string
+          nullable: true
+        vercelInspectorUrl:
+          type: string
+          nullable: true
+        errorMessage:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - status
+        - liveUrl
+        - vercelInspectorUrl
+        - errorMessage
+        - createdAt
+        - finishedAt
+    PublishResponse:
+      type: object
+      properties:
+        deploymentId: { type: string }
+        alreadyRunning: { type: boolean }
+      required:
+        - deploymentId
+    PublishStatus:
+      type: object
+      properties:
+        publishStatus: { type: string }
+        liveUrl:
+          type: string
+          nullable: true
+        lastPublishedAt:
+          type: string
+          format: date-time
+          nullable: true
+        primaryCustomDomain:
+          type: string
+          nullable: true
+      required:
+        - publishStatus
+        - liveUrl
+        - lastPublishedAt
+        - primaryCustomDomain
+    DomainVerificationRecord:
+      type: object
+      properties:
+        type: { type: string }
+        domain: { type: string }
+        value: { type: string }
+        reason: { type: string }
+      required:
+        - type
+        - domain
+        - value
+        - reason
+    DnsRecordType:
+      type: string
+      enum: [CNAME, A]
+    DomainSuggestedRecord:
+      type: object
+      properties:
+        type:
+          $ref: "#/components/schemas/DnsRecordType"
+        name: { type: string }
+        value: { type: string }
+      required:
+        - type
+        - name
+        - value
+    DomainDnsMismatch:
+      type: object
+      properties:
+        recordType:
+          $ref: "#/components/schemas/DnsRecordType"
+        expected: { type: string }
+        actual:
+          type: array
+          items: { type: string }
+      required:
+        - recordType
+        - expected
+        - actual
+    ProjectDomain:
+      type: object
+      properties:
+        id: { type: string }
+        host: { type: string }
+        verified: { type: boolean }
+        isPrimary: { type: boolean }
+        misconfigured: { type: boolean }
+        verificationRecords:
+          type: array
+          items:
+            $ref: "#/components/schemas/DomainVerificationRecord"
+        suggestedRecords:
+          type: array
+          items:
+            $ref: "#/components/schemas/DomainSuggestedRecord"
+        aValues:
+          type: array
+          nullable: true
+          items: { type: string }
+        cnames:
+          type: array
+          nullable: true
+          items: { type: string }
+        configuredBy:
+          type: string
+          nullable: true
+        dnsMismatch:
+          oneOf:
+            - $ref: "#/components/schemas/DomainDnsMismatch"
+            - type: "null"
+        createdAt:
+          type: string
+          format: date-time
+        lastCheckedAt:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - host
+        - verified
+        - isPrimary
+        - misconfigured
+        - verificationRecords
+        - suggestedRecords
+        - aValues
+        - cnames
+        - configuredBy
+        - dnsMismatch
+        - createdAt
+        - lastCheckedAt
+    AddDomainBody:
+      type: object
+      properties:
+        host: { type: string }
+      required:
+        - host
+    SetPrimaryDomainResponse:
+      type: object
+      properties:
+        status: { type: string }
+      required:
+        - status
+    AdminMe:
+      type: object
+      properties:
+        isAdmin: { type: boolean }
+        configured: { type: boolean }
+      required:
+        - isAdmin
+        - configured
+    AdminStats:
+      type: object
+      properties:
+        totalUsers: { type: integer }
+        totalProjects: { type: integer }
+        buildsToday: { type: integer }
+        revenueGbp: { type: number }
+        spendGbp: { type: number }
+      required:
+        - totalUsers
+        - totalProjects
+        - buildsToday
+        - revenueGbp
+        - spendGbp
+    AdminRecentBuild:
+      type: object
+      properties:
+        id: { type: string }
+        duration: { type: integer }
+        cost: { type: number }
+        status: { type: string }
+        createdAt:
+          type: string
+          format: date-time
+        project: { type: string }
+        username: { type: string }
+      required:
+        - id
+        - duration
+        - cost
+        - status
+        - createdAt
+        - project
+        - username
+    AdminUser:
+      type: object
+      properties:
+        id: { type: string }
+        username: { type: string }
+        email: { type: string }
+        plan: { type: string }
+        balance: { type: number }
+        status: { type: string }
+        signupDate: { type: string }
+      required:
+        - id
+        - username
+        - email
+        - plan
+        - balance
+        - status
+        - signupDate
+    AdminCostByModel:
+      type: object
+      properties:
+        model: { type: string }
+        total: { type: number }
+      required:
+        - model
+        - total
