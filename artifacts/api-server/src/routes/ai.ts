@@ -387,6 +387,13 @@ router.post(
       .select({
         path: projectFilesTable.path,
         content: projectFilesTable.content,
+        // buildFilesContext substitutes a metadata stub for binary
+        // assets — sending megabytes of base64 to Claude wastes
+        // tokens and confuses the model. The path still goes into
+        // the prompt so generated HTML can `src="logo.png"`.
+        encoding: projectFilesTable.encoding,
+        contentType: projectFilesTable.contentType,
+        size: projectFilesTable.size,
       })
       .from(projectFilesTable)
       .where(eq(projectFilesTable.projectId, project.id))
@@ -413,6 +420,11 @@ router.post(
       if (parsed.length === 0) return [];
       await db.transaction(async (tx) => {
         for (const f of parsed) {
+          // UTF-8 byte length, not JS string char count — multibyte
+          // characters (emoji, non-ASCII) otherwise under-report
+          // size and would drift from how the publish-payload size
+          // budget actually counts the file on the wire.
+          const byteSize = Buffer.byteLength(f.content, "utf8");
           await tx
             .insert(projectFilesTable)
             .values({
@@ -426,7 +438,7 @@ router.post(
               // overwritten back to text.
               encoding: "utf8",
               contentType: null,
-              size: f.content.length,
+              size: byteSize,
             })
             .onConflictDoUpdate({
               target: [projectFilesTable.projectId, projectFilesTable.path],
@@ -434,7 +446,7 @@ router.post(
                 content: f.content,
                 encoding: "utf8",
                 contentType: null,
-                size: f.content.length,
+                size: byteSize,
                 updatedAt: sql`now()`,
               },
             });

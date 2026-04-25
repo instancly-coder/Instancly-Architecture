@@ -130,15 +130,30 @@ That's it. Friendly sentence, optional file mention, then the file blocks.`;
 
 // Format the project's existing files as context the model can read in the
 // next prompt. Truncates very large files so we stay inside the model's
-// context window.
+// context window. Binary uploads (images, fonts, etc.) are surfaced as
+// metadata-only stubs — sending raw base64 to Claude wastes tokens and
+// degrades generation quality. The model still sees the path so it can
+// reference uploaded assets in generated HTML/JSX (e.g. `<img src="logo.png">`).
 export function buildFilesContext(
-  files: Array<{ path: string; content: string }>,
+  files: Array<{
+    path: string;
+    content: string;
+    encoding?: string | null;
+    contentType?: string | null;
+    size?: number | null;
+  }>,
 ): string {
   if (files.length === 0) {
     return "There are no files yet — this is the first build for this project.";
   }
   const MAX_FILE_BYTES = 12_000;
   const blocks = files.map((f) => {
+    if (f.encoding === "base64") {
+      const ct = f.contentType ?? "application/octet-stream";
+      const sizeLabel =
+        typeof f.size === "number" ? ` ${f.size} bytes,` : "";
+      return `<file path="${f.path}">\n[binary asset —${sizeLabel} ${ct} — reference by path, do not regenerate the bytes]\n</file>`;
+    }
     const trimmed =
       f.content.length > MAX_FILE_BYTES
         ? f.content.slice(0, MAX_FILE_BYTES) +
