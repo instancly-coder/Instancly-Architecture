@@ -43,13 +43,24 @@ export default function Login() {
     try {
       setBusy(provider);
       const callbackURL = `${window.location.origin}/handler`;
+      // `disableRedirect: true` tells Better Auth NOT to auto-navigate the
+      // tab itself. We do the redirect manually below so the behaviour is
+      // deterministic across SDK versions and so the awaited promise
+      // always resolves cleanly with `{ data: { url } }` instead of
+      // potentially being cut off mid-flight by a same-tick navigation.
       const result = (await authClient.signIn.social({
         provider,
         callbackURL,
-      })) as {
+        disableRedirect: true,
+      } as Parameters<typeof authClient.signIn.social>[0])) as {
         data?: { url?: string; redirect?: boolean } | null;
         error?: { message?: string; code?: string; status?: number } | null;
       };
+      // eslint-disable-next-line no-console
+      console.info("[auth] signIn.social result", {
+        hasUrl: !!result?.data?.url,
+        errorCode: result?.error?.code,
+      });
 
       // Better Auth's client returns `{ data: null, error: {...} }` for
       // failures (it does NOT throw). The most common production failure
