@@ -885,7 +885,11 @@ export default function Builder() {
                     <Rocket className="w-3.5 h-3.5" />
                   )}
                   <span>
-                    {liveDeploymentUrl ? "Redeploy to web" : "Deploy to web"}
+                    {isFreePlan
+                      ? "Upgrade to publish"
+                      : liveDeploymentUrl
+                      ? "Redeploy to web"
+                      : "Publish to web"}
                   </span>
                   {isFreePlan && (
                     <span className="ml-auto text-[10px] uppercase tracking-wider text-secondary font-mono">
