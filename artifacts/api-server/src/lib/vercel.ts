@@ -190,33 +190,95 @@ type VercelBuildEvent = {
 // real "module not found" / "syntax error" / "missing dep" line lives
 // on the events stream. Best-effort: returns a short human-readable
 // excerpt or null if we can't extract one.
+//
+// Two earlier traps we explicitly avoid:
+//
+// 1. **Direction matters.** Vercel's stream is append-only. The actual
+//    diagnostic (Vite/Rollup "Could not resolve…", esbuild "Transform
+//    failed", tsc "TS2304", etc.) lands EARLY. The wrapper "npm run
+//    build exited with 1" + Node.js internal stack frames land LAST.
+//    Iterating `direction=backward` (newest-first) and stopping at the
+//    first 5 stderr lines hands the user the noise and hides the real
+//    cause. We fetch forward and pick the first high-signal line.
+//
+// 2. **Not every stderr line is a real error.** `node:internal/streams`
+//    stack frames, "exited with N", and bare `at Object.<anonymous>`
+//    lines are noise from npm's parent process dying — they tell the
+//    user nothing. We filter them out and only fall back to them if no
+//    higher-signal line exists.
+const HIGH_SIGNAL_PATTERNS: RegExp[] = [
+  /could not resolve/i, // Rollup
+  /cannot find module/i, // Node
+  /module not found/i, // Webpack-style / Next
+  /failed to resolve/i, // Vite
+  /transform failed/i, // esbuild
+  /unexpected token/i, // parser
+  /syntaxerror/i,
+  /typeerror/i,
+  /referenceerror/i,
+  /\bTS\d{3,5}\b/, // tsc diagnostics
+  /^\[vite\]/i,
+  /\berror\b.*:.+/i, // generic "Error: <message>"
+];
+const NOISE_PATTERNS: RegExp[] = [
+  /^\s*at .+\(node:internal\//, // Node internals stack frames
+  /command ".*" exited with \d+/i, // npm wrapper failure
+  /^\s*npm error/i,
+  /^\s*npm warn/i,
+  /^\s*at Object\.<anonymous>/, // generic Node frame
+  /\benoent\b/i, // npm process spawn noise (often unhelpful here)
+];
+function isNoise(text: string): boolean {
+  return NOISE_PATTERNS.some((re) => re.test(text));
+}
+function isHighSignal(text: string): boolean {
+  return HIGH_SIGNAL_PATTERNS.some((re) => re.test(text));
+}
+
 export async function getDeploymentBuildErrors(
   id: string,
 ): Promise<string | null> {
   try {
     const events = await request<VercelBuildEvent[]>(
       "GET",
-      `/v3/deployments/${encodeURIComponent(id)}/events${teamQueryAppend("?builds=1&direction=backward&follow=0&limit=200")}`,
+      `/v3/deployments/${encodeURIComponent(id)}/events${teamQueryAppend("?builds=1&direction=forward&follow=0&limit=1000")}`,
     );
     if (!Array.isArray(events) || events.length === 0) return null;
-    // Grab the most informative error/stderr lines, freshest first. We
-    // prefer entries that mention "error" / "failed" / "cannot" since
-    // Vercel emits a lot of routine stdout we don't want to surface.
-    const lines: string[] = [];
-    for (const evt of events) {
+    // First pass: pull every non-empty, non-noise text line in chrono
+    // order. We carry the index so we can grab a few lines of context
+    // around whatever we end up picking.
+    const candidates: { idx: number; text: string }[] = [];
+    events.forEach((evt, idx) => {
       const text = (evt.payload?.text ?? evt.text ?? "").trim();
-      if (!text) continue;
-      const isErrorLine =
-        evt.type === "stderr" ||
-        evt.type === "error" ||
-        /(error|failed|cannot find|not found|exited with)/i.test(text);
-      if (isErrorLine) lines.push(text);
-      if (lines.length >= 5) break;
+      if (!text) return;
+      if (isNoise(text)) return;
+      candidates.push({ idx, text });
+    });
+    if (candidates.length === 0) return null;
+    // Second pass: prefer the FIRST high-signal line we see (it's the
+    // root cause). If nothing matches, fall back to the first stderr
+    // line — better than nothing.
+    const firstSignal = candidates.find((c) => isHighSignal(c.text));
+    let selected: { idx: number; text: string };
+    if (firstSignal) {
+      selected = firstSignal;
+    } else {
+      // Find the first stderr/error event among candidates.
+      const firstStderr = candidates.find((c) => {
+        const evt = events[c.idx];
+        return evt?.type === "stderr" || evt?.type === "error";
+      });
+      if (!firstStderr) return null;
+      selected = firstStderr;
     }
-    if (lines.length === 0) return null;
+    // Grab up to 4 surrounding non-noise lines for context (the line
+    // before the error often names the file, and the line after often
+    // shows the column marker — both help the AI debug).
+    const start = Math.max(0, candidates.indexOf(selected) - 1);
+    const slice = candidates.slice(start, start + 5).map((c) => c.text);
+    const joined = slice.join(" | ");
     // Cap so we don't dump a 10KB stack into a toast.
-    const joined = lines.join(" | ");
-    return joined.length > 400 ? joined.slice(0, 400) + "…" : joined;
+    return joined.length > 600 ? joined.slice(0, 600) + "…" : joined;
   } catch {
     // Best-effort — never let log retrieval mask the original failure.
     return null;
