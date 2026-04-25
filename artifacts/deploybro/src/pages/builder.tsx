@@ -1053,8 +1053,18 @@ export default function Builder() {
   return (
     <div className="h-screen w-full bg-background flex flex-col overflow-hidden text-foreground">
       {/* Top Navbar */}
-      <header className="h-12 border-b border-border bg-surface flex items-center justify-between px-3 md:px-4 shrink-0 relative z-50 gap-2">
-        <div className="flex items-center gap-2 md:gap-3 min-w-0">
+      {/* The navbar is split at the same boundary as the body: a brand
+          column whose width matches the chat panel, a draggable vertical
+          handle that lines up with the body's chat-resize handle, and the
+          tab strip that fills the rest. Dragging EITHER handle (navbar or
+          body) resizes the chat column, and visually you get one
+          continuous draggable edge from the top of the navbar all the
+          way down. */}
+      <header className="h-12 border-b border-border bg-surface flex items-center shrink-0 relative z-50">
+        <div
+          className="flex items-center gap-2 md:gap-3 min-w-0 px-3 md:px-4 h-full md:shrink-0 md:w-[var(--chat-w)] md:border-r md:border-border"
+          style={{ ["--chat-w" as string]: `${chatWidth}px` } as React.CSSProperties}
+        >
           <Link href="/dashboard" className="hover:opacity-80 transition-opacity shrink-0 flex items-center">
             <img
               src={brandLogoUrl}
@@ -1070,6 +1080,15 @@ export default function Builder() {
           <div className="w-2 h-2 rounded-full bg-success ml-1 shrink-0" title="Live" />
         </div>
 
+        {/* Drag handle aligned with the body's chat-resize handle so the
+            entire chat column has one continuous draggable seam. */}
+        <div
+          onMouseDown={startDrag}
+          onDoubleClick={() => setChatWidth(400)}
+          className="hidden md:block w-1 self-stretch shrink-0 cursor-col-resize bg-transparent hover:bg-primary/40 active:bg-primary/60 transition-colors -ml-px"
+          title="Drag to resize · double-click to reset"
+        />
+
         {/* Tab strip — desktop only, lives in the navbar to use the
             otherwise-empty middle space. Mobile gets its own row below. */}
         <BuilderTabStrip
@@ -1081,7 +1100,7 @@ export default function Builder() {
           className="hidden md:flex flex-1 items-center gap-1 px-2 overflow-x-auto min-w-0"
         />
 
-        <div className="flex items-center gap-2 md:gap-3 shrink-0">
+        <div className="flex items-center gap-2 md:gap-3 shrink-0 ml-auto px-3 md:px-4">
           <span className="hidden lg:inline text-xs text-secondary font-mono">
             ${apiBuilds.reduce((s, b) => s + b.cost, 0).toFixed(2)} spend
           </span>
