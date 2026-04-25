@@ -299,6 +299,136 @@ async function* readSSE(res: Response): AsyncGenerator<{ event: string; data: an
   }
 }
 
+// Tab strip used in two places: inside the navbar on desktop (with labels)
+// and as a standalone row on mobile (icons only). Defined at module scope so
+// each instance owns its own popover/search state without resetting on every
+// parent re-render.
+function BuilderTabStrip({
+  openTabs,
+  activeTab,
+  setActiveTab,
+  closeTab,
+  openTab,
+  compact = false,
+  className = "",
+}: {
+  openTabs: TabKey[];
+  activeTab: TabKey;
+  setActiveTab: (k: TabKey) => void;
+  closeTab: (k: TabKey) => void;
+  openTab: (k: TabKey) => void;
+  compact?: boolean;
+  className?: string;
+}) {
+  const [addOpen, setAddOpen] = useState(false);
+  const [tabSearch, setTabSearch] = useState("");
+
+  const availableToAdd = ADDABLE_TABS.filter((k) => !openTabs.includes(k)).filter(
+    (k) => TAB_META[k].label.toLowerCase().includes(tabSearch.toLowerCase())
+  );
+
+  const handlePick = (k: TabKey) => {
+    openTab(k);
+    setAddOpen(false);
+    setTabSearch("");
+  };
+
+  return (
+    <div className={className}>
+      {openTabs.map((key) => {
+        const meta = TAB_META[key];
+        const Icon = meta.icon;
+        const active = activeTab === key;
+        const closeable = key !== "preview";
+        return (
+          <div
+            key={key}
+            className={`group h-8 ${compact ? "pl-2 pr-1" : "pl-3 pr-1"} rounded-md text-sm flex items-center gap-2 whitespace-nowrap transition-colors border ${
+              active
+                ? "bg-primary/15 text-primary border-primary"
+                : "text-secondary hover:text-foreground hover:bg-surface-raised border-transparent"
+            }`}
+          >
+            <button
+              onClick={() => setActiveTab(key)}
+              className="flex items-center gap-2 h-full pr-1"
+              aria-label={meta.label}
+              title={compact ? meta.label : undefined}
+            >
+              <Icon className="w-4 h-4" />
+              {!compact && <span>{meta.label}</span>}
+            </button>
+            {closeable ? (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  closeTab(key);
+                }}
+                className={`w-5 h-5 rounded flex items-center justify-center ml-0.5 transition-colors ${
+                  active
+                    ? "text-primary/70 hover:text-primary hover:bg-primary/10"
+                    : "text-secondary hover:text-foreground hover:bg-background/60"
+                }`}
+                aria-label={`Close ${meta.label}`}
+              >
+                <X className="w-3 h-3" />
+              </button>
+            ) : (
+              <span className="w-1.5" />
+            )}
+          </div>
+        );
+      })}
+
+      <Popover open={addOpen} onOpenChange={setAddOpen}>
+        <PopoverTrigger asChild>
+          <button
+            className="ml-1 w-7 h-7 rounded-md flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors shrink-0"
+            aria-label="Add tab"
+            title="Add tab"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-64 p-2 border-border">
+          <div className="relative mb-2">
+            <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-secondary" />
+            <input
+              autoFocus
+              value={tabSearch}
+              onChange={(e) => setTabSearch(e.target.value)}
+              placeholder="Search tabs..."
+              className="w-full bg-background border border-border rounded-md pl-7 pr-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+          <div className="max-h-64 overflow-y-auto">
+            {availableToAdd.length === 0 ? (
+              <div className="text-xs text-secondary px-2 py-3 text-center">
+                No tabs match
+              </div>
+            ) : (
+              availableToAdd.map((k) => {
+                const meta = TAB_META[k];
+                const Icon = meta.icon;
+                return (
+                  <button
+                    key={k}
+                    onClick={() => handlePick(k)}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-left text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
+                  >
+                    <Icon className="w-3.5 h-3.5" />
+                    <span>{meta.label}</span>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
 export default function Builder() {
   const params = useParams();
   const { username, slug } = params;
@@ -313,8 +443,6 @@ export default function Builder() {
   const [openTabs, setOpenTabs] = useState<TabKey[]>(["preview"]);
   const [activeTab, setActiveTab] = useState<TabKey>("preview");
   const [viewport, setViewport] = useState<"desktop" | "tablet" | "mobile">("desktop");
-  const [tabSearch, setTabSearch] = useState("");
-  const [addOpen, setAddOpen] = useState(false);
 
   const liveUrl = `https://${slug}-${username}.deploybro.app`;
   const [urlValue, setUrlValue] = useState(liveUrl);
@@ -471,8 +599,6 @@ export default function Builder() {
   const openTab = (key: TabKey) => {
     setOpenTabs((tabs) => (tabs.includes(key) ? tabs : [...tabs, key]));
     setActiveTab(key);
-    setAddOpen(false);
-    setTabSearch("");
   };
 
   const closeTab = (key: TabKey) => {
@@ -487,10 +613,6 @@ export default function Builder() {
       return next;
     });
   };
-
-  const availableToAdd = ADDABLE_TABS.filter((k) => !openTabs.includes(k)).filter(
-    (k) => TAB_META[k].label.toLowerCase().includes(tabSearch.toLowerCase())
-  );
 
   const [chatInput, setChatInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
@@ -944,6 +1066,17 @@ export default function Builder() {
           <div className="w-2 h-2 rounded-full bg-success ml-1 shrink-0" title="Live" />
         </div>
 
+        {/* Tab strip — desktop only, lives in the navbar to use the
+            otherwise-empty middle space. Mobile gets its own row below. */}
+        <BuilderTabStrip
+          openTabs={openTabs}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          closeTab={closeTab}
+          openTab={openTab}
+          className="hidden md:flex flex-1 items-center gap-1 px-2 overflow-x-auto min-w-0"
+        />
+
         <div className="flex items-center gap-2 md:gap-3 shrink-0">
           <span className="hidden lg:inline text-xs text-secondary font-mono">
             ${apiBuilds.reduce((s, b) => s + b.cost, 0).toFixed(2)} spend
@@ -1137,97 +1270,17 @@ export default function Builder() {
 
         {/* Right Panel - Tabbed Workspace */}
         <section className="flex-1 flex flex-col bg-background overflow-hidden min-w-0">
-          {/* Tab strip */}
-          <div className="h-11 border-b border-border bg-surface flex items-center px-2 gap-1 overflow-x-auto shrink-0">
-            {openTabs.map((key) => {
-              const meta = TAB_META[key];
-              const Icon = meta.icon;
-              const active = activeTab === key;
-              const closeable = key !== "preview";
-              return (
-                <div
-                  key={key}
-                  className={`group h-8 pl-3 pr-1 rounded-md text-sm flex items-center gap-2 whitespace-nowrap transition-colors border ${
-                    active
-                      ? "bg-primary/15 text-primary border-primary"
-                      : "text-secondary hover:text-foreground hover:bg-surface-raised border-transparent"
-                  }`}
-                >
-                  <button
-                    onClick={() => setActiveTab(key)}
-                    className="flex items-center gap-2 h-full pr-1"
-                  >
-                    <Icon className="w-4 h-4" />
-                    <span>{meta.label}</span>
-                  </button>
-                  {closeable ? (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        closeTab(key);
-                      }}
-                      className={`w-5 h-5 rounded flex items-center justify-center ml-0.5 transition-colors ${
-                        active
-                          ? "text-primary/70 hover:text-primary hover:bg-primary/10"
-                          : "text-secondary hover:text-foreground hover:bg-background/60"
-                      }`}
-                      aria-label={`Close ${meta.label}`}
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  ) : (
-                    <span className="w-1.5" />
-                  )}
-                </div>
-              );
-            })}
-
-            <Popover open={addOpen} onOpenChange={setAddOpen}>
-              <PopoverTrigger asChild>
-                <button
-                  className="ml-1 w-7 h-7 rounded-md flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors shrink-0"
-                  aria-label="Add tab"
-                  title="Add tab"
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
-              </PopoverTrigger>
-              <PopoverContent align="start" className="w-64 p-2 border-border">
-                <div className="relative mb-2">
-                  <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-secondary" />
-                  <input
-                    autoFocus
-                    value={tabSearch}
-                    onChange={(e) => setTabSearch(e.target.value)}
-                    placeholder="Search tabs..."
-                    className="w-full bg-background border border-border rounded-md pl-7 pr-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-primary"
-                  />
-                </div>
-                <div className="max-h-64 overflow-y-auto">
-                  {availableToAdd.length === 0 ? (
-                    <div className="text-xs text-secondary px-2 py-3 text-center">
-                      No tabs match
-                    </div>
-                  ) : (
-                    availableToAdd.map((k) => {
-                      const meta = TAB_META[k];
-                      const Icon = meta.icon;
-                      return (
-                        <button
-                          key={k}
-                          onClick={() => openTab(k)}
-                          className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-left text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
-                        >
-                          <Icon className="w-3.5 h-3.5" />
-                          <span>{meta.label}</span>
-                        </button>
-                      );
-                    })
-                  )}
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
+          {/* Tab strip — mobile only (icons), since the desktop strip lives
+              inside the navbar above. */}
+          <BuilderTabStrip
+            compact
+            openTabs={openTabs}
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+            closeTab={closeTab}
+            openTab={openTab}
+            className="md:hidden h-11 border-b border-border bg-surface flex items-center px-2 gap-1 overflow-x-auto shrink-0"
+          />
 
           {/* Live URL bar (preview only) */}
           {activeTab === "preview" && (
