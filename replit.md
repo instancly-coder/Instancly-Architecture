@@ -40,6 +40,7 @@ Drizzle schema in `lib/db/src/schema/`:
 - `builds` (projectId FK, number, prompt, aiMessage, model, cost, durationSec, filesChanged, tokens)
 - `deployments` (projectId FK, status `queued|provisioning_db|creating_project|deploying|polling|live|failed`, vercelDeploymentId, vercelInspectorUrl, liveUrl, errorMessage, createdAt, finishedAt)
 - `transactions` (userId FK, kind, amount, description)
+- `project_files` (projectId FK, path, content, **encoding `utf8|base64`**, **content_type**, size) — `encoding=base64` for user-uploaded binary assets (images, fonts, favicons); content holds the base64 string and is decoded by the preview route + publish payload builder
 
 Workflow:
 - `pnpm --filter @workspace/db run push --force` — sync schema to Neon (uses `NEON_DATABASE_URL` secret, auto-SSL on neon.tech).

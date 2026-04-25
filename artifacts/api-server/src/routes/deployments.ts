@@ -22,8 +22,8 @@ import {
 import { provisionAppDatabase, deleteBranch as neonDeleteBranch } from "../lib/neon";
 import {
   buildVercelPayload,
-  BinaryFileNotSupportedError,
   PayloadTooLargeError,
+  type ProjectFileLite,
 } from "../lib/deploy-payload";
 import { encryptSecret, decryptSecret } from "../lib/secret-cipher";
 
@@ -113,13 +113,26 @@ async function runPublishPipeline(args: {
       .select({
         path: projectFilesTable.path,
         content: projectFilesTable.content,
+        // Tells buildVercelPayload whether `content` is raw source or
+        // already base64-encoded binary so it can pass-through instead
+        // of double-encoding (which would corrupt images/fonts/etc.).
+        encoding: projectFilesTable.encoding,
       })
       .from(projectFilesTable)
       .where(eq(projectFilesTable.projectId, projectId));
     if (fileRows.length === 0) {
       throw new Error("Project has no files to deploy yet — run a build first");
     }
-    const payload = buildVercelPayload(fileRows);
+    // The DB column is plain `text` so Drizzle types `encoding` as
+    // `string`. Narrow it here against the two values the schema's
+    // CHECK / app code can actually produce — anything else is a bug
+    // we'd want to surface immediately rather than silently mis-route
+    // through buildVercelPayload's text path.
+    const typedFiles: ProjectFileLite[] = fileRows.map((r) => {
+      const enc = r.encoding === "base64" ? "base64" : "utf8";
+      return { path: r.path, content: r.content, encoding: enc };
+    });
+    const payload = buildVercelPayload(typedFiles);
 
     // ---------- 2. Provision (or reuse) the Neon database ----------
     // `databaseUrl` is encrypted-at-rest. If a prior publish stored one we

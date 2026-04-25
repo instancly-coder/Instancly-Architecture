@@ -51,6 +51,7 @@ import {
   Loader2,
   Rocket,
   Sparkles,
+  Upload,
 } from "lucide-react";
 import brandLogoUrl from "@assets/download_1776989236348.png";
 import { Button } from "@/components/ui/button";
@@ -88,6 +89,8 @@ import {
   useProjectBuilds,
   useProjectFile,
   useProjectFiles,
+  useUploadProjectFile,
+  useDeleteProjectFile,
   usePublishProject,
   useDeployments,
   useDeploymentStatus,
@@ -2158,6 +2161,13 @@ function FilesPane({
   setActiveFile: (f: string) => void;
 }) {
   const { data: files = [] } = useProjectFiles(username, slug);
+  const uploadFile = useUploadProjectFile(username, slug);
+  const deleteFile = useDeleteProjectFile(username, slug);
+  // Hidden file input for the Explorer's Upload button. We render one
+  // <input type=file multiple> and trigger it imperatively from the
+  // toolbar button + drag handler so the rest of the layout stays clean.
+  const uploadInputRef = useRef<HTMLInputElement>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const tree = files.map((f) => {
     const segments = f.path.split("/");
     const group = segments.length > 1 ? segments.slice(0, -1).join("/") : "";
@@ -2167,8 +2177,53 @@ function FilesPane({
         : f.size < 1024 * 1024
         ? `${(f.size / 1024).toFixed(1)} KB`
         : `${(f.size / 1024 / 1024).toFixed(1)} MB`;
-    return { path: f.path, group, size };
+    return {
+      path: f.path,
+      group,
+      size,
+      encoding: f.encoding,
+      contentType: f.contentType,
+    };
   });
+
+  // Walks a FileList and uploads each entry sequentially. Sequential
+  // (not Promise.all) so the API server's 30MB body cap isn't blown by
+  // four 9MB images racing in parallel, and so a single failure leaves
+  // the rest of the queue intact.
+  const handleUploads = async (list: FileList | File[] | null) => {
+    if (!list) return;
+    const arr = Array.from(list);
+    if (arr.length === 0) return;
+    setUploadError(null);
+    for (const file of arr) {
+      try {
+        await uploadFile.mutateAsync({ file });
+      } catch (err) {
+        const msg =
+          err instanceof Error ? err.message : "Upload failed";
+        setUploadError(`${file.name}: ${msg}`);
+        // Stop the queue on the first failure so the user can react
+        // (e.g. shrink the file) before retrying the rest.
+        break;
+      }
+    }
+  };
+
+  const handleDelete = async (path: string) => {
+    if (!confirm(`Delete ${path}?`)) return;
+    try {
+      await deleteFile.mutateAsync(path);
+      // If the user just deleted the file they were viewing, fall back
+      // to the next available file (or empty).
+      if (path === activeFile) {
+        const next = files.find((f) => f.path !== path);
+        setActiveFile(next?.path ?? "");
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Delete failed";
+      setUploadError(msg);
+    }
+  };
 
   // Pick a sensible default file the moment the project actually has files.
   useEffect(() => {
@@ -2210,33 +2265,53 @@ function FilesPane({
           {files.map((f) => {
             const name = f.path.split("/").pop()!;
             const active = activeFile === f.path;
+            const isBinary = f.encoding === "base64";
+            const isImage = isBinary && (f.contentType ?? "").startsWith("image/");
+            const Icon = isImage ? ImageIcon : FileCode2;
             return (
-              <button
+              <div
                 key={f.path}
-                onClick={() => {
-                  setActiveFile(f.path);
-                  setMobileTreeOpen(false);
-                }}
-                className={`group w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs font-mono text-left transition-colors ${
-                  active
-                    ? "bg-primary/15 text-primary"
-                    : "text-secondary hover:text-foreground hover:bg-surface-raised"
+                className={`group flex items-stretch rounded ${
+                  active ? "bg-primary/15" : "hover:bg-surface-raised"
                 }`}
               >
-                <FileCode2 className="w-3.5 h-3.5 shrink-0" />
-                <span className="truncate flex-1">{name}</span>
-                {f.status && (
-                  <span
-                    className={`text-[9px] font-mono px-1 rounded ${
-                      f.status === "A"
-                        ? "bg-success/15 text-success"
-                        : "bg-primary/15 text-primary"
-                    }`}
+                <button
+                  onClick={() => {
+                    setActiveFile(f.path);
+                    setMobileTreeOpen(false);
+                  }}
+                  className={`flex-1 min-w-0 flex items-center gap-2 px-2 py-1.5 text-xs font-mono text-left transition-colors ${
+                    active
+                      ? "text-primary"
+                      : "text-secondary group-hover:text-foreground"
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate flex-1">{name}</span>
+                  {isBinary && (
+                    <span className="text-[9px] font-mono px-1 rounded bg-surface text-secondary">
+                      bin
+                    </span>
+                  )}
+                </button>
+                {isBinary && (
+                  // Delete affordance only for user-uploaded assets —
+                  // AI-generated source files get rewritten on the next
+                  // build anyway, so a delete button there would just
+                  // be confusing.
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void handleDelete(f.path);
+                    }}
+                    title="Delete file"
+                    aria-label={`Delete ${f.path}`}
+                    className="px-1.5 opacity-0 group-hover:opacity-100 text-secondary hover:text-red-500 transition-opacity"
                   >
-                    {f.status}
-                  </span>
+                    <Trash2 className="w-3 h-3" />
+                  </button>
                 )}
-              </button>
+              </div>
             );
           })}
         </div>
@@ -2246,15 +2321,48 @@ function FilesPane({
 
   return (
     <div className="absolute inset-0 flex bg-background">
+      <input
+        ref={uploadInputRef}
+        type="file"
+        multiple
+        // Match the server's MAX_UPLOAD_BYTES — common image and font
+        // formats that cover ~99% of the use case (logos, photos,
+        // favicons, brand fonts). Users can still pick anything via
+        // the OS dialog if the browser ignores `accept`; the server
+        // validates regardless.
+        accept="image/*,font/*,.woff,.woff2,.ttf,.otf,.eot,.ico,.svg"
+        className="hidden"
+        onChange={(e) => {
+          void handleUploads(e.target.files);
+          if (uploadInputRef.current) uploadInputRef.current.value = "";
+        }}
+      />
       <div className="hidden md:flex w-64 border-r border-border bg-surface overflow-y-auto shrink-0 flex-col">
-        <div className="flex items-center justify-between px-3 py-2 border-b border-border">
+        <div className="flex items-center justify-between px-3 py-2 border-b border-border gap-2">
           <div className="text-[10px] uppercase tracking-wider font-mono text-secondary">
             Explorer
           </div>
-          <span className="text-[10px] font-mono text-secondary">
-            {tree.length} files
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-mono text-secondary">
+              {tree.length} files
+            </span>
+            <button
+              type="button"
+              onClick={() => uploadInputRef.current?.click()}
+              disabled={uploadFile.isPending}
+              title="Upload an image, font, or favicon"
+              className="inline-flex items-center gap-1 h-6 px-2 rounded text-[10px] font-mono text-secondary hover:text-foreground hover:bg-surface-raised border border-border disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <Upload className="w-3 h-3" />
+              {uploadFile.isPending ? "Uploading…" : "Upload"}
+            </button>
+          </div>
         </div>
+        {uploadError && (
+          <div className="mx-2 my-1 px-2 py-1.5 rounded text-[10px] text-red-500 bg-red-500/10 border border-red-500/20 break-words">
+            {uploadError}
+          </div>
+        )}
         {TreeBody}
       </div>
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
@@ -2272,17 +2380,6 @@ function FilesPane({
                 {activeFile}
               </div>
             </div>
-            {activeMeta?.status && (
-              <span
-                className={`text-[9px] font-mono px-1 rounded ${
-                  activeMeta.status === "A"
-                    ? "bg-success/15 text-success"
-                    : "bg-primary/15 text-primary"
-                }`}
-              >
-                {activeMeta.status}
-              </span>
-            )}
             <ChevronDown
               className={`w-4 h-4 text-secondary transition-transform shrink-0 ${
                 mobileTreeOpen ? "rotate-180" : ""
@@ -2320,18 +2417,34 @@ function FilesPane({
             {activeFile}
           </div>
           <div className="hidden sm:flex items-center px-4 text-[10px] font-mono text-secondary border-l border-border">
-            UTF-8 · LF · {ext.toUpperCase()}
+            {fileData?.encoding === "base64"
+              ? `${fileData.contentType ?? "binary"} · ${activeMeta?.size ?? ""}`
+              : `UTF-8 · LF · ${ext.toUpperCase()}`}
           </div>
         </div>
         <div className="flex-1 overflow-auto bg-background">
-          <div className="grid grid-cols-[3.25rem_1fr] font-mono text-xs leading-6">
-            <div className="text-right pr-3 py-3 select-none text-secondary/60 border-r border-border bg-surface/40">
-              {lines.map((_, i) => (
-                <div key={i}>{i + 1}</div>
-              ))}
+          {fileData?.encoding === "base64" ? (
+            // Binary asset preview. We render an <img> for image MIMEs
+            // (cheap, accurate, lets the user verify the upload actually
+            // worked) and a generic placeholder for everything else
+            // (fonts, audio, etc.) so the editor doesn't try to dump
+            // base64 garbage into a <pre>.
+            <BinaryFilePreview
+              path={activeFile}
+              base64={fileData.content}
+              contentType={fileData.contentType}
+              sizeLabel={activeMeta?.size ?? ""}
+            />
+          ) : (
+            <div className="grid grid-cols-[3.25rem_1fr] font-mono text-xs leading-6">
+              <div className="text-right pr-3 py-3 select-none text-secondary/60 border-r border-border bg-surface/40">
+                {lines.map((_, i) => (
+                  <div key={i}>{i + 1}</div>
+                ))}
+              </div>
+              <pre className="py-3 px-4 text-foreground whitespace-pre overflow-x-auto">{code}</pre>
             </div>
-            <pre className="py-3 px-4 text-foreground whitespace-pre overflow-x-auto">{code}</pre>
-          </div>
+          )}
         </div>
         <div className="h-7 border-t border-border bg-surface px-4 flex items-center justify-between text-[10px] font-mono text-secondary">
           <div className="flex items-center gap-3">
@@ -2346,6 +2459,55 @@ function FilesPane({
             <span>Last build: 2 min ago</span>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// Renders a friendly preview for a binary project file. Image MIMEs get
+// an actual <img> via a `data:` URL so the user can verify what they
+// just uploaded; everything else gets a placeholder card with the file
+// name, content type, and size.
+function BinaryFilePreview({
+  path,
+  base64,
+  contentType,
+  sizeLabel,
+}: {
+  path: string;
+  base64: string;
+  contentType: string | null;
+  sizeLabel: string;
+}) {
+  const mime = contentType ?? "application/octet-stream";
+  const isImage = mime.startsWith("image/");
+  const dataUrl = `data:${mime};base64,${base64}`;
+  return (
+    <div className="h-full w-full flex items-center justify-center p-6">
+      <div className="max-w-md w-full rounded-xl border border-border bg-surface p-5 flex flex-col items-center gap-4 text-center">
+        {isImage ? (
+          <img
+            src={dataUrl}
+            alt={path}
+            className="max-w-full max-h-[40vh] rounded border border-border bg-background"
+          />
+        ) : (
+          <div className="w-16 h-16 rounded-lg border border-border bg-background flex items-center justify-center">
+            <ImageIcon className="w-7 h-7 text-secondary" />
+          </div>
+        )}
+        <div className="min-w-0 w-full">
+          <div className="font-mono text-xs truncate text-foreground">{path}</div>
+          <div className="text-[11px] text-secondary mt-1">
+            {mime} · {sizeLabel || "binary"}
+          </div>
+        </div>
+        {!isImage && (
+          <div className="text-[11px] text-secondary leading-snug">
+            This file ships with the published site but can't be shown
+            inline here.
+          </div>
+        )}
       </div>
     </div>
   );

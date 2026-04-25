@@ -172,7 +172,25 @@ export function useUserProjects(username: string | undefined) {
 export type ApiProjectFile = {
   path: string;
   size: number;
+  // "utf8" for source code, "base64" for binary uploads (images,
+  // fonts, favicons, etc.). The Files panel uses this to show a
+  // binary badge and to switch the editor over to a preview pane.
+  encoding: "utf8" | "base64";
+  // Browser-supplied MIME type captured at upload time. Null for
+  // AI-generated text files; the iframe preview falls back to an
+  // extension-derived type in that case.
+  contentType: string | null;
   updatedAt: string;
+};
+
+export type ApiProjectFileContent = {
+  path: string;
+  // For utf8 files this is the source string. For base64 files this
+  // is the raw base64 of the bytes — combine with `contentType` to
+  // build a `data:` URL for an <img> preview.
+  content: string;
+  encoding: "utf8" | "base64";
+  contentType: string | null;
 };
 
 export function useProjectFiles(
@@ -195,10 +213,97 @@ export function useProjectFile(
   return useQuery({
     queryKey: ["projects", username, slug, "file", path],
     queryFn: () =>
-      request<{ path: string; content: string }>(
+      request<ApiProjectFileContent>(
         `/projects/${username}/${slug}/files/${path}`,
       ),
     enabled: !!username && !!slug && !!path,
+  });
+}
+
+// Reads a File as a base64 string (no `data:` prefix). Used by the
+// upload mutation below — the server expects raw base64 in the JSON
+// body so it can decode and size-check before persisting.
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result !== "string") {
+        reject(new Error("Failed to read file as data URL"));
+        return;
+      }
+      // result is `data:<mime>;base64,<payload>` — strip the prefix.
+      const comma = result.indexOf(",");
+      resolve(comma >= 0 ? result.slice(comma + 1) : result);
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("Read failed"));
+    reader.readAsDataURL(file);
+  });
+}
+
+// Upload a binary asset (image, font, favicon, etc.) into the project.
+// `path` is what the user wants the file stored as — typically just the
+// File.name dropped into the project root, but callers can prefix a
+// folder if they want (e.g. "public/logo.png").
+export function useUploadProjectFile(
+  username: string | undefined,
+  slug: string | undefined,
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { file: File; path?: string }) => {
+      if (!username || !slug) throw new Error("Project not loaded");
+      const path = (input.path ?? input.file.name).trim();
+      if (!path) throw new Error("Missing file path");
+      const contentBase64 = await fileToBase64(input.file);
+      return request<ApiProjectFile>(
+        `/projects/${username}/${slug}/files/upload`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            path,
+            contentBase64,
+            contentType: input.file.type || undefined,
+          }),
+        },
+      );
+    },
+    onSuccess: (uploaded) => {
+      qc.invalidateQueries({
+        queryKey: ["projects", username, slug, "files"],
+      });
+      // Drop the cached single-file content so the editor re-fetches if
+      // the user re-uploads the same path.
+      qc.invalidateQueries({
+        queryKey: ["projects", username, slug, "file", uploaded.path],
+      });
+    },
+  });
+}
+
+// Delete a file from the project. Used by the Files panel to undo a
+// mistaken upload.
+export function useDeleteProjectFile(
+  username: string | undefined,
+  slug: string | undefined,
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (path: string) => {
+      if (!username || !slug) throw new Error("Project not loaded");
+      return request<{ status: "ok"; path: string }>(
+        `/projects/${username}/${slug}/files/${path}`,
+        { method: "DELETE" },
+      );
+    },
+    onSuccess: (_data, path) => {
+      qc.invalidateQueries({
+        queryKey: ["projects", username, slug, "files"],
+      });
+      qc.invalidateQueries({
+        queryKey: ["projects", username, slug, "file", path],
+      });
+    },
   });
 }
 

@@ -1,10 +1,19 @@
-// Translates the project_files rows that the AI generated into the inlined
-// file payload Vercel expects. Also injects sane defaults when the AI omits
-// `package.json` or `vercel.json` so Vite-based builds work out of the box.
+// Translates the project_files rows that the AI generated (or the user
+// uploaded) into the inlined file payload Vercel expects. Also injects sane
+// defaults when the project omits `package.json` or `vercel.json` so
+// Vite-based builds work out of the box.
 
 import type { VercelInlinedFile } from "./vercel";
 
-export type ProjectFileLite = { path: string; content: string };
+// Rows we accept from the publish pipeline. `encoding` mirrors the new
+// project_files column: "utf8" means `content` is the raw source string,
+// "base64" means `content` is already base64-encoded bytes (binary
+// uploads — images, fonts, etc.).
+export type ProjectFileLite = {
+  path: string;
+  content: string;
+  encoding?: "utf8" | "base64" | null;
+};
 
 const DEFAULT_PACKAGE_JSON = {
   name: "deploybro-app",
@@ -41,43 +50,10 @@ const DEFAULT_VERCEL_JSON = {
 // Hard cap on the total size of the inlined payload we'll send to Vercel.
 // Vercel itself rejects requests well above 100MB; we leave a safety margin
 // so the user gets our friendly message instead of an opaque 413 / network
-// error mid-pipeline. Counted as the sum of the raw (pre-base64) file
+// error mid-pipeline. Counted as the sum of the raw (decoded) file
 // contents — base64 inflates by ~4/3 but headers, JSON envelope, and other
 // fields take additional space so 90MB raw is comfortably under the limit.
 export const PAYLOAD_SIZE_LIMIT_BYTES = 90 * 1024 * 1024;
-
-// File extensions that are unambiguously binary (images, fonts, archives,
-// audio/video, compiled artifacts). The DB column for `content` is `text`,
-// so anything that arrived here has already been UTF-8 round-tripped and is
-// almost certainly corrupt — base64-encoding it again would just deploy a
-// broken asset. Reject up front with a clear message instead.
-const BINARY_EXTENSIONS = new Set([
-  // images
-  "png", "jpg", "jpeg", "gif", "webp", "ico", "bmp", "tiff", "tif", "avif", "heic",
-  // fonts
-  "woff", "woff2", "ttf", "otf", "eot",
-  // audio
-  "mp3", "wav", "ogg", "flac", "aac", "m4a",
-  // video
-  "mp4", "mov", "avi", "webm", "mkv",
-  // archives / binaries
-  "zip", "tar", "gz", "tgz", "rar", "7z", "pdf", "exe", "dll", "so", "dylib",
-  "wasm", "class", "jar",
-]);
-
-// Thrown when the project contains a file whose extension we know is binary.
-// Caught by the publish pipeline and surfaced verbatim to the user via the
-// deployments row's `errorMessage` column.
-export class BinaryFileNotSupportedError extends Error {
-  readonly path: string;
-  constructor(path: string) {
-    super(
-      `Binary uploads aren't supported yet — remove or replace "${path}" before publishing.`,
-    );
-    this.name = "BinaryFileNotSupportedError";
-    this.path = path;
-  }
-}
 
 // Thrown when the total raw size of project files exceeds our safe limit.
 export class PayloadTooLargeError extends Error {
@@ -95,24 +71,33 @@ export class PayloadTooLargeError extends Error {
   }
 }
 
-function extensionOf(path: string): string {
-  const idx = path.lastIndexOf(".");
-  if (idx < 0 || idx === path.length - 1) return "";
-  return path.slice(idx + 1).toLowerCase();
-}
-
-function isBinaryPath(path: string): boolean {
-  return BINARY_EXTENSIONS.has(extensionOf(path));
-}
-
-function toBase64(s: string): string {
+function toBase64FromUtf8(s: string): string {
   return Buffer.from(s, "utf8").toString("base64");
+}
+
+// Returns the base64-encoded payload Vercel expects, plus the raw
+// (decoded) byte length for size accounting. Branches on `encoding` so
+// binary uploads — already base64 in the DB — pass through unchanged
+// instead of being re-encoded as UTF-8 (which would corrupt them).
+function encodeForVercel(file: ProjectFileLite): {
+  data: string;
+  rawBytes: number;
+} {
+  if (file.encoding === "base64") {
+    // Re-decode just to get the raw byte length for the size budget.
+    // This is a small price to pay for an honest size check, and
+    // base64 decoding is fast.
+    const rawBytes = Buffer.from(file.content, "base64").length;
+    return { data: file.content, rawBytes };
+  }
+  const rawBytes = Buffer.byteLength(file.content, "utf8");
+  return { data: toBase64FromUtf8(file.content), rawBytes };
 }
 
 // True if the project file list looks like it should be treated as a
 // pre-built static site (raw HTML/CSS/JS at the root) rather than a Vite
-// project. In that case we ship everything as `public/` and let Vercel
-// serve it without a build step.
+// project. In that case we ship everything as-is and let Vercel serve it
+// without a build step.
 function isStaticOnly(files: ProjectFileLite[]): boolean {
   const hasIndexHtml = files.some((f) => f.path === "index.html");
   const hasPackage = files.some((f) => f.path === "package.json");
@@ -123,20 +108,20 @@ function isStaticOnly(files: ProjectFileLite[]): boolean {
 export function buildVercelPayload(
   files: ProjectFileLite[],
 ): VercelInlinedFile[] {
-  // ---------- Pre-flight: reject binary files & oversized payloads ----------
-  // Run these checks before any base64 work so failures are fast and the
-  // error message references the offending path, not a partial payload.
+  // ---------- Pre-flight: encode every file & enforce the size cap ----------
+  // We do this in a single pass so the size accounting is honest (binary
+  // file size is the *decoded* byte length, not the inflated base64
+  // length) and so an oversized project bails out before we synthesise
+  // any defaults below.
+  const encoded: VercelInlinedFile[] = [];
   let totalBytes = 0;
   for (const f of files) {
-    if (isBinaryPath(f.path)) {
-      throw new BinaryFileNotSupportedError(f.path);
-    }
-    // Byte length, not character length — multi-byte UTF-8 characters
-    // count for what they actually take on the wire.
-    totalBytes += Buffer.byteLength(f.content, "utf8");
+    const { data, rawBytes } = encodeForVercel(f);
+    totalBytes += rawBytes;
     if (totalBytes > PAYLOAD_SIZE_LIMIT_BYTES) {
       throw new PayloadTooLargeError(totalBytes, PAYLOAD_SIZE_LIMIT_BYTES);
     }
+    encoded.push({ file: f.path, data, encoding: "base64" });
   }
 
   const present = new Set(files.map((f) => f.path));
@@ -144,15 +129,10 @@ export function buildVercelPayload(
   if (isStaticOnly(files)) {
     // Pure static site — ship as-is plus a vercel.json that disables the
     // build step. Vercel will serve files from the project root.
-    const out: VercelInlinedFile[] = files.map((f) => ({
-      file: f.path,
-      data: toBase64(f.content),
-      encoding: "base64",
-    }));
     if (!present.has("vercel.json")) {
-      out.push({
+      encoded.push({
         file: "vercel.json",
-        data: toBase64(JSON.stringify({
+        data: toBase64FromUtf8(JSON.stringify({
           buildCommand: null,
           outputDirectory: ".",
           rewrites: DEFAULT_VERCEL_JSON.rewrites,
@@ -160,38 +140,32 @@ export function buildVercelPayload(
         encoding: "base64",
       });
     }
-    return out;
+    return encoded;
   }
 
   // Vite project path — synthesize package.json / vite.config / vercel.json
   // when missing so the AI doesn't have to remember to emit them every time.
-  const out: VercelInlinedFile[] = files.map((f) => ({
-    file: f.path,
-    data: toBase64(f.content),
-    encoding: "base64",
-  }));
-
   if (!present.has("package.json")) {
-    out.push({
+    encoded.push({
       file: "package.json",
-      data: toBase64(JSON.stringify(DEFAULT_PACKAGE_JSON, null, 2)),
+      data: toBase64FromUtf8(JSON.stringify(DEFAULT_PACKAGE_JSON, null, 2)),
       encoding: "base64",
     });
   }
   if (!present.has("vite.config.js") && !present.has("vite.config.ts")) {
-    out.push({
+    encoded.push({
       file: "vite.config.js",
-      data: toBase64(DEFAULT_VITE_CONFIG),
+      data: toBase64FromUtf8(DEFAULT_VITE_CONFIG),
       encoding: "base64",
     });
   }
   if (!present.has("vercel.json")) {
-    out.push({
+    encoded.push({
       file: "vercel.json",
-      data: toBase64(JSON.stringify(DEFAULT_VERCEL_JSON, null, 2)),
+      data: toBase64FromUtf8(JSON.stringify(DEFAULT_VERCEL_JSON, null, 2)),
       encoding: "base64",
     });
   }
 
-  return out;
+  return encoded;
 }

@@ -419,12 +419,21 @@ router.post(
               projectId: project.id,
               path: f.path,
               content: f.content,
+              // Source code from the AI is always UTF-8 text. Stated
+              // explicitly so an upload that previously stored this
+              // path as base64 (e.g. user dropped logo.png, then asked
+              // the AI to "regenerate logo.png") gets cleanly
+              // overwritten back to text.
+              encoding: "utf8",
+              contentType: null,
               size: f.content.length,
             })
             .onConflictDoUpdate({
               target: [projectFilesTable.projectId, projectFilesTable.path],
               set: {
                 content: f.content,
+                encoding: "utf8",
+                contentType: null,
                 size: f.content.length,
                 updatedAt: sql`now()`,
               },

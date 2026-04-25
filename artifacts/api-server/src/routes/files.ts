@@ -5,10 +5,16 @@ import {
   usersTable,
   projectFilesTable,
 } from "@workspace/db";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { contentTypeFor, sanitizePath } from "../lib/file-blocks";
+import { requireAuth, getAuthedUser } from "../middlewares/auth";
 
 const router: IRouter = Router();
+
+// Per-file cap on uploaded binary content (decoded). 10MB is generous for
+// images/fonts and leaves comfortable headroom under express.json's 30MB
+// body limit (base64 inflates by ~4/3 → ~13.3MB on the wire).
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 async function findProject(username: string, slug: string) {
   const rows = await db
@@ -20,7 +26,9 @@ async function findProject(username: string, slug: string) {
   return rows[0]?.project ?? null;
 }
 
-// Lightweight metadata listing for the Files panel.
+// Lightweight metadata listing for the Files panel. Includes encoding +
+// content type so the UI can render a binary badge / image preview without
+// fetching the full content.
 router.get(
   "/projects/:username/:slug/files",
   async (req: Request, res: Response): Promise<void> => {
@@ -36,6 +44,8 @@ router.get(
       .select({
         path: projectFilesTable.path,
         size: projectFilesTable.size,
+        encoding: projectFilesTable.encoding,
+        contentType: projectFilesTable.contentType,
         updatedAt: projectFilesTable.updatedAt,
       })
       .from(projectFilesTable)
@@ -45,6 +55,8 @@ router.get(
       rows.map((r) => ({
         path: r.path,
         size: r.size,
+        encoding: r.encoding,
+        contentType: r.contentType,
         updatedAt: r.updatedAt.toISOString(),
       })),
     );
@@ -52,7 +64,9 @@ router.get(
 );
 
 // Single file content for the editor view. Path is everything after
-// `…/files/` so it can include slashes.
+// `…/files/` so it can include slashes. Returns the raw stored content
+// (base64 string for binary, source string for text) plus the encoding
+// so the client knows how to render it.
 router.get(
   "/projects/:username/:slug/files/*splat",
   async (req: Request, res: Response): Promise<void> => {
@@ -77,7 +91,11 @@ router.get(
     }
     const row = (
       await db
-        .select({ content: projectFilesTable.content })
+        .select({
+          content: projectFilesTable.content,
+          encoding: projectFilesTable.encoding,
+          contentType: projectFilesTable.contentType,
+        })
         .from(projectFilesTable)
         .where(
           and(
@@ -91,7 +109,162 @@ router.get(
       res.status(404).json({ status: "error", message: "File not found" });
       return;
     }
-    res.json({ path, content: row.content });
+    res.json({
+      path,
+      content: row.content,
+      encoding: row.encoding,
+      contentType: row.contentType,
+    });
+  },
+);
+
+// User-driven upload of a binary asset (image, font, favicon, etc.).
+// Body: { path, contentBase64, contentType? }. The size budget is enforced
+// against the *decoded* byte length so users can't sneak past it by
+// padding the base64 string. Owner-only.
+router.post(
+  "/projects/:username/:slug/files/upload",
+  requireAuth,
+  async (req: Request, res: Response): Promise<void> => {
+    const project = await findProject(
+      String(req.params.username),
+      String(req.params.slug),
+    );
+    if (!project) {
+      res.status(404).json({ status: "error", message: "Project not found" });
+      return;
+    }
+    const me = getAuthedUser(req);
+    if (!me || me.id !== project.userId) {
+      res.status(403).json({ status: "error", message: "Forbidden" });
+      return;
+    }
+
+    const body = (req.body ?? {}) as {
+      path?: unknown;
+      contentBase64?: unknown;
+      contentType?: unknown;
+    };
+    const rawPath = typeof body.path === "string" ? body.path : "";
+    const rawB64 = typeof body.contentBase64 === "string" ? body.contentBase64 : "";
+    const rawCt = typeof body.contentType === "string" ? body.contentType : "";
+
+    const path = sanitizePath(rawPath);
+    if (!path) {
+      res.status(400).json({ status: "error", message: "Invalid path" });
+      return;
+    }
+    if (!rawB64) {
+      res.status(400).json({ status: "error", message: "Missing contentBase64" });
+      return;
+    }
+    // Reject obviously-bad input before allocating a Buffer the size of
+    // the request body. ~13.5MB of base64 covers our 10MB decoded cap with
+    // padding to spare.
+    if (rawB64.length > 14 * 1024 * 1024) {
+      res.status(413).json({
+        status: "error",
+        message: `File is too large. Limit is ${Math.floor(MAX_UPLOAD_BYTES / (1024 * 1024))}MB.`,
+      });
+      return;
+    }
+    // Round-trip verifies it's actually valid base64. Buffer.from is
+    // lenient (skips bad chars) so we re-encode and compare.
+    const buf = Buffer.from(rawB64, "base64");
+    if (buf.length === 0 || buf.toString("base64").replace(/=+$/, "") !== rawB64.replace(/=+$/, "")) {
+      res.status(400).json({ status: "error", message: "Invalid base64 content" });
+      return;
+    }
+    if (buf.length > MAX_UPLOAD_BYTES) {
+      res.status(413).json({
+        status: "error",
+        message: `File is too large (${(buf.length / (1024 * 1024)).toFixed(1)}MB). Limit is ${Math.floor(MAX_UPLOAD_BYTES / (1024 * 1024))}MB.`,
+      });
+      return;
+    }
+
+    // Fall back to extension-derived MIME if the client didn't send one
+    // (or sent something silly like the empty string from File.type).
+    const contentType =
+      rawCt && /^[\w.+-]+\/[\w.+-]+(?:;.*)?$/.test(rawCt)
+        ? rawCt.slice(0, 200)
+        : contentTypeFor(path);
+
+    await db
+      .insert(projectFilesTable)
+      .values({
+        projectId: project.id,
+        path,
+        content: rawB64,
+        encoding: "base64",
+        contentType,
+        size: buf.length,
+      })
+      .onConflictDoUpdate({
+        target: [projectFilesTable.projectId, projectFilesTable.path],
+        set: {
+          content: rawB64,
+          encoding: "base64",
+          contentType,
+          size: buf.length,
+          updatedAt: sql`now()`,
+        },
+      });
+
+    res.json({
+      path,
+      size: buf.length,
+      encoding: "base64",
+      contentType,
+    });
+  },
+);
+
+// Delete a single file from the project. Owner-only. Used by the Files
+// panel's delete affordance — primarily so users can undo a mistaken
+// upload without poking at the database.
+router.delete(
+  "/projects/:username/:slug/files/*splat",
+  requireAuth,
+  async (req: Request, res: Response): Promise<void> => {
+    const project = await findProject(
+      String(req.params.username),
+      String(req.params.slug),
+    );
+    if (!project) {
+      res.status(404).json({ status: "error", message: "Project not found" });
+      return;
+    }
+    const me = getAuthedUser(req);
+    if (!me || me.id !== project.userId) {
+      res.status(403).json({ status: "error", message: "Forbidden" });
+      return;
+    }
+    const splat = (req.params as Record<string, unknown>).splat;
+    const raw = Array.isArray(splat)
+      ? splat.join("/")
+      : typeof splat === "string"
+      ? splat
+      : "";
+    const path = sanitizePath(raw);
+    if (!path) {
+      res.status(400).json({ status: "error", message: "Invalid path" });
+      return;
+    }
+    const result = await db
+      .delete(projectFilesTable)
+      .where(
+        and(
+          eq(projectFilesTable.projectId, project.id),
+          eq(projectFilesTable.path, path),
+        ),
+      )
+      .returning({ path: projectFilesTable.path });
+    if (result.length === 0) {
+      res.status(404).json({ status: "error", message: "File not found" });
+      return;
+    }
+    res.json({ status: "ok", path });
   },
 );
 
@@ -130,7 +303,11 @@ router.get(
 
     const row = (
       await db
-        .select({ content: projectFilesTable.content })
+        .select({
+          content: projectFilesTable.content,
+          encoding: projectFilesTable.encoding,
+          contentType: projectFilesTable.contentType,
+        })
         .from(projectFilesTable)
         .where(
           and(
@@ -152,10 +329,23 @@ router.get(
       return;
     }
 
-    // Always send fresh content — the AI may have just regenerated this.
+    // Always send fresh content — the AI may have just regenerated this,
+    // and uploaded assets get overwritten in place too.
     res.setHeader("Cache-Control", "no-store");
-    res.setHeader("Content-Type", contentTypeFor(path));
-    res.send(row.content);
+    // Prefer the stored content type for binary uploads (it was set from
+    // the browser's File.type at upload time and is more accurate than
+    // an extension-only guess for things like svg-vs-svg+xml).
+    res.setHeader(
+      "Content-Type",
+      row.contentType && row.encoding === "base64"
+        ? row.contentType
+        : contentTypeFor(path),
+    );
+    if (row.encoding === "base64") {
+      res.send(Buffer.from(row.content, "base64"));
+    } else {
+      res.send(row.content);
+    }
   },
 );
 

@@ -132,6 +132,43 @@ export function contentTypeFor(path: string): string {
       return "image/webp";
     case "ico":
       return "image/x-icon";
+    case "avif":
+      return "image/avif";
+    case "bmp":
+      return "image/bmp";
+    case "tiff":
+    case "tif":
+      return "image/tiff";
+    // Fonts — important for user-uploaded brand fonts to render in
+    // both the live preview iframe and the published Vercel site.
+    case "woff":
+      return "font/woff";
+    case "woff2":
+      return "font/woff2";
+    case "ttf":
+      return "font/ttf";
+    case "otf":
+      return "font/otf";
+    case "eot":
+      return "application/vnd.ms-fontobject";
+    // Audio / video — round out the binary asset story so uploaded
+    // sound/video files at least serve with the right type.
+    case "mp3":
+      return "audio/mpeg";
+    case "wav":
+      return "audio/wav";
+    case "ogg":
+      return "audio/ogg";
+    case "mp4":
+      return "video/mp4";
+    case "webm":
+      return "video/webm";
+    case "mov":
+      return "video/quicktime";
+    case "pdf":
+      return "application/pdf";
+    case "wasm":
+      return "application/wasm";
     case "txt":
     case "md":
       return "text/plain; charset=utf-8";
