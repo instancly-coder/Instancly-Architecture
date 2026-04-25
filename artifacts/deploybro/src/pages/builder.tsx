@@ -52,6 +52,8 @@ import {
   Rocket,
   Sparkles,
   Upload,
+  ArrowDownAZ,
+  ArrowDown10,
 } from "lucide-react";
 import brandLogoUrl from "@assets/download_1776989236348.png";
 import { Button } from "@/components/ui/button";
@@ -2254,6 +2256,16 @@ function FilesPane({
   // toolbar button + drag handler so the rest of the layout stays clean.
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  // Sort mode for the file list. "name" keeps the alphabetical-by-path
+  // grouping users are used to; "size" flattens the tree and sorts
+  // largest-first so the file eating the publish budget is row #1.
+  // Persisted in component state only — resets on a fresh mount per the
+  // task spec ("per-session in component state").
+  const [sortMode, setSortMode] = useState<"name" | "size">("name");
+  // Tracks whether we've already auto-nudged the user into "size" mode
+  // for this mount so the toast/auto-switch only fires once even if the
+  // gauge oscillates around the warn threshold as files are added/removed.
+  const autoSortedRef = useRef(false);
   const tree = files.map((f) => {
     const segments = f.path.split("/");
     const group = segments.length > 1 ? segments.slice(0, -1).join("/") : "";
@@ -2275,6 +2287,22 @@ function FilesPane({
   const sizePct = (totalBytes / publishLimitBytes) * 100;
   const sizeState: "ok" | "warn" | "over" =
     sizePct >= 100 ? "over" : sizePct >= 80 ? "warn" : "ok";
+
+  // Soft auto-suggestion: the first time the gauge crosses into amber/red
+  // for this session, flip the file list into size order so the offender
+  // is immediately on screen. We only do this once and only if the user
+  // hasn't already chosen a sort themselves (still on default "name") so
+  // we never override an explicit user preference.
+  useEffect(() => {
+    if (autoSortedRef.current) return;
+    if (sizeState !== "warn" && sizeState !== "over") return;
+    autoSortedRef.current = true;
+    setSortMode((current) => {
+      if (current !== "name") return current;
+      toast.message("Sorted by size to help you find what to prune");
+      return "size";
+    });
+  }, [sizeState]);
 
   // Walks a FileList and uploads each entry sequentially. Sequential
   // (not Promise.all) so the API server's 30MB body cap isn't blown by
@@ -2341,11 +2369,18 @@ function FilesPane({
     tree.some((t) => t.path === activeFile) ? activeFile : undefined,
   );
 
-  const grouped = tree.reduce<Record<string, typeof tree>>((acc, f) => {
-    const k = f.group || "/";
-    (acc[k] ||= []).push(f);
-    return acc;
-  }, {});
+  // In "name" mode, keep the existing folder grouping. In "size" mode,
+  // collapse everything into a single flat list sorted largest-first —
+  // that puts the worst budget offender at row #1 regardless of which
+  // folder it lives in, which is the whole point of the toggle.
+  const grouped =
+    sortMode === "size"
+      ? { "": [...tree].sort((a, b) => b.sizeBytes - a.sizeBytes) }
+      : tree.reduce<Record<string, typeof tree>>((acc, f) => {
+          const k = f.group || "/";
+          (acc[k] ||= []).push(f);
+          return acc;
+        }, {});
   const code =
     fileData?.content ??
     (codeLoading ? "// loading…" : tree.length === 0 ? "" : `// ${activeFile}\n`);
@@ -2355,13 +2390,67 @@ function FilesPane({
   const activeName = activeFile.split("/").pop() || "—";
   const activeMeta = tree.find((t) => t.path === activeFile);
 
+  // Compact two-state segmented control rendered just under the Explorer
+  // header on both desktop and mobile. Icon-only to fit the narrow
+  // sidebar; tooltips spell out which mode is which.
+  const SortToggle = (
+    <div
+      className="flex items-center gap-1 px-3 py-1.5 border-b border-border bg-surface shrink-0"
+      role="group"
+      aria-label="Sort files"
+    >
+      <span className="text-[10px] uppercase tracking-wider font-mono text-secondary/70 mr-1">
+        Sort
+      </span>
+      <div className="inline-flex rounded border border-border overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setSortMode("name")}
+          aria-pressed={sortMode === "name"}
+          title="Sort by name (alphabetical, grouped by folder)"
+          className={`inline-flex items-center gap-1 h-5 px-1.5 text-[10px] font-mono transition-colors ${
+            sortMode === "name"
+              ? "bg-primary/15 text-primary"
+              : "text-secondary hover:text-foreground hover:bg-surface-raised"
+          }`}
+        >
+          <ArrowDownAZ className="w-3 h-3" />
+          Name
+        </button>
+        <button
+          type="button"
+          onClick={() => setSortMode("size")}
+          aria-pressed={sortMode === "size"}
+          title="Sort by size (largest first, flattened across folders)"
+          className={`inline-flex items-center gap-1 h-5 px-1.5 text-[10px] font-mono border-l border-border transition-colors ${
+            sortMode === "size"
+              ? "bg-primary/15 text-primary"
+              : "text-secondary hover:text-foreground hover:bg-surface-raised"
+          }`}
+        >
+          <ArrowDown10 className="w-3 h-3" />
+          Size
+        </button>
+      </div>
+    </div>
+  );
+
   const TreeBody = (
     <div className="p-2 space-y-3">
       {Object.entries(grouped).map(([group, files]) => (
         <div key={group}>
-          <div className="px-2 py-1 text-[10px] uppercase tracking-wider font-mono text-secondary/70 truncate">
-            {group || "root"}
-          </div>
+          {sortMode === "size" ? (
+            // Flattened size view: a single "by size" caption replaces
+            // per-folder headers so it's obvious why files from
+            // different folders are now interleaved in one list.
+            <div className="px-2 py-1 text-[10px] uppercase tracking-wider font-mono text-secondary/70 truncate">
+              by size · largest first
+            </div>
+          ) : (
+            <div className="px-2 py-1 text-[10px] uppercase tracking-wider font-mono text-secondary/70 truncate">
+              {group || "root"}
+            </div>
+          )}
           {files.map((f) => {
             const name = f.path.split("/").pop()!;
             const active = activeFile === f.path;
@@ -2466,6 +2555,7 @@ function FilesPane({
             </button>
           </div>
         </div>
+        {SortToggle}
         {uploadError && (
           <div className="mx-2 my-1 px-2 py-1.5 rounded text-[10px] text-red-500 bg-red-500/10 border border-red-500/20 break-words shrink-0">
             {uploadError}
@@ -2518,6 +2608,7 @@ function FilesPane({
                     {tree.length} files
                   </span>
                 </div>
+                {SortToggle}
                 <div className="flex-1 overflow-y-auto min-h-0">{TreeBody}</div>
                 {/* Mobile gauge mirrors the desktop one so users on
                     small screens get the same publish-size warning. */}
