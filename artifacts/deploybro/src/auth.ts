@@ -1,29 +1,66 @@
 import { createAuthClient } from "better-auth/react";
 
-const rawBaseURL = (
-  import.meta.env.VITE_NEON_AUTH_BASE_URL as string | undefined
-)?.replace(/\/+$/, "");
+/**
+ * Normalise whatever the user pasted into `VITE_NEON_AUTH_BASE_URL` into
+ * the canonical Better Auth base URL (i.e. the URL where appending
+ * `/sign-in/social`, `/get-session`, `/token`, `/.well-known/jwks.json`
+ * etc. yields the right endpoint).
+ *
+ * People reasonably copy whichever URL they have to hand from the Neon
+ * Console, which is often the JWKS URL (it's the one Neon shows on the
+ * Auth tab). We tolerate both by stripping known trailing endpoint
+ * suffixes and any trailing slashes.
+ */
+function normaliseAuthBaseURL(raw: string | undefined): string | null {
+  if (!raw) return null;
+  let url = raw.trim();
+  if (!/^https?:\/\//.test(url)) return null;
+  url = url.replace(/\/+$/, "");
+  // Common pasted-by-mistake suffixes — strip them so the SDK ends up
+  // hitting `<base>/sign-in/social` instead of `<base>/.well-known/jwks.json/sign-in/social`.
+  const stripSuffixes = [
+    "/.well-known/jwks.json",
+    "/.well-known/openid-configuration",
+    "/get-session",
+    "/token",
+    "/sign-in",
+    "/sign-out",
+  ];
+  for (const suffix of stripSuffixes) {
+    if (url.toLowerCase().endsWith(suffix)) {
+      url = url.slice(0, -suffix.length);
+      break;
+    }
+  }
+  return url.replace(/\/+$/, "");
+}
 
-const looksLikeUrl = (s: string | undefined): s is string =>
-  !!s && /^https?:\/\//.test(s);
+const rawEnv = import.meta.env.VITE_NEON_AUTH_BASE_URL as string | undefined;
+const normalised = normaliseAuthBaseURL(rawEnv);
+const hasValidConfig = !!normalised;
 
-const hasValidConfig = looksLikeUrl(rawBaseURL);
-
-export const authBaseURL = hasValidConfig ? rawBaseURL! : null;
+export const authBaseURL = normalised;
 
 export const authClient = hasValidConfig
   ? createAuthClient({
-      baseURL: rawBaseURL!,
+      baseURL: normalised!,
       fetchOptions: { credentials: "include" },
     })
   : null;
 
 export const authConfigured = !!authClient;
 
-if (!authConfigured && rawBaseURL) {
+if (!authConfigured && rawEnv) {
   // eslint-disable-next-line no-console
   console.warn(
     "[auth] VITE_NEON_AUTH_BASE_URL is set but doesn't look like an http(s) URL.",
+    { raw: rawEnv },
+  );
+}
+if (authConfigured && rawEnv && rawEnv.replace(/\/+$/, "") !== normalised) {
+  // eslint-disable-next-line no-console
+  console.info(
+    `[auth] Normalised VITE_NEON_AUTH_BASE_URL "${rawEnv}" → "${normalised}"`,
   );
 }
 

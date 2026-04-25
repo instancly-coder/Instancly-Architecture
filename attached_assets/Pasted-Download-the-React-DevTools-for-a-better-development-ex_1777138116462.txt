@@ -1,0 +1,150 @@
+Download the React DevTools for a better development experience: https://react.dev/link/react-devtools
+session-sync.tsx:20  GET https://ep-lingering-darkness-amvgcj99.neonauth.c-5.us-east-1.aws.neon.tech/neondb/auth/.well-known/jwks.json/get-session 404 (Not Found)
+betterFetch @ better-auth_react.js?v=fac0d7c4:1630
+await in betterFetch
+$fetch @ better-auth_react.js?v=fac0d7c4:1537
+(anonymous) @ better-auth_react.js?v=fac0d7c4:747
+fn @ better-auth_react.js?v=fac0d7c4:741
+(anonymous) @ better-auth_react.js?v=fac0d7c4:811
+setTimeout
+(anonymous) @ better-auth_react.js?v=fac0d7c4:808
+listener @ better-auth_react.js?v=fac0d7c4:680
+object.events.<computed>.reduceRight.shared @ better-auth_react.js?v=fac0d7c4:658
+(anonymous) @ better-auth_react.js?v=fac0d7c4:658
+$store.listen @ better-auth_react.js?v=fac0d7c4:688
+get @ better-auth_react.js?v=fac0d7c4:581
+useStore @ better-auth_react.js?v=fac0d7c4:1922
+resolvedHooks.<computed> @ better-auth_react.js?v=fac0d7c4:1950
+SessionSyncInner @ session-sync.tsx:20
+react-stack-bottom-frame @ react-dom_client.js?v=fac0d7c4:17424
+renderWithHooks @ react-dom_client.js?v=fac0d7c4:4206
+updateFunctionComponent @ react-dom_client.js?v=fac0d7c4:6619
+beginWork @ react-dom_client.js?v=fac0d7c4:7654
+runWithFiberInDEV @ react-dom_client.js?v=fac0d7c4:1485
+performUnitOfWork @ react-dom_client.js?v=fac0d7c4:10868
+workLoopSync @ react-dom_client.js?v=fac0d7c4:10728
+renderRootSync @ react-dom_client.js?v=fac0d7c4:10711
+performWorkOnRoot @ react-dom_client.js?v=fac0d7c4:10330
+performWorkOnRootViaSchedulerTask @ react-dom_client.js?v=fac0d7c4:11623
+performWorkUntilDeadline @ react-dom_client.js?v=fac0d7c4:36
+<SessionSyncInner>
+exports.jsxDEV @ react_jsx-dev-runtime.js?v=fac0d7c4:250
+(anonymous) @ session-sync.tsx:14
+react-stack-bottom-frame @ react-dom_client.js?v=fac0d7c4:17424
+renderWithHooks @ react-dom_client.js?v=fac0d7c4:4206
+updateFunctionComponent @ react-dom_client.js?v=fac0d7c4:6619
+beginWork @ react-dom_client.js?v=fac0d7c4:7654
+runWithFiberInDEV @ react-dom_client.js?v=fac0d7c4:1485
+performUnitOfWork @ react-dom_client.js?v=fac0d7c4:10868
+workLoopSync @ react-dom_client.js?v=fac0d7c4:10728
+renderRootSync @ react-dom_client.js?v=fac0d7c4:10711
+performWorkOnRoot @ react-dom_client.js?v=fac0d7c4:10330
+performWorkOnRootViaSchedulerTask @ react-dom_client.js?v=fac0d7c4:11623
+performWorkUntilDeadline @ react-dom_client.js?v=fac0d7c4:36
+<SessionSync>
+exports.jsxDEV @ react_jsx-dev-runtime.js?v=fac0d7c4:250
+App @ App.tsx:102
+react-stack-bottom-frame @ react-dom_client.js?v=fac0d7c4:17424
+renderWithHooks @ react-dom_client.js?v=fac0d7c4:4206
+updateFunctionComponent @ react-dom_client.js?v=fac0d7c4:6619
+beginWork @ react-dom_client.js?v=fac0d7c4:7654
+runWithFiberInDEV @ react-dom_client.js?v=fac0d7c4:1485
+performUnitOfWork @ react-dom_client.js?v=fac0d7c4:10868
+workLoopSync @ react-dom_client.js?v=fac0d7c4:10728
+renderRootSync @ react-dom_client.js?v=fac0d7c4:10711
+performWorkOnRoot @ react-dom_client.js?v=fac0d7c4:10330
+performWorkOnRootViaSchedulerTask @ react-dom_client.js?v=fac0d7c4:11623
+performWorkUntilDeadline @ react-dom_client.js?v=fac0d7c4:36
+<App>
+exports.jsxDEV @ react_jsx-dev-runtime.js?v=fac0d7c4:250
+(anonymous) @ main.tsx:5Understand this error
+login.tsx:51  POST https://ep-lingering-darkness-amvgcj99.neonauth.c-5.us-east-1.aws.neon.tech/neondb/auth/.well-known/jwks.json/sign-in/social 404 (Not Found)
+betterFetch @ better-auth_react.js?v=fac0d7c4:1630
+await in betterFetch
+$fetch @ better-auth_react.js?v=fac0d7c4:1537
+apply @ better-auth_react.js?v=fac0d7c4:1886
+(anonymous) @ login.tsx:51
+(anonymous) @ login.tsx:133
+executeDispatch @ react-dom_client.js?v=fac0d7c4:11736
+runWithFiberInDEV @ react-dom_client.js?v=fac0d7c4:1485
+processDispatchQueue @ react-dom_client.js?v=fac0d7c4:11772
+(anonymous) @ react-dom_client.js?v=fac0d7c4:12182
+batchedUpdates$1 @ react-dom_client.js?v=fac0d7c4:2628
+dispatchEventForPluginEventSystem @ react-dom_client.js?v=fac0d7c4:11877
+dispatchEvent @ react-dom_client.js?v=fac0d7c4:14792
+dispatchDiscreteEvent @ react-dom_client.js?v=fac0d7c4:14773
+<button>
+exports.jsxDEV @ react_jsx-dev-runtime.js?v=fac0d7c4:250
+ProviderButton @ login.tsx:175
+react-stack-bottom-frame @ react-dom_client.js?v=fac0d7c4:17424
+renderWithHooks @ react-dom_client.js?v=fac0d7c4:4206
+updateFunctionComponent @ react-dom_client.js?v=fac0d7c4:6619
+beginWork @ react-dom_client.js?v=fac0d7c4:7654
+runWithFiberInDEV @ react-dom_client.js?v=fac0d7c4:1485
+performUnitOfWork @ react-dom_client.js?v=fac0d7c4:10868
+workLoopSync @ react-dom_client.js?v=fac0d7c4:10728
+renderRootSync @ react-dom_client.js?v=fac0d7c4:10711
+performWorkOnRoot @ react-dom_client.js?v=fac0d7c4:10330
+performWorkOnRootViaSchedulerTask @ react-dom_client.js?v=fac0d7c4:11623
+performWorkUntilDeadline @ react-dom_client.js?v=fac0d7c4:36
+<ProviderButton>
+exports.jsxDEV @ react_jsx-dev-runtime.js?v=fac0d7c4:250
+(anonymous) @ login.tsx:129
+react-stack-bottom-frame @ react-dom_client.js?v=fac0d7c4:17424
+renderWithHooks @ react-dom_client.js?v=fac0d7c4:4206
+updateFunctionComponent @ react-dom_client.js?v=fac0d7c4:6619
+beginWork @ react-dom_client.js?v=fac0d7c4:7654
+runWithFiberInDEV @ react-dom_client.js?v=fac0d7c4:1485
+performUnitOfWork @ react-dom_client.js?v=fac0d7c4:10868
+workLoopSync @ react-dom_client.js?v=fac0d7c4:10728
+renderRootSync @ react-dom_client.js?v=fac0d7c4:10711
+performWorkOnRoot @ react-dom_client.js?v=fac0d7c4:10330
+performWorkOnRootViaSchedulerTask @ react-dom_client.js?v=fac0d7c4:11623
+performWorkUntilDeadline @ react-dom_client.js?v=fac0d7c4:36
+<Login>
+exports.createElement @ chunk-KC53NVYV.js?v=fac0d7c4:773
+h_route @ wouter.js?v=fac0d7c4:277
+Route @ wouter.js?v=fac0d7c4:309
+react-stack-bottom-frame @ react-dom_client.js?v=fac0d7c4:17424
+renderWithHooks @ react-dom_client.js?v=fac0d7c4:4206
+updateFunctionComponent @ react-dom_client.js?v=fac0d7c4:6619
+beginWork @ react-dom_client.js?v=fac0d7c4:7654
+runWithFiberInDEV @ react-dom_client.js?v=fac0d7c4:1485
+performUnitOfWork @ react-dom_client.js?v=fac0d7c4:10868
+workLoopSync @ react-dom_client.js?v=fac0d7c4:10728
+renderRootSync @ react-dom_client.js?v=fac0d7c4:10711
+performWorkOnRoot @ react-dom_client.js?v=fac0d7c4:10330
+performWorkOnRootViaSchedulerTask @ react-dom_client.js?v=fac0d7c4:11623
+performWorkUntilDeadline @ react-dom_client.js?v=fac0d7c4:36
+<Route>
+exports.jsxDEV @ react_jsx-dev-runtime.js?v=fac0d7c4:250
+Router @ App.tsx:63
+react-stack-bottom-frame @ react-dom_client.js?v=fac0d7c4:17424
+renderWithHooks @ react-dom_client.js?v=fac0d7c4:4206
+updateFunctionComponent @ react-dom_client.js?v=fac0d7c4:6619
+beginWork @ react-dom_client.js?v=fac0d7c4:7654
+runWithFiberInDEV @ react-dom_client.js?v=fac0d7c4:1485
+performUnitOfWork @ react-dom_client.js?v=fac0d7c4:10868
+workLoopSync @ react-dom_client.js?v=fac0d7c4:10728
+renderRootSync @ react-dom_client.js?v=fac0d7c4:10711
+performWorkOnRoot @ react-dom_client.js?v=fac0d7c4:10330
+performWorkOnRootViaSchedulerTask @ react-dom_client.js?v=fac0d7c4:11623
+performWorkUntilDeadline @ react-dom_client.js?v=fac0d7c4:36
+<Router>
+exports.jsxDEV @ react_jsx-dev-runtime.js?v=fac0d7c4:250
+App @ App.tsx:105
+react-stack-bottom-frame @ react-dom_client.js?v=fac0d7c4:17424
+renderWithHooks @ react-dom_client.js?v=fac0d7c4:4206
+updateFunctionComponent @ react-dom_client.js?v=fac0d7c4:6619
+beginWork @ react-dom_client.js?v=fac0d7c4:7654
+runWithFiberInDEV @ react-dom_client.js?v=fac0d7c4:1485
+performUnitOfWork @ react-dom_client.js?v=fac0d7c4:10868
+workLoopSync @ react-dom_client.js?v=fac0d7c4:10728
+renderRootSync @ react-dom_client.js?v=fac0d7c4:10711
+performWorkOnRoot @ react-dom_client.js?v=fac0d7c4:10330
+performWorkOnRootViaSchedulerTask @ react-dom_client.js?v=fac0d7c4:11623
+performWorkUntilDeadline @ react-dom_client.js?v=fac0d7c4:36
+<App>
+exports.jsxDEV @ react_jsx-dev-runtime.js?v=fac0d7c4:250
+(anonymous) @ main.tsx:5Understand this error
+login.tsx:60 [auth] signIn.social result {hasUrl: false, errorCode: undefined}
