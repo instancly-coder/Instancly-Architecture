@@ -62,6 +62,7 @@ function Router() {
       <Route path="/" component={Landing} />
       <Route path="/login" component={Login} />
       <Route path="/signup/username" component={gated(SignupUsername)} />
+      <Route path="/handler" component={Handler} />
       <Route path="/handler/:rest*" component={Handler} />
       <Route path="/dashboard" component={gated(Dashboard)} />
       <Route path="/dashboard/billing" component={gated(Billing)} />
