@@ -661,6 +661,32 @@ router.post(
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : "AI request failed";
+      // Detect upstream conditions that mean the AI provider is effectively
+      // offline for everyone (operator's API credits exhausted, key revoked,
+      // provider outage). We still log/persist the raw upstream message for
+      // operator debugging, but the user-facing event gets a friendly
+      // "server is offline" payload so they don't see scary billing text.
+      const anyErr = err as { status?: number; error?: { error?: { type?: string; message?: string } } };
+      const upstreamStatus = typeof anyErr?.status === "number" ? anyErr.status : 0;
+      const upstreamErrType = anyErr?.error?.error?.type;
+      const upstreamErrMessage = anyErr?.error?.error?.message ?? "";
+      const looksLikeCreditError =
+        /credit balance|insufficient[_ ]?(?:funds|quota|credits?)|billing/i.test(
+          upstreamErrMessage || message,
+        );
+      const isUpstreamUnavailable =
+        // Out-of-credits / billing on the operator's API key
+        (upstreamStatus === 400 && looksLikeCreditError) ||
+        upstreamStatus === 402 ||
+        // Bad / revoked / unconfigured API key — also not user-fixable
+        upstreamStatus === 401 ||
+        upstreamErrType === "authentication_error" ||
+        // Provider-side outages
+        upstreamStatus === 502 ||
+        upstreamStatus === 503 ||
+        upstreamStatus === 529 ||
+        upstreamErrType === "overloaded_error";
+
       let failedResult: Awaited<ReturnType<typeof persistBuild>> | null = null;
       try {
         const written = await persistFiles().catch(() => [] as string[]);
@@ -682,7 +708,14 @@ router.post(
             model: modelInfo.display,
           });
         }
-        send("error", { message });
+        if (isUpstreamUnavailable) {
+          send("error", {
+            message: "Server is currently offline, come back soon.",
+            code: "upstream_unavailable",
+          });
+        } else {
+          send("error", { message });
+        }
         send("done", { ok: false });
       }
     } finally {

@@ -986,7 +986,15 @@ export default function Builder() {
             model: String(evt.data?.model ?? selectedModel),
           });
         } else if (evt.event === "error") {
-          throw new Error(evt.data?.message || "AI error");
+          // Server marks operator-side outages (out of API credits, key
+          // revoked, provider down) with code "upstream_unavailable" so we
+          // can show a friendly fallback instead of leaking billing text
+          // to end users.
+          const friendly =
+            evt.data?.code === "upstream_unavailable"
+              ? "Server is currently offline, come back soon."
+              : evt.data?.message || "AI error";
+          throw new Error(friendly);
         } else if (evt.event === "done") {
           if (evt.data?.ok) {
             setPhase("Done");
