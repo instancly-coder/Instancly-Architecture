@@ -114,6 +114,54 @@
   --ring: 215 100% 62%;
 }
 
+/* --------------------------------------------------------------------
+ * Neon Auth UI bridge tokens.
+ *
+ * `@neondatabase/neon-js`'s `theme.css` declares `--neon-border` etc
+ * via `var(--border, <fallback>)`, then `theme-inline.css` remaps
+ * Tailwind's `--color-border` (the token behind `border-border`,
+ * `bg-card`, etc.) to those `--neon-*` tokens.
+ *
+ * The SDK assumes `--border` is a complete CSS color (e.g. `oklch(...)`
+ * or `hsl(0 0% 16%)`). Our app stores tokens as raw HSL **components**
+ * (`0 0% 16%`) and wraps them with `hsl()` in our own `@theme inline`
+ * — so the SDK's bare `var(--border)` resolves to an invalid color and
+ * borders/cards/popovers fall back to `currentColor` (white on dark
+ * backgrounds — that's the symptom).
+ *
+ * Fix: pre-populate the SDK's `--neon-*` tokens here with `hsl()`
+ * wrappers around our raw components. Now whichever `@theme inline`
+ * mapping wins the cascade (ours or the SDK's), the resolved value is
+ * always a valid color. Both `:root` and `.dark` automatically pick up
+ * the right palette because each `--neon-X` references our `--X`,
+ * which itself flips between light/dark.
+ *
+ * Sidebar tokens are intentionally omitted — we don't use the SDK's
+ * sidebar component, so its `oklch(...)` fallbacks are fine.
+ * ------------------------------------------------------------------ */
+:root,
+.dark {
+  --neon-background: hsl(var(--background));
+  --neon-foreground: hsl(var(--foreground));
+  --neon-card: hsl(var(--card));
+  --neon-card-foreground: hsl(var(--card-foreground));
+  --neon-popover: hsl(var(--popover));
+  --neon-popover-foreground: hsl(var(--popover-foreground));
+  --neon-primary: hsl(var(--primary));
+  --neon-primary-foreground: hsl(var(--primary-foreground));
+  --neon-secondary: hsl(var(--secondary));
+  --neon-secondary-foreground: hsl(var(--secondary-foreground));
+  --neon-muted: hsl(var(--muted));
+  --neon-muted-foreground: hsl(var(--muted-foreground));
+  --neon-accent: hsl(var(--accent));
+  --neon-accent-foreground: hsl(var(--accent-foreground));
+  --neon-destructive: hsl(var(--destructive));
+  --neon-destructive-foreground: hsl(var(--destructive-foreground));
+  --neon-border: hsl(var(--border));
+  --neon-input: hsl(var(--input));
+  --neon-ring: hsl(var(--ring));
+}
+
 @layer base {
   * {
     @apply border-border;
