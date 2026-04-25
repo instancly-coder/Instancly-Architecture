@@ -46,6 +46,13 @@ Workflow:
 - Seed: `node node_modules/.pnpm/tsx@*/node_modules/tsx/dist/cli.mjs lib/db/src/seed.ts` from `lib/db/`.
 - `lib/db` and `lib/api-zod` are TS composite projects — run `npx tsc -b` in those dirs after schema changes so api-server typecheck can resolve `.d.ts`.
 
+## Builder AI
+
+The in-builder code-generation flow (`POST /api/ai/build/:username/:slug`, SSE) calls Anthropic's Claude API **directly** (`api.anthropic.com`), not via the Replit AI integrations proxy.
+
+Required secret:
+- `ANTHROPIC_API_KEY` — Anthropic console API key. Without it `/ai/build` responds with an SSE `error` event and the builder shows "AI is not configured". Models used: `claude-haiku-4-5` (Free), `claude-sonnet-4-6` (default for Pro), `claude-opus-4-5` (Pro opt-in).
+
 ## Publish to Vercel + Neon
 
 The Publish flow in the builder provisions a per-app Neon Postgres branch and deploys to Vercel. Pro-plan-gated. Pipeline runs in-process (no external job queue).

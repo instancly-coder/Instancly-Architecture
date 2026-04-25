@@ -20,13 +20,13 @@ import { requireAuth, getAuthedUser } from "../middlewares/auth";
 
 const router: IRouter = Router();
 
-const baseURL = process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL;
-const apiKey = process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY;
-const aiConfigured = Boolean(baseURL && apiKey);
+// Direct Anthropic external API. We hit api.anthropic.com using the
+// customer's own ANTHROPIC_API_KEY rather than going through the Replit
+// AI integrations proxy.
+const apiKey = process.env.ANTHROPIC_API_KEY;
+const aiConfigured = Boolean(apiKey);
 
-const anthropic = aiConfigured
-  ? new Anthropic({ baseURL, apiKey })
-  : null;
+const anthropic = aiConfigured ? new Anthropic({ apiKey }) : null;
 
 // Per-million-token pricing in USD. These are the marked-up rates the user
 // pays — model cost + platform margin baked in. Update one place to reprice.
@@ -362,7 +362,7 @@ router.post(
     if (!anthropic) {
       send("error", {
         message:
-          "AI is not configured. AI_INTEGRATIONS_ANTHROPIC_* env vars are missing on the server.",
+          "AI is not configured. ANTHROPIC_API_KEY is missing on the server.",
       });
       send("done", { ok: false });
       res.end();
