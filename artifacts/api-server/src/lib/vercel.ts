@@ -176,6 +176,53 @@ export async function getDeployment(id: string): Promise<VercelDeployment> {
   );
 }
 
+// A single line from Vercel's build-events stream. Vercel includes a lot
+// of fields here; we narrow to the ones that carry useful diagnostics.
+type VercelBuildEvent = {
+  type?: string;
+  text?: string;
+  payload?: { text?: string };
+  created?: number;
+};
+
+// Pull the actual build error out of Vercel's events log. When a deploy
+// hits the ERROR readyState, the high-level API gives us nothing — the
+// real "module not found" / "syntax error" / "missing dep" line lives
+// on the events stream. Best-effort: returns a short human-readable
+// excerpt or null if we can't extract one.
+export async function getDeploymentBuildErrors(
+  id: string,
+): Promise<string | null> {
+  try {
+    const events = await request<VercelBuildEvent[]>(
+      "GET",
+      `/v3/deployments/${encodeURIComponent(id)}/events${teamQueryAppend("?builds=1&direction=backward&follow=0&limit=200")}`,
+    );
+    if (!Array.isArray(events) || events.length === 0) return null;
+    // Grab the most informative error/stderr lines, freshest first. We
+    // prefer entries that mention "error" / "failed" / "cannot" since
+    // Vercel emits a lot of routine stdout we don't want to surface.
+    const lines: string[] = [];
+    for (const evt of events) {
+      const text = (evt.payload?.text ?? evt.text ?? "").trim();
+      if (!text) continue;
+      const isErrorLine =
+        evt.type === "stderr" ||
+        evt.type === "error" ||
+        /(error|failed|cannot find|not found|exited with)/i.test(text);
+      if (isErrorLine) lines.push(text);
+      if (lines.length >= 5) break;
+    }
+    if (lines.length === 0) return null;
+    // Cap so we don't dump a 10KB stack into a toast.
+    const joined = lines.join(" | ");
+    return joined.length > 400 ? joined.slice(0, 400) + "…" : joined;
+  } catch {
+    // Best-effort — never let log retrieval mask the original failure.
+    return null;
+  }
+}
+
 // Best-effort cleanup helpers. The orchestrator calls these inside catch
 // blocks; they MUST swallow their own errors so they never mask the original
 // failure. We log via the orchestrator's logger when invoked.

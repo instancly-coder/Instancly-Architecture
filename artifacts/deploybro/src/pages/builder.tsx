@@ -166,15 +166,20 @@ function stripIncompleteFileBlocks(text: string): string {
 }
 
 // Renders a chat message string, swapping our [[FILE_DONE:path]] /
-// [[FILE_PENDING:path]] markers for inline Lucide icons. Also accepts
-// the legacy server format `_(updated **path**)_` / `_(writing path…)_`
-// so historical builds in the DB render with icons too.
+// [[FILE_PENDING:path]] markers for full conversational lines like
+// "Creating app.jsx..." / "Created app.jsx" — the AI's prose stays
+// inline, but each file event becomes its own row with an icon so the
+// chat reads like live narration of the build instead of a checklist.
+// Also accepts the legacy server format `_(updated **path**)_` /
+// `_(writing path…)_` so historical builds render with the new look too.
 function FileNoticeText({ text }: { text: string }) {
-  // Normalize legacy markers to the new ones up front so we have a
-  // single split below.
+  // Normalize legacy markers up front so we have a single split below.
   const normalized = text
     .replace(/_\(updated \*\*([^*]+)\*\*\)_/g, "[[FILE_DONE:$1]]")
     .replace(/_\(writing ([^)]+?)…\)_/g, "[[FILE_PENDING:$1]]");
+  // Split on whole marker tokens, keeping the markers as their own
+  // entries. Adjacent markers are separated by surrounding "" entries
+  // which we filter out below.
   const parts = normalized.split(/(\[\[FILE_(?:DONE|PENDING):[^\]]+\]\])/g);
   return (
     <>
@@ -182,28 +187,44 @@ function FileNoticeText({ text }: { text: string }) {
         const done = part.match(/^\[\[FILE_DONE:(.+)\]\]$/);
         if (done) {
           return (
-            <span
+            <div
               key={i}
-              className="inline-flex items-center gap-1.5 text-secondary/90 mr-1"
+              className="flex items-center gap-2 text-[12px] leading-snug text-secondary/90 my-1"
             >
-              <FileCheck className="w-3.5 h-3.5 shrink-0 opacity-70" />
-              <span className="font-mono text-[11px]">{done[1]}</span>
-            </span>
+              <FileCheck className="w-3.5 h-3.5 shrink-0 text-emerald-500" />
+              <span>
+                Created{" "}
+                <span className="font-mono text-foreground/90">{done[1]}</span>
+              </span>
+            </div>
           );
         }
         const pending = part.match(/^\[\[FILE_PENDING:(.+)\]\]$/);
         if (pending) {
           return (
-            <span
+            <div
               key={i}
-              className="inline-flex items-center gap-1.5 text-secondary/90 mr-1"
+              className="flex items-center gap-2 text-[12px] leading-snug text-secondary/90 my-1"
             >
-              <FilePen className="w-3.5 h-3.5 shrink-0 opacity-70 animate-pulse" />
-              <span className="font-mono text-[11px]">{pending[1]}</span>
-            </span>
+              <FilePen className="w-3.5 h-3.5 shrink-0 text-primary animate-pulse" />
+              <span>
+                Creating{" "}
+                <span className="font-mono text-foreground/90">{pending[1]}</span>
+                <span className="text-muted-foreground">…</span>
+              </span>
+            </div>
           );
         }
-        return <span key={i}>{part}</span>;
+        // Trim collapsed whitespace produced by the marker split (we
+        // emit blank lines around marker tokens upstream so the prose
+        // doesn't run into the inline file rows). An empty span here
+        // would still take up vertical room, so skip outright.
+        if (!part || /^\s*$/.test(part)) return null;
+        return (
+          <span key={i} className="whitespace-pre-wrap">
+            {part}
+          </span>
+        );
       })}
     </>
   );
@@ -966,39 +987,11 @@ export default function Builder() {
       // Track whether we've already pushed the "Generating code" step so
       // the very first `delta` event swaps the spinner off the previous
       // status even when the server didn't send a separate status for it.
+      // We deliberately DO NOT add per-file "Writing X" rows to the
+      // checklist any more — the AI's typed prose now narrates each
+      // file inline via FileNoticeText (rendered as "Creating X..." /
+      // "Created X" rows), and a parallel checklist would be redundant.
       let generatingPushed = false;
-      // Per-file write progress: as soon as the AI emits `<file path="X">`
-      // we add a "Writing X" step (in progress); once the matching
-      // `</file>` arrives we tick it. This turns a single "Generating
-      // code" spinner into a live checklist of files being written.
-      const fileSeen = new Map<string, boolean>(); // path -> closed?
-      const markFileDone = (path: string) =>
-        setStreamSteps((prev) =>
-          prev.map((s) =>
-            s.label === `Writing ${path}` && s.status === "in_progress"
-              ? { ...s, status: "done" as const }
-              : s,
-          ),
-        );
-      const syncFileSteps = (rawText: string) => {
-        const re = /<file\s+path="([^"]+)"\s*>/g;
-        let m: RegExpExecArray | null;
-        while ((m = re.exec(rawText))) {
-          const path = m[1];
-          const closeIdx = rawText.indexOf("</file>", re.lastIndex);
-          const closed = closeIdx >= 0;
-          const known = fileSeen.get(path);
-          if (known === undefined) {
-            fileSeen.set(path, closed);
-            closeAndAdd(`Writing ${path}`);
-            if (closed) markFileDone(path);
-          } else if (!known && closed) {
-            fileSeen.set(path, true);
-            markFileDone(path);
-          }
-          if (closed) re.lastIndex = closeIdx + "</file>".length;
-        }
-      };
       for await (const evt of readSSE(res)) {
         if (evt.event === "status" && typeof evt.data?.message === "string") {
           closeAndAdd(evt.data.message.replace(/[…\.]+$/g, ""));
@@ -1016,7 +1009,6 @@ export default function Builder() {
             closeAndAdd("Generating code");
             generatingPushed = true;
           }
-          syncFileSteps(raw);
         } else if (evt.event === "usage") {
           // The server tells us exactly what this generation cost and what's
           // left in the balance, so we can show "Used $X · Remaining: $Y"
@@ -1652,9 +1644,9 @@ function ChatPanel({
 
               {/* AI response */}
               <div className="space-y-2">
-                <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap break-words">
+                <div className="text-sm text-muted-foreground leading-relaxed break-words">
                   <FileNoticeText text={b.aiMessage} />
-                </p>
+                </div>
 
                 {/* Footer: Checkpoint on its own line, then clickable price/time */}
                 <div className="pt-1 space-y-1.5 text-xs text-secondary">
@@ -1775,7 +1767,7 @@ function ChatPanel({
                     <span
                       className={
                         step.status === "in_progress"
-                          ? "shimmer-text uppercase tracking-wider"
+                          ? "uppercase tracking-wider text-foreground/80"
                           : step.status === "error"
                             ? "uppercase tracking-wider text-destructive"
                             : "uppercase tracking-wider text-muted-foreground"
@@ -4357,9 +4349,9 @@ function HistoryPane({
                       <div className="text-[10px] uppercase tracking-wider font-mono text-secondary mb-1">
                         AI response
                       </div>
-                      <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap break-words">
+                      <div className="text-sm text-muted-foreground leading-relaxed break-words">
                         <FileNoticeText text={b.aiMessage} />
-                      </p>
+                      </div>
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       <Stat label="Model" value={b.model} />

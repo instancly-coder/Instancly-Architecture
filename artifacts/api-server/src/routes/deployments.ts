@@ -14,6 +14,7 @@ import {
   upsertEnvVar,
   createDeployment,
   getDeployment,
+  getDeploymentBuildErrors,
   projectNameFor,
   deleteProject as vercelDeleteProject,
   cancelDeployment as vercelCancelDeployment,
@@ -254,7 +255,18 @@ async function runPublishPipeline(args: {
     if (!final) throw new Error("Deployment timed out after 10 minutes");
 
     if (final.readyState !== "READY") {
-      throw new Error(`Vercel deployment ${final.readyState ?? "failed"}`);
+      // Vercel returns ERROR/CANCELED with no detail on the deployment
+      // object — the actual "Cannot resolve module X" / "syntax error"
+      // line lives in the build-events stream. Fetch it best-effort so
+      // the user sees something actionable instead of "Vercel deployment
+      // ERROR. Tap Republish in the toolbar to retry."
+      const buildErrors =
+        final.readyState === "ERROR"
+          ? await getDeploymentBuildErrors(deployment.id).catch(() => null)
+          : null;
+      const stateLabel = final.readyState ?? "failed";
+      const detail = buildErrors ? `: ${buildErrors}` : "";
+      throw new Error(`Vercel build ${stateLabel.toLowerCase()}${detail}`);
     }
 
     const finalUrl = final.url ? `https://${final.url}` : tentativeUrl;
