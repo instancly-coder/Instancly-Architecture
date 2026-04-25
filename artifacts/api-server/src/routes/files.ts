@@ -374,27 +374,86 @@ router.get(
   },
 );
 
-// Inline error overlay injected into every dev-preview HTML response.
-// Listens for `error` and `unhandledrejection` and also intercepts
-// `console.error` so Babel-standalone parse errors (which it logs
-// instead of throwing) surface too. First error wins so the overlay
-// stays readable even if the page enters an error loop.
-const ERROR_OVERLAY_SCRIPT = `<script>
+// Inline error overlay + Babel-runner injected into every dev-preview HTML
+// response. Three jobs:
+//
+// 1. **Take over Babel-standalone's auto-loader.** Babel's default
+//    `transformScriptTags` evals user code via `new Function(...)`, which
+//    strips the source URL — runtime errors then bubble up to
+//    `window.onerror` as the useless cross-origin "Script error." with no
+//    detail. We rename `<script type="text/babel">` to a custom type so
+//    Babel ignores it, then process each tag ourselves with an explicit
+//    `filename` + `//# sourceURL=` pragma so errors carry the real file
+//    and line numbers.
+//
+// 2. **Show a friendly overlay when the user's code throws.** First error
+//    wins so the overlay stays readable even in an error loop. Includes
+//    a "Fix with AI" button that posts the error context up to the
+//    builder shell so it can auto-prompt Claude with a fix request.
+//
+// 3. **Catch the slippery cases**: `unhandledrejection`, `console.error`
+//    (Babel logs syntax errors here instead of throwing), and onerror.
+//
+// We inject the script at the START of `<head>` so the renamer runs
+// BEFORE the parser hits the user's `<script type="text/babel">` tags
+// further down the page. A MutationObserver covers tags that get parsed
+// after the script executes but before Babel's DOMContentLoaded handler
+// fires.
+const ERROR_OVERLAY_SCRIPT = `<script data-deploybro-error-overlay>
 (function () {
   if (window.__deploybroOverlay) return;
   window.__deploybroOverlay = true;
-  var shown = false;
+
+  // --- A. Defer text/babel scripts so Babel-standalone won't touch them.
+  // We swap the type to a custom one the browser ignores. Renaming
+  // happens both immediately (for tags already in the DOM) and via
+  // MutationObserver (for tags added during HTML parsing or by JS).
+  var DEFERRED_TYPE = "application/x-deploybro-babel";
+  function renameAll() {
+    var nodes = document.querySelectorAll('script[type="text/babel"]');
+    for (var i = 0; i < nodes.length; i++) {
+      var s = nodes[i];
+      if (s.getAttribute("data-deploybro-deferred")) continue;
+      s.setAttribute("data-deploybro-deferred", "1");
+      // Stash original presets so we can pass them to Babel.transform.
+      var presets = s.getAttribute("data-presets") || "react";
+      s.setAttribute("data-deploybro-presets", presets);
+      s.setAttribute("type", DEFERRED_TYPE);
+    }
+  }
+  renameAll();
+  var mo = null;
+  if (typeof MutationObserver !== "undefined") {
+    mo = new MutationObserver(renameAll);
+    mo.observe(document.documentElement, { childList: true, subtree: true });
+  }
+
+  // --- B. Error reporting helpers.
   function esc(s) {
     return String(s).replace(/[&<>]/g, function (c) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c];
     });
   }
-  function show(title, message, stack) {
+  var shown = false;
+  var lastError = null;
+  function postToParent(payload) {
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage(
+          Object.assign({ type: "deploybro:preview-error" }, payload),
+          "*",
+        );
+      }
+    } catch (_) {}
+  }
+  function show(title, message, stack, where) {
     if (shown) return;
     shown = true;
+    lastError = { title: title, message: message, stack: stack || "", where: where || "" };
+    postToParent(lastError);
     function paint() {
       var el = document.createElement("div");
-      el.setAttribute("data-deploybro-error-overlay", "");
+      el.setAttribute("data-deploybro-error-overlay-root", "");
       el.style.cssText =
         "position:fixed;inset:0;background:rgba(15,15,20,0.96);color:#fff;" +
         "font:14px/1.5 ui-sans-serif,system-ui,-apple-system,sans-serif;" +
@@ -406,45 +465,53 @@ const ERROR_OVERLAY_SCRIPT = `<script>
             '<div style="font-weight:600;letter-spacing:0.05em;text-transform:uppercase;font-size:11px;color:#fca5a5;">' +
               esc(title) +
             "</div>" +
+            (where ? '<div style="font:11px/1 ui-monospace,Menlo,Consolas,monospace;color:#9ca3af;margin-left:auto;">' + esc(where) + "</div>" : "") +
           "</div>" +
           '<pre style="background:#1f1f24;border:1px solid #2a2a30;border-radius:8px;padding:14px;' +
             'white-space:pre-wrap;word-break:break-word;color:#fee2e2;' +
             'font:12px/1.55 ui-monospace,Menlo,Consolas,monospace;margin:0;">' +
             esc(message) + (stack ? "\\n\\n" + esc(stack) : "") +
           "</pre>" +
-          '<div style="margin-top:14px;font-size:12px;color:#9ca3af;">' +
-            "Tell DeployBro what went wrong in the chat and it will try to fix it." +
+          '<div style="margin-top:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">' +
+            '<button type="button" data-deploybro-fix-btn ' +
+              'style="background:#6366f1;color:#fff;border:0;border-radius:8px;padding:8px 14px;' +
+              'font:600 12px/1 ui-sans-serif,system-ui,sans-serif;cursor:pointer;">' +
+              "Fix this with AI" +
+            "</button>" +
+            '<span style="font-size:12px;color:#9ca3af;">' +
+              "or describe the problem in chat — DeployBro will read this error." +
+            "</span>" +
           "</div>" +
         "</div>";
+      var btn = el.querySelector("[data-deploybro-fix-btn]");
+      if (btn) {
+        btn.addEventListener("click", function () {
+          postToParent(Object.assign({}, lastError, { autofix: true }));
+        });
+      }
       (document.body || document.documentElement).appendChild(el);
     }
     if (document.body) paint();
     else document.addEventListener("DOMContentLoaded", paint);
   }
   window.addEventListener("error", function (e) {
-    var msg =
-      (e.error && e.error.message) ||
-      e.message ||
-      "Unknown error";
-    var stack =
-      (e.error && e.error.stack) ||
-      (e.filename ? e.filename + ":" + e.lineno + ":" + e.colno : "");
-    show("Runtime error", msg, stack);
+    var msg = (e.error && e.error.message) || e.message || "Unknown error";
+    var stack = (e.error && e.error.stack) || "";
+    var where = e.filename
+      ? e.filename + ":" + (e.lineno || "?") + ":" + (e.colno || "?")
+      : "";
+    show("Runtime error", msg, stack, where);
   });
   window.addEventListener("unhandledrejection", function (e) {
     var r = e.reason || {};
-    var msg =
-      (r && r.message) ||
-      (typeof r === "string" ? r : "Unhandled promise rejection");
-    show("Unhandled rejection", msg, (r && r.stack) || "");
+    var msg = (r && r.message) || (typeof r === "string" ? r : "Unhandled promise rejection");
+    show("Unhandled rejection", msg, (r && r.stack) || "", "");
   });
-  // Babel-standalone reports JSX parse errors via console.error
-  // instead of throwing — wrap so they trigger the overlay too.
+  // Babel-standalone reports JSX parse errors via console.error rather
+  // than throwing. Hook so they surface to the user too.
   var origErr = console.error.bind(console);
   console.error = function () {
-    try {
-      origErr.apply(null, arguments);
-    } catch (_) {}
+    try { origErr.apply(null, arguments); } catch (_) {}
     var parts = [];
     for (var i = 0; i < arguments.length; i++) {
       var a = arguments[i];
@@ -453,19 +520,96 @@ const ERROR_OVERLAY_SCRIPT = `<script>
       else { try { parts.push(JSON.stringify(a)); } catch (_) { parts.push(String(a)); } }
     }
     var text = parts.join(" ");
-    // Skip noisy framework warnings that aren't real errors.
     if (/^(Warning:|\\[HMR\\])/.test(text)) return;
-    show("Console error", text, "");
+    show("Console error", text, "", "");
   };
+
+  // --- C. Run the deferred text/babel scripts ourselves with proper
+  // sourceURL + filename so errors carry real location info.
+  function runOne(node) {
+    if (node.getAttribute("data-deploybro-processed")) return;
+    node.setAttribute("data-deploybro-processed", "1");
+    var src = node.getAttribute("src") || "";
+    var inline = node.textContent || "";
+    var filename = src || "inline-script-" + Math.random().toString(36).slice(2, 7) + ".jsx";
+    var presets = (node.getAttribute("data-deploybro-presets") || "react")
+      .split(",").map(function (p) { return p.trim(); }).filter(Boolean);
+
+    function execute(source) {
+      var transformed;
+      try {
+        transformed = window.Babel.transform(source, {
+          presets: presets,
+          filename: filename,
+          sourceMaps: false,
+        }).code;
+      } catch (compileErr) {
+        var loc = compileErr && compileErr.loc;
+        var where = loc ? filename + ":" + loc.line + ":" + loc.column : filename;
+        show("Compile error", String(compileErr.message || compileErr), "", where);
+        return;
+      }
+      // sourceURL pragma makes runtime errors carry the right filename.
+      var withPragma = transformed + "\\n//# sourceURL=" + filename;
+      try {
+        // Indirect eval so user code runs in the global scope (matches
+        // Babel-standalone's default behaviour for <script> tags).
+        (0, eval)(withPragma);
+      } catch (runtimeErr) {
+        var stack = runtimeErr && runtimeErr.stack ? String(runtimeErr.stack) : "";
+        show("Runtime error", String(runtimeErr.message || runtimeErr), stack, filename);
+      }
+    }
+
+    if (src) {
+      try {
+        var xhr = new XMLHttpRequest();
+        xhr.open("GET", src, true);
+        xhr.onload = function () {
+          if (xhr.status >= 200 && xhr.status < 300) execute(xhr.responseText);
+          else show("Failed to load " + src, "HTTP " + xhr.status, "", filename);
+        };
+        xhr.onerror = function () { show("Failed to load " + src, "Network error", "", filename); };
+        xhr.send();
+      } catch (fetchErr) {
+        show("Failed to load " + src, String(fetchErr && fetchErr.message || fetchErr), "", filename);
+      }
+    } else {
+      execute(inline);
+    }
+  }
+  function processDeferred() {
+    if (!window.Babel || !window.Babel.transform) {
+      // Babel hasn't finished loading yet — try again shortly. Keep the
+      // MutationObserver running in the meantime so any text/babel tags
+      // injected by other scripts (or still being parsed) get renamed
+      // before Babel's own DOMContentLoaded handler can grab them.
+      return setTimeout(processDeferred, 30);
+    }
+    if (mo) { try { mo.disconnect(); } catch (_) {} mo = null; }
+    var nodes = document.querySelectorAll('script[type="' + DEFERRED_TYPE + '"]');
+    for (var i = 0; i < nodes.length; i++) runOne(nodes[i]);
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", processDeferred);
+  } else {
+    processDeferred();
+  }
 })();
 </script>`;
 
 function injectErrorOverlay(html: string): string {
   if (/data-deploybro-error-overlay/.test(html)) return html;
+  // Inject at the START of <head> so the script-tag renamer runs BEFORE
+  // the parser reaches any `<script type="text/babel">` tags further
+  // down the page. Falls back to body / prepend if no <head>.
+  if (/<head[^>]*>/i.test(html)) {
+    return html.replace(/<head[^>]*>/i, (m) => `${m}\n${ERROR_OVERLAY_SCRIPT}`);
+  }
   if (/<\/body>/i.test(html)) {
     return html.replace(/<\/body>/i, `${ERROR_OVERLAY_SCRIPT}\n</body>`);
   }
-  return html + `\n${ERROR_OVERLAY_SCRIPT}\n`;
+  return ERROR_OVERLAY_SCRIPT + "\n" + html;
 }
 
 function emptyHtml(headline = "Your app will appear here"): string {

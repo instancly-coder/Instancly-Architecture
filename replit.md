@@ -56,6 +56,17 @@ Required secret:
 
 The SSE stream emits granular `status` events ("Fetching reference URLs", "Connecting to Claude", "Saving generated files", "Recording build") in addition to `start`/`delta`/`usage`/`done`/`error`. The builder renders each `status` as a row in a per-prompt action checklist under the in-flight assistant bubble (spinner → check on completion, X on error) so the user can see exactly which phase is running.
 
+### Dev preview error overlay + AI auto-fix
+
+Every HTML response served from `/api/preview/...` (see `artifacts/api-server/src/routes/files.ts → injectErrorOverlay`) gets a script injected at the top of `<head>` that:
+
+1. Renames `<script type="text/babel">` to `application/x-deploybro-babel` (immediately + via MutationObserver) so Babel-standalone's auto-runner ignores them.
+2. After Babel loads, runs each tag itself via `Babel.transform(..., { filename })` + `//# sourceURL=` pragma + indirect `eval` so JSX runtime errors carry **real** file/line/column info instead of the cross-origin opaque `Script error.`
+3. Catches `error`, `unhandledrejection`, and wraps `console.error` (Babel logs syntax errors there instead of throwing). First error wins so the overlay stays readable in error loops.
+4. Renders an in-iframe overlay with the message, location, stack, and a **"Fix this with AI"** button.
+
+Clicking the button posts a `{ type: "deploybro:preview-error", message, where, stack, autofix: true }` message to the parent window. The builder shell (`artifacts/deploybro/src/pages/builder.tsx`) authenticates the message by checking `event.source === previewIframeRef.current.contentWindow` (defends against spoofed autofix triggers from third-party scripts), then either auto-submits a fix prompt to Claude (if the chat is idle and the input is empty) or pre-fills the input for the user to review (if streaming or if the user is mid-prompt). Dedupe is keyed on `message|location` and resets on slug change or when a new build starts so legitimate retries aren't blocked.
+
 ## Homepage prompt → builder flow
 
 A prompt typed on the landing page carries straight through to the builder, including through login if needed.

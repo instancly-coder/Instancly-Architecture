@@ -638,6 +638,12 @@ export default function Builder() {
 
   const [chatInput, setChatInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
+  // Ref on the dev preview iframe so we can authenticate `postMessage`
+  // events that claim to be runtime errors from the user's app — only
+  // messages whose `event.source` matches this iframe's contentWindow
+  // are honoured. Without this binding, any third-party script could
+  // spoof a "Fix with AI" trigger and force a chat submission.
+  const previewIframeRef = useRef<HTMLIFrameElement>(null);
   // The user's prompt for the in-flight build, shown as a chat bubble at
   // the top of the streaming section so the user can see what they
   // typed even before the AI responds. Cleared once the build is
@@ -1091,6 +1097,89 @@ export default function Builder() {
     handleSendRef.current = handleSend;
   });
 
+  // Listen for runtime errors postMessaged from the dev preview iframe.
+  // The overlay injected by the API server (see `injectErrorOverlay` in
+  // artifacts/api-server/src/routes/files.ts) sends a structured
+  // `deploybro:preview-error` message whenever the user's app throws or
+  // their JSX fails to compile. We surface a toast immediately so the
+  // user knows the AI can help, and when they click "Fix this with AI"
+  // in the overlay (`autofix: true`) we pre-fill the chat with the full
+  // error context and auto-submit. This closes the loop the user was
+  // missing — bad code gets caught, the AI sees the actual error
+  // message + file + line, and the next build is a fix attempt.
+  // Dedupe so the same error doesn't trigger multiple back-to-back fix
+  // builds (double-clicked button, error fires twice, etc.). Reset
+  // whenever the project changes so navigating away and back doesn't
+  // permanently block legitimate retries on the same error message.
+  const lastAutofixSigRef = useRef<string>("");
+  useEffect(() => {
+    lastAutofixSigRef.current = "";
+  }, [username, slug]);
+  // Also reset when a new build starts — if the user runs another
+  // generation, the preview is a fresh attempt and the same error
+  // re-occurring is worth fixing again.
+  useEffect(() => {
+    if (isStreaming) lastAutofixSigRef.current = "";
+  }, [isStreaming]);
+
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      // Authenticate the source: only trust messages from our preview
+      // iframe. This prevents any other frame/extension/script from
+      // spoofing a "Fix with AI" trigger and forcing an AI submission
+      // (which costs the user money). `event.source` is the Window of
+      // the sender, which we compare against the iframe's contentWindow.
+      if (!previewIframeRef.current) return;
+      if (event.source !== previewIframeRef.current.contentWindow) return;
+      const data = event.data;
+      if (!data || typeof data !== "object") return;
+      if (data.type !== "deploybro:preview-error") return;
+      const message = String(data.message ?? "Unknown error").slice(0, 1000);
+      const where = data.where ? String(data.where).slice(0, 200) : "";
+      const stack = data.stack ? String(data.stack).slice(0, 1500) : "";
+      // Only auto-trigger when the overlay's "Fix this with AI" button
+      // was clicked. Plain error reports just show a toast — the user
+      // might be mid-prompt and we don't want to clobber their input.
+      if (!data.autofix) {
+        toast.error("Preview hit an error. Click 'Fix this with AI' to debug.", {
+          duration: 5000,
+        });
+        return;
+      }
+      // Dedupe so a double-clicked button doesn't queue two fix-builds.
+      const sig = `${message}|${where}`;
+      if (sig === lastAutofixSigRef.current) return;
+      lastAutofixSigRef.current = sig;
+      const fixPrompt =
+        `The preview is throwing this error — please diagnose and fix it.\n\n` +
+        `Error: ${message}` +
+        (where ? `\nLocation: ${where}` : "") +
+        (stack ? `\n\nStack:\n${stack}` : "");
+      // Preserve any in-progress draft the user is typing — overwriting
+      // it would be infuriating. If they have text, queue the fix
+      // prompt for their review instead of submitting.
+      const hasDraft = chatInput.trim().length > 0;
+      if (isStreaming || hasDraft) {
+        setChatInput(fixPrompt);
+        toast.message("Fix request ready in chat", {
+          description: isStreaming
+            ? "Send it when the current build finishes."
+            : "Review and hit send to apply.",
+        });
+        return;
+      }
+      toast.message("Asking DeployBro to fix this…", {
+        description: where || message.slice(0, 80),
+      });
+      handleSendRef.current?.(fixPrompt);
+    };
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+    // We deliberately depend on `isStreaming` and `chatInput` so the
+    // closure sees the current streaming state and draft when the
+    // iframe sends an error.
+  }, [isStreaming, chatInput]);
+
   const copyUrl = () => {
     navigator.clipboard.writeText(`${slug}-${username}.deploybro.com`);
     toast.success("URL copied");
@@ -1426,6 +1515,7 @@ export default function Builder() {
                 viewport={viewport}
                 setViewport={setViewport}
                 isBuilding={isStreaming}
+                iframeRef={previewIframeRef}
               />
             )}
             {activeTab === "files" && (
@@ -2071,12 +2161,14 @@ function PreviewPane({
   slug,
   viewport,
   isBuilding,
+  iframeRef,
 }: {
   username: string;
   slug: string;
   viewport: "desktop" | "tablet" | "mobile";
   setViewport: (v: "desktop" | "tablet" | "mobile") => void;
   isBuilding?: boolean;
+  iframeRef?: React.RefObject<HTMLIFrameElement | null>;
 }) {
   const { data: files } = useProjectFiles(username, slug);
   const hasIndex = !!files?.some((f) => f.path === "index.html");
@@ -2130,6 +2222,7 @@ function PreviewPane({
           ) : (
             <iframe
               key={previewSrc}
+              ref={iframeRef}
               src={previewSrc}
               title="App preview"
               className="flex-1 w-full bg-white"
