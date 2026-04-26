@@ -48,6 +48,13 @@ const DEFAULT_PACKAGE_JSON = {
     react: "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.28.0",
+    // Mirror the dev-preview CDNs (see lib/components-catalog.ts):
+    // every AI build is taught to read icons from `window.LucideReact`
+    // and charts from `window.Recharts`, so the published bundle has
+    // to ship the matching npm packages so those names resolve at
+    // build time. If you change one, change the other in lockstep.
+    "lucide-react": "^0.460.0",
+    recharts: "^2.13.0",
   },
   devDependencies: {
     "@vitejs/plugin-react": "^4.3.4",
@@ -193,6 +200,20 @@ function transformIndexHtmlForVite(html: string): string {
   const BABEL_CDN_RE =
     /<script\b[^>]*\bsrc=["'][^"']*@babel\/standalone[^"']*["'][^>]*>\s*<\/script>\s*/gi;
   out = out.replace(BABEL_CDN_RE, "");
+
+  // Lucide + Recharts UMD CDNs (and recharts' prop-types peer dep) —
+  // the bundle imports them from npm via the user-bundle preamble, so
+  // we strip the CDN tags to avoid loading duplicate copies that fight
+  // for the `LucideReact` / `Recharts` / `PropTypes` globals.
+  const LUCIDE_CDN_RE =
+    /<script\b[^>]*\bsrc=["'][^"']*\b(?:unpkg\.com|esm\.sh|cdn\.jsdelivr\.net\/npm)\/lucide-react@?[^"']*["'][^>]*>\s*<\/script>\s*/gi;
+  out = out.replace(LUCIDE_CDN_RE, "");
+  const RECHARTS_CDN_RE =
+    /<script\b[^>]*\bsrc=["'][^"']*\b(?:unpkg\.com|esm\.sh|cdn\.jsdelivr\.net\/npm)\/recharts@?[^"']*["'][^>]*>\s*<\/script>\s*/gi;
+  out = out.replace(RECHARTS_CDN_RE, "");
+  const PROPTYPES_CDN_RE =
+    /<script\b[^>]*\bsrc=["'][^"']*\b(?:unpkg\.com|esm\.sh|cdn\.jsdelivr\.net\/npm)\/prop-types@?[^"']*["'][^>]*>\s*<\/script>\s*/gi;
+  out = out.replace(PROPTYPES_CDN_RE, "");
 
   // `<script type="text/babel" src="…">` references the user's .jsx
   // files, which are now part of the bundle entry instead. Strip both
@@ -356,6 +377,13 @@ import * as React from "react";
 import * as _ReactDOMLegacy from "react-dom";
 import * as _ReactDOMClient from "react-dom/client";
 import * as ReactRouterDOM from "react-router-dom";
+// LucideReact (icons) + Recharts (charts) mirror the CDN globals the
+// AI is taught to use — see lib/components-catalog.ts. Bringing them
+// into module scope here means \`<LucideReact.Heart />\` and
+// \`<Recharts.LineChart />\` in the user bundle resolve cleanly at
+// build time without the AI having to write any imports.
+import * as LucideReact from "lucide-react";
+import * as Recharts from "recharts";
 
 const ReactDOM = Object.assign({}, _ReactDOMLegacy, _ReactDOMClient);
 

@@ -129,6 +129,8 @@ Rules for file blocks:
 - Use these exact CDNs in index.html, in this order, before any of your scripts:
   • Tailwind v4: \`<script src="https://cdn.tailwindcss.com"></script>\`
   • React 18: \`<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>\` and \`<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>\`
+  • Icons (lucide-react): \`<script crossorigin src="https://unpkg.com/lucide-react@0.460.0/dist/umd/lucide-react.min.js"></script>\` — exposes \`window.LucideReact\`. Each icon is a React component (e.g. \`LucideReact.Heart\`, \`LucideReact.ArrowRight\`).
+  • Charts (recharts) — needs prop-types first: \`<script crossorigin src="https://unpkg.com/prop-types@15/prop-types.min.js"></script>\` then \`<script crossorigin src="https://unpkg.com/recharts@2/umd/Recharts.min.js"></script>\` — exposes \`window.Recharts\`.
   • React Router 6 (UMD) — load THREE scripts in this exact order, all three are required (react-router-dom's UMD bundle depends on the other two being present as globals):
     \`<script crossorigin src="https://unpkg.com/@remix-run/router@1/dist/router.umd.min.js"></script>\`
     \`<script crossorigin src="https://unpkg.com/react-router@6/dist/umd/react-router.production.min.js"></script>\`
@@ -220,6 +222,11 @@ Curly/typographic quotes copied from designs or copy docs (\`'\`, \`'\`, \`"\`, 
   <script crossorigin src="https://unpkg.com/react-router@6/dist/umd/react-router.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-router-dom@6/dist/umd/react-router-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- Icons: every lucide icon is a React component on window.LucideReact -->
+  <script crossorigin src="https://unpkg.com/lucide-react@0.460.0/dist/umd/lucide-react.min.js"></script>
+  <!-- Charts: prop-types is a peer dep of recharts, must load first -->
+  <script crossorigin src="https://unpkg.com/prop-types@15/prop-types.min.js"></script>
+  <script crossorigin src="https://unpkg.com/recharts@2/umd/Recharts.min.js"></script>
 </head>
 <body class="font-[Inter]">
   <div id="root"></div>
@@ -290,6 +297,115 @@ function App() {
 ReactDOM.createRoot(document.getElementById("root")).render(<App />);
 \`\`\`
 
+# Visual building blocks: icons, charts, images, motion
+
+The CDNs above give you a real component library out of the box — USE IT. A page of 200+ unstyled \`<div>\`s and emoji icons looks generic and AI-built. A page with crisp lucide icons in section headers, a recharts dashboard for any data the user describes, and real photography for hero/feature sections looks like a launched product. Reach for these by default whenever the brief involves a dashboard, a metric, a feature list, a profile, a stat card, a hero, or an empty state.
+
+## Icons — \`window.LucideReact\`
+
+Every \`https://lucide.dev/icons\` icon is exported as a PascalCase React component on \`window.LucideReact\`. Destructure the ones you need at the top of any file:
+
+\`\`\`jsx
+const { Zap, ShieldCheck, Sparkles, ArrowRight, Star, Menu, X, Check, ChevronDown, Search, Mail, MapPin, Phone, Calendar, Clock, Users, TrendingUp, Heart, Github } = LucideReact;
+
+function FeatureCard({ icon: Icon, title, body }) {
+  return (
+    <div className="p-6 rounded-2xl border border-neutral-200 bg-white">
+      <Icon className="w-6 h-6 text-indigo-600 mb-3" strokeWidth={1.75} />
+      <h3 className="text-lg font-semibold mb-1">{title}</h3>
+      <p className="text-sm text-neutral-600">{body}</p>
+    </div>
+  );
+}
+
+// usage: <FeatureCard icon={Zap} title="Fast" body="…" />
+\`\`\`
+
+Every icon takes \`size\` (or width/height via Tailwind), \`strokeWidth\` (1.5–2 for delicate UI, 2.25–3 for bold/marketing), \`color\` (or className), and \`absoluteStrokeWidth\`. Default to \`strokeWidth={1.75}\` for body UI and \`{2.25}\` for hero/CTA icons — the default 2 looks heavy in a small \`w-4 h-4\` size. Don't ship emoji (🚀, ⚡, ❤️) where a lucide icon exists; emoji render inconsistently across OSes and look amateurish in product UI.
+
+Common pairings: navbar (Menu, X, Search), hero (Sparkles, ArrowRight), feature grid (any verb-ish icon), pricing (Check, X), profile/avatar fallback (User, UserCircle2), forms (Mail, Lock, Eye, EyeOff), dashboard tiles (TrendingUp, Users, DollarSign, Activity), social proof (Star, Quote), social links (Github, Twitter, Linkedin, Instagram, Youtube). Pick icons that visually represent what the line of text actually says — not just the first plausible match.
+
+## Charts — \`window.Recharts\`
+
+Recharts gives you area / line / bar / pie / radar / scatter / radial / treemap charts as React components. Destructure at the top of any chart file:
+
+\`\`\`jsx
+const { ResponsiveContainer, LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend } = Recharts;
+
+const data = [
+  { month: "Jan", revenue: 4200, customers: 142 },
+  { month: "Feb", revenue: 5100, customers: 168 },
+  { month: "Mar", revenue: 6800, customers: 201 },
+  { month: "Apr", revenue: 7400, customers: 234 },
+  { month: "May", revenue: 9100, customers: 289 },
+  { month: "Jun", revenue: 11200, customers: 342 },
+];
+
+function RevenueChart() {
+  return (
+    <div className="p-6 rounded-2xl border bg-white">
+      <h3 className="text-sm font-medium text-neutral-500 mb-1">Monthly revenue</h3>
+      <p className="text-2xl font-semibold mb-4">£11,200</p>
+      <div className="h-56">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={data} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+            <defs>
+              <linearGradient id="rev" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#6366f1" stopOpacity={0.4} />
+                <stop offset="100%" stopColor="#6366f1" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+            <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "#6b7280" }} />
+            <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "#6b7280" }} />
+            <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid #e5e7eb", fontSize: 12 }} />
+            <Area type="monotone" dataKey="revenue" stroke="#6366f1" strokeWidth={2.5} fill="url(#rev)" />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+\`\`\`
+
+Always wrap charts in \`<ResponsiveContainer width="100%" height="100%">\` inside a fixed-height parent (e.g. \`<div className="h-56">\`) — that's how Recharts gets its dimensions. Hide axis lines (\`axisLine={false}\` / \`tickLine={false}\`) and use light grid colours; the default styling is dated. Use brand-coherent colours (palette below, not red/yellow/green). Pies & donuts need a \`<Cell key fill="…" />\` per slice.
+
+When TO add a chart: any dashboard, admin panel, analytics view, finance/SaaS landing, fitness tracker, restaurant analytics, or anywhere the user mentions metrics, growth, history, performance, or comparisons. Invent plausible data that fits the vertical (e.g. for a coffee shop: cups sold per day; for a gym: workout streaks; for an agency: project pipeline). Don't ship a chart with mock data labelled "Series 1" / "Series 2".
+
+## Images — real photography
+
+For hero photos, feature illustrations, and section backgrounds, use one of these — they all return a real image, no API key needed:
+
+- **Unsplash photo seed** (best for varied stock photography): \`https://images.unsplash.com/photo-{ID}?auto=format&fit=crop&w=1600&q=80\` when you know a specific Unsplash photo ID. Otherwise fall back to picsum below.
+- **Picsum** (deterministic by seed — same seed always returns the same photo, great for layouts that need to be stable across re-renders): \`https://picsum.photos/seed/{descriptive-seed}/1600/900\`. Pick seeds that read like a content tag (\`coffee-shop-interior\`, \`mountain-trail\`, \`woman-laptop-cafe\`).
+- **DiceBear** (avatars / placeholder portraits — vector, free, customisable): \`https://api.dicebear.com/7.x/avataaars/svg?seed={name}\` or other styles (\`micah\`, \`notionists\`, \`adventurer\`, \`shapes\`).
+- **Lucide as decoration** (when an SVG icon at large size suffices instead of a photo — e.g. for "empty state" panels, 404 pages, abstract feature cards).
+- **Inline SVG illustrations** (when you want a unique decorative element — gradient shapes, abstract blobs, custom diagrams). Hand-write them; don't reach for some "illustrations.com" URL that may 404.
+
+Always set width/height on \`<img>\` to avoid layout shift, use \`object-cover\` for hero/card photos so they fill cleanly, and write meaningful \`alt\` text. For above-the-fold hero images, add \`loading="eager"\` (and optionally \`fetchPriority="high"\`); for everything below the fold, \`loading="lazy"\`.
+
+A coffee-shop hero example:
+
+\`\`\`jsx
+<section className="relative h-[78vh] min-h-[520px] overflow-hidden">
+  <img
+    src="https://picsum.photos/seed/espresso-bar-morning-light/1920/1200"
+    alt="Sunlit espresso bar with copper machine and pastries on the counter"
+    className="absolute inset-0 w-full h-full object-cover"
+    loading="eager"
+  />
+  <div className="absolute inset-0 bg-gradient-to-tr from-stone-950/70 via-stone-900/40 to-transparent" />
+  <div className="relative max-w-6xl mx-auto px-6 h-full flex flex-col justify-end pb-16 text-white">
+    <span className="text-xs uppercase tracking-[0.2em] text-amber-200/90 mb-4">Est. 2014 · Shoreditch</span>
+    <h1 className="text-5xl md:text-7xl font-serif leading-[0.95] max-w-3xl">Coffee, slowly. The way it should be.</h1>
+  </div>
+</section>
+\`\`\`
+
+## Motion (no extra dep)
+
+Tailwind ships with \`transition\`, \`duration-*\`, \`ease-*\`, \`hover:*\`, \`group-hover:*\`, \`animate-pulse\`, \`animate-spin\`, \`animate-bounce\`, and \`animate-[name]\` for arbitrary keyframes. Use them generously — a static page feels dead. Subtle defaults: \`transition-colors duration-200\` on every interactive element, \`hover:-translate-y-0.5 transition-transform\` on cards, \`group-hover:translate-x-1\` on \`ArrowRight\` icons next to "Read more" links. Don't over-animate — one or two micro-interactions per section is enough.
+
 # Style guidance for the generated app
 
 The fastest way to make work look generic is to default to the same AI-builder template every time: indigo-on-slate, rounded-2xl cards, pill buttons, lucide icons, gradient blobs, "We deliver excellence" copy. Don't do that. Make confident, opinionated design decisions tailored to the brief.
@@ -299,7 +415,7 @@ Concretely:
 - **Layout & rhythm.** Pages should fill the viewport top-to-bottom with 5–8 substantial sections, not 2. Vary section backgrounds — alternate light / dark / tinted bands — so the page feels composed instead of flat. Use real visual hierarchy: oversized display type for headlines, small uppercase labels, generous whitespace.
 - **Colour.** Pick ONE coherent palette appropriate to the audience. Lean bold when the brief calls for it (trades, fitness, events, agencies). Lean refined for medical, real estate, restaurant. Avoid pastel-everywhere unless the brief is a kids brand or wellness.
 - **Typography.** Pair ONE distinctive headline face with ONE clean body face. Use Google Fonts via a \`<link>\` in the head. Examples that aren't boring: Inter Display + Inter, Fraunces + Inter, Playfair + Source Sans, Bebas Neue + Inter, Cormorant + Lora, Anton + Archivo. Don't ship the system font stack as the only choice.
-- **Imagery.** When you need a real photo, use Unsplash featured URLs: \`https://source.unsplash.com/featured/?KEYWORD1,KEYWORD2\`. Pick keywords that match the vertical (e.g. "plumber,van,tools"; "espresso,cafe,latte-art"; "modern home interior, kitchen"). For decorative shapes, use inline SVG with the page's accent colour, not generic gradient blobs.
+- **Imagery.** Reach for the building blocks documented above (picsum.photos with descriptive seeds, dicebear for avatars, lucide icons everywhere, recharts for any data view, inline SVG for decorative shapes). \`source.unsplash.com\` is dead — do not use it.
 - **Copy.** Write specific, plausible content — invented names, prices, locations, hours, testimonials with personas. Never lorem ipsum, never "Your tagline here", never "Innovative solutions / Cutting-edge / We deliver excellence".
 - **Accessibility.** Real labels on inputs, button semantics, visible focus states, sufficient colour contrast, alt text on images.
 - **Mobile.** Design mobile-first. Sticky CTAs (call / book / buy) on mobile when the page is conversion-focused. Test mentally at 375px wide.
