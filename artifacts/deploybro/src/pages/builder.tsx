@@ -30,6 +30,7 @@ import {
   Search,
   Check,
   ArrowUp,
+  Square,
   Paperclip,
   Image as ImageIcon,
   Link2,
@@ -139,7 +140,43 @@ const TAB_META: Record<TabKey, { label: string; icon: any }> = {
 // (still streaming) becomes a "pending" marker and everything after the
 // open tag is dropped from view. Marker tokens are rendered as inline
 // Lucide icons by <FileNotice/>.
+//
+// Also drops the trailing `<suggestions>…</suggestions>` block from the
+// in-flight buffer so the user never briefly sees raw XML before the
+// model finishes the closing tag — those items are surfaced as clickable
+// chips above the prompt box once the SSE `done` event arrives.
 function stripIncompleteFileBlocks(text: string): string {
+  // Hide the trailing `<suggestions>…</suggestions>` block — even while
+  // still in flight. We deliberately only strip if the open tag is the
+  // LAST occurrence in the buffer AND nothing-but-whitespace follows the
+  // close tag (or there's no close tag yet, which means it IS the trailing
+  // tail still being streamed). This mirrors the server's lastSuggestionsMatch
+  // logic so a prose mention of `<suggestions>` earlier in the response
+  // can never accidentally truncate live text.
+  {
+    const lower = text.toLowerCase();
+    const openIdx = lower.lastIndexOf("<suggestions>");
+    if (openIdx >= 0) {
+      const closeRel = lower.indexOf("</suggestions>", openIdx + 13);
+      if (closeRel < 0) {
+        // No close tag yet. Only treat this as the streaming chip block
+        // if nothing meaningful has come after the open tag yet — otherwise
+        // it's just a prose mention of "<suggestions>" and we leave it
+        // alone so subsequent text and file markers keep rendering.
+        const tail = text.slice(openIdx + 13);
+        if (tail.trim().length === 0 || /^\s*<item\b/i.test(tail)) {
+          text = text.slice(0, openIdx).replace(/\s+$/, "");
+        }
+      } else {
+        const after = text.slice(closeRel + 14);
+        if (after.trim().length === 0) {
+          // Close tag present and nothing meaningful follows — treat as
+          // the trailing chip block and hide.
+          text = text.slice(0, openIdx).replace(/\s+$/, "");
+        }
+      }
+    }
+  }
   let out = "";
   let cursor = 0;
   const OPEN = /<file\s+path="([^"]*)"\s*>/g;
@@ -681,6 +718,12 @@ export default function Builder() {
   const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
   const [phase, setPhase] = useState<string | undefined>(undefined);
   const [typed, setTyped] = useState("");
+  // Quick follow-up task chips. The AI emits a hidden `<suggestions>` block
+  // at the end of every successful reply; we render those as clickable chips
+  // above the prompt box so the user can keep momentum without typing. The
+  // list is replaced on every successful build and cleared the moment the
+  // next send fires (so stale suggestions don't linger).
+  const [quickTasks, setQuickTasks] = useState<string[]>([]);
   // Per-prompt action rows that show under the in-flight assistant bubble:
   // each `status` SSE event closes out the previous step and starts a new
   // one, so the user sees a granular checklist of what's happening
@@ -904,6 +947,10 @@ export default function Builder() {
     setPhase("Thinking");
     setTyped("");
     setLastUsage(null);
+    // Clear any chips from the previous turn the moment a new send fires —
+    // they belonged to a different reply and would be misleading next to
+    // an in-flight build.
+    setQuickTasks([]);
     // Seed the action checklist with a single "Preparing your request"
     // step. Server `status` events will close it out and push their own
     // labels as the build pipeline moves through each phase.
@@ -1087,6 +1134,16 @@ export default function Builder() {
                 ? `Build complete — ${n} file${n === 1 ? "" : "s"} updated`
                 : "Build complete",
             );
+            // Pull the AI's quick follow-up suggestions out of the done
+            // payload and stash them as chips above the prompt box.
+            // Server caps at 4 already; clamp again client-side as a
+            // belt-and-braces guard against malformed payloads.
+            const sugg = Array.isArray(evt.data?.suggestions)
+              ? (evt.data.suggestions as unknown[])
+                  .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
+                  .slice(0, 4)
+              : [];
+            setQuickTasks(sugg);
           }
         }
       }
@@ -1454,6 +1511,8 @@ export default function Builder() {
             setAttachments={setAttachments}
             refUrls={refUrls}
             setRefUrls={setRefUrls}
+            quickTasks={quickTasks}
+            onStop={() => abortRef.current?.abort()}
           />
         </aside>
         {/* Drag handle to resize chat */}
@@ -1634,6 +1693,8 @@ export default function Builder() {
           setAttachments={setAttachments}
           refUrls={refUrls}
           setRefUrls={setRefUrls}
+          quickTasks={quickTasks}
+          onStop={() => abortRef.current?.abort()}
         />
       </div>
     </div>
@@ -1689,6 +1750,8 @@ function ChatPanel({
   setAttachments,
   refUrls,
   setRefUrls,
+  quickTasks,
+  onStop,
 }: {
   chatInput: string;
   setChatInput: (v: string) => void;
@@ -1710,6 +1773,8 @@ function ChatPanel({
   setAttachments: React.Dispatch<React.SetStateAction<File[]>>;
   refUrls: string[];
   setRefUrls: React.Dispatch<React.SetStateAction<string[]>>;
+  quickTasks: string[];
+  onStop: () => void;
 }) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1941,7 +2006,29 @@ function ChatPanel({
       </div>
 
       <div className="p-3 border-t border-border bg-surface shrink-0">
-        <div className="prompt-glow rounded-xl border border-border bg-background focus-within:border-primary focus-within:shadow-[0_0_0_1px_hsl(var(--primary))] transition-shadow">
+        {/* Quick follow-up task chips. Hidden while a build is streaming
+            and while the user is typing — both states mean the previous
+            chips are stale or about to be replaced. Click drops the text
+            into the input and focuses it; the user can edit before send. */}
+        {!isStreaming && quickTasks.length > 0 && chatInput.trim().length === 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {quickTasks.map((task, i) => (
+              <button
+                key={`qt-${i}`}
+                onClick={() => {
+                  setChatInput(task);
+                  inputRef.current?.focus();
+                }}
+                className="inline-flex items-center gap-1 max-w-full px-2.5 py-1 rounded-full border border-border bg-surface-raised hover:bg-background hover:border-primary/40 text-[11px] text-foreground transition-colors text-left"
+                title={task}
+              >
+                <Sparkles className="w-3 h-3 text-primary shrink-0" />
+                <span className="truncate">{task}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="prompt-glow rounded-xl border border-border bg-background">
           {/* Attachment + URL chips */}
           {(attachments.length > 0 || refUrls.length > 0) && (
             <div className="flex flex-wrap gap-1.5 p-2 pb-0">
@@ -2163,15 +2250,30 @@ function ChatPanel({
                 <span>Plan</span>
               </button>
 
-              <button
-                onClick={() => onSend()}
-                disabled={!chatInput.trim() || isStreaming}
-                className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors"
-                title="Send"
-                aria-label="Send"
-              >
-                <ArrowUp className="w-4 h-4" />
-              </button>
+              {/* Send / Stop. While a build is streaming the same button
+                  becomes a stop control that aborts the in-flight request,
+                  so the user has one consistent place to either send or
+                  cancel without having to hunt for an extra control. */}
+              {isStreaming ? (
+                <button
+                  onClick={onStop}
+                  className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 transition-colors"
+                  title="Stop generating"
+                  aria-label="Stop generating"
+                >
+                  <Square className="w-3 h-3 fill-current" />
+                </button>
+              ) : (
+                <button
+                  onClick={() => onSend()}
+                  disabled={!chatInput.trim()}
+                  className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors"
+                  title="Send"
+                  aria-label="Send"
+                >
+                  <ArrowUp className="w-4 h-4" />
+                </button>
+              )}
             </div>
           </div>
         </div>

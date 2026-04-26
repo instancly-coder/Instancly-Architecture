@@ -15,7 +15,12 @@ import {
   buildFilesContext,
   buildSystemPrompt,
 } from "../lib/components-catalog";
-import { parseFileBlocks, stripFileBlocks } from "../lib/file-blocks";
+import {
+  parseFileBlocks,
+  stripFileBlocks,
+  parseSuggestions,
+  stripSuggestionsBlock,
+} from "../lib/file-blocks";
 import { enhancePrompt } from "../lib/prompt-enhancer";
 import { requireAuth, getAuthedUser } from "../middlewares/auth";
 
@@ -493,9 +498,10 @@ router.post(
         .where(eq(buildsTable.projectId, project.id));
       const nextNumber = (maxNumber ?? 0) + 1;
 
-      // Store the human-readable transcript with file payloads stripped so
-      // the build history stays compact and readable.
-      const visible = stripFileBlocks(fullText);
+      // Store the human-readable transcript with file payloads AND the
+      // hidden suggestions block stripped so the build history stays
+      // compact and readable.
+      const visible = stripSuggestionsBlock(stripFileBlocks(fullText));
       const aiMessage = errorMessage
         ? `${visible}\n\n[${status}] ${errorMessage}`.slice(0, 4000)
         : visible.slice(0, 4000);
@@ -679,6 +685,10 @@ router.post(
         balance: postBalance,
         model: modelInfo.display,
       });
+      // Pull the four (max) follow-up task suggestions the model emitted in
+      // its hidden `<suggestions>` block. Sent only on success — there's
+      // nothing useful to suggest after an error.
+      const suggestions = parseSuggestions(fullText);
       send("done", {
         ok: true,
         build: {
@@ -691,6 +701,7 @@ router.post(
           filesChanged: written.length,
           files: written,
         },
+        suggestions,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : "AI request failed";

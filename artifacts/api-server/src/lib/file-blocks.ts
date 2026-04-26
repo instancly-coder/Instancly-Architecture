@@ -100,6 +100,70 @@ export function sanitizePath(raw: string): string | null {
   return normalized;
 }
 
+// Parses the trailing `<suggestions><item>…</item>…</suggestions>` block
+// from the model output. The model is instructed to emit it as the very
+// last thing in the reply, so we deliberately match the LAST occurrence
+// (allowing only whitespace after the closing tag) — that way prose that
+// happens to mention `<suggestions>` earlier in the response can never
+// be mistaken for the real chip block. The UI then renders the items as
+// clickable chips above the prompt box.
+//
+// `lastSuggestionsMatch` walks the string looking for the final
+// `<suggestions>…</suggestions>` pair whose closing tag is the last
+// non-whitespace content in the message. Returns the match start, end
+// (after closing tag), and inner body, or null if there is no such block.
+function lastSuggestionsMatch(
+  text: string,
+): { start: number; end: number; inner: string } | null {
+  const OPEN = "<suggestions>";
+  const CLOSE = "</suggestions>";
+  // Walk from the end looking for the last `<suggestions>` open tag.
+  // (Using lastIndexOf for the open tag, then locating the matching
+  // close tag forwards from there.) Case-insensitive matching is done
+  // by lowercasing a sliding window only when needed — a full lowercase
+  // copy would double the memory for very large outputs.
+  const lower = text.toLowerCase();
+  const openIdx = lower.lastIndexOf(OPEN);
+  if (openIdx < 0) return null;
+  const closeIdx = lower.indexOf(CLOSE, openIdx + OPEN.length);
+  if (closeIdx < 0) return null;
+  const end = closeIdx + CLOSE.length;
+  // Only treat it as the trailing block if nothing but whitespace follows.
+  if (text.slice(end).trim().length > 0) return null;
+  return {
+    start: openIdx,
+    end,
+    inner: text.slice(openIdx + OPEN.length, closeIdx),
+  };
+}
+
+const SUGG_ITEM_RE = /<item>([\s\S]*?)<\/item>/gi;
+
+export function parseSuggestions(text: string): string[] {
+  const m = lastSuggestionsMatch(text);
+  if (!m) return [];
+  const out: string[] = [];
+  SUGG_ITEM_RE.lastIndex = 0;
+  let im: RegExpExecArray | null;
+  while ((im = SUGG_ITEM_RE.exec(m.inner)) !== null) {
+    const v = im[1].trim();
+    if (v) out.push(v.length > 120 ? v.slice(0, 120) : v);
+    if (out.length >= 4) break;
+  }
+  return out;
+}
+
+// Removes the trailing `<suggestions>…</suggestions>` block (if any) from
+// the visible transcript so the chips don't show up as raw XML in the
+// chat history. Only strips the terminal block — earlier mentions of the
+// tag (e.g. quoted in prose) are left alone.
+export function stripSuggestionsBlock(text: string): string {
+  const m = lastSuggestionsMatch(text);
+  if (!m) return text;
+  const head = text.slice(0, m.start).replace(/\s+$/, "");
+  return head + (head ? "\n" : "");
+}
+
 export function contentTypeFor(path: string): string {
   const ext = path.split(".").pop()?.toLowerCase() ?? "";
   switch (ext) {
