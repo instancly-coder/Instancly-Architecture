@@ -526,57 +526,63 @@ const ERROR_OVERLAY_SCRIPT = `<script data-deploybro-error-overlay>
 
   // --- C. Run the deferred text/babel scripts ourselves with proper
   // sourceURL + filename so errors carry real location info.
-  function runOne(node) {
-    if (node.getAttribute("data-deploybro-processed")) return;
+  //
+  // CRITICAL: scripts must execute in **document order**, not in the order
+  // their network fetches happen to complete. Multi-file React apps like
+  // index.html → components/Nav.jsx → pages/Home.jsx → app.jsx rely on
+  // earlier scripts defining \`Nav\`, \`Home\` etc. as globals before
+  // app.jsx's <Routes> renders them. Naive async XHR-with-onload races
+  // those fetches against each other and frequently runs app.jsx first,
+  // producing "ReferenceError: Home is not defined".
+  //
+  // Strategy: fetch all external scripts in parallel for speed, queue the
+  // execution, and process the queue strictly left-to-right so each
+  // script's globals are visible to every script after it.
+  function transformAndExec(source, filename, presets) {
+    var transformed;
+    try {
+      transformed = window.Babel.transform(source, {
+        presets: presets,
+        filename: filename,
+        sourceMaps: false,
+      }).code;
+    } catch (compileErr) {
+      var loc = compileErr && compileErr.loc;
+      var where = loc ? filename + ":" + loc.line + ":" + loc.column : filename;
+      show("Compile error", String(compileErr.message || compileErr), "", where);
+      return;
+    }
+    // sourceURL pragma makes runtime errors carry the right filename.
+    var withPragma = transformed + "\\n//# sourceURL=" + filename;
+    try {
+      // Indirect eval so user code runs in the global scope (matches
+      // Babel-standalone's default behaviour for <script> tags). This
+      // is what makes top-level \`function Home() {}\` declarations
+      // become \`window.Home\`, which the canonical multi-file pattern
+      // depends on.
+      (0, eval)(withPragma);
+    } catch (runtimeErr) {
+      var stack = runtimeErr && runtimeErr.stack ? String(runtimeErr.stack) : "";
+      show("Runtime error", String(runtimeErr.message || runtimeErr), stack, filename);
+    }
+  }
+  function loadOne(node) {
+    if (node.getAttribute("data-deploybro-processed")) return null;
     node.setAttribute("data-deploybro-processed", "1");
     var src = node.getAttribute("src") || "";
     var inline = node.textContent || "";
     var filename = src || "inline-script-" + Math.random().toString(36).slice(2, 7) + ".jsx";
     var presets = (node.getAttribute("data-deploybro-presets") || "react")
       .split(",").map(function (p) { return p.trim(); }).filter(Boolean);
-
-    function execute(source) {
-      var transformed;
-      try {
-        transformed = window.Babel.transform(source, {
-          presets: presets,
-          filename: filename,
-          sourceMaps: false,
-        }).code;
-      } catch (compileErr) {
-        var loc = compileErr && compileErr.loc;
-        var where = loc ? filename + ":" + loc.line + ":" + loc.column : filename;
-        show("Compile error", String(compileErr.message || compileErr), "", where);
-        return;
-      }
-      // sourceURL pragma makes runtime errors carry the right filename.
-      var withPragma = transformed + "\\n//# sourceURL=" + filename;
-      try {
-        // Indirect eval so user code runs in the global scope (matches
-        // Babel-standalone's default behaviour for <script> tags).
-        (0, eval)(withPragma);
-      } catch (runtimeErr) {
-        var stack = runtimeErr && runtimeErr.stack ? String(runtimeErr.stack) : "";
-        show("Runtime error", String(runtimeErr.message || runtimeErr), stack, filename);
-      }
+    if (!src) {
+      return { filename: filename, presets: presets, src: "", promise: Promise.resolve(inline) };
     }
-
-    if (src) {
-      try {
-        var xhr = new XMLHttpRequest();
-        xhr.open("GET", src, true);
-        xhr.onload = function () {
-          if (xhr.status >= 200 && xhr.status < 300) execute(xhr.responseText);
-          else show("Failed to load " + src, "HTTP " + xhr.status, "", filename);
-        };
-        xhr.onerror = function () { show("Failed to load " + src, "Network error", "", filename); };
-        xhr.send();
-      } catch (fetchErr) {
-        show("Failed to load " + src, String(fetchErr && fetchErr.message || fetchErr), "", filename);
-      }
-    } else {
-      execute(inline);
-    }
+    var p = fetch(src, { credentials: "same-origin", cache: "no-store" })
+      .then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.text();
+      });
+    return { filename: filename, presets: presets, src: src, promise: p };
   }
   function processDeferred() {
     if (!window.Babel || !window.Babel.transform) {
@@ -588,7 +594,28 @@ const ERROR_OVERLAY_SCRIPT = `<script data-deploybro-error-overlay>
     }
     if (mo) { try { mo.disconnect(); } catch (_) {} mo = null; }
     var nodes = document.querySelectorAll('script[type="' + DEFERRED_TYPE + '"]');
-    for (var i = 0; i < nodes.length; i++) runOne(nodes[i]);
+    // Kick off every fetch immediately (parallel) but execute strictly
+    // in declared order by chaining each promise off the previous one.
+    var chain = Promise.resolve();
+    for (var i = 0; i < nodes.length; i++) {
+      var item = loadOne(nodes[i]);
+      if (!item) continue;
+      (function (it) {
+        chain = chain.then(function () {
+          return it.promise.then(
+            function (source) { transformAndExec(source, it.filename, it.presets); },
+            function (err) {
+              show(
+                "Failed to load " + (it.src || it.filename),
+                String((err && err.message) || err || "Network error"),
+                "",
+                it.filename
+              );
+            }
+          );
+        });
+      })(item);
+    }
   }
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", processDeferred);
