@@ -4,7 +4,7 @@ import { Search, Sparkles, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import logoUrl from "@assets/download_1776989236348.png";
+import { BrandLogo } from "@/components/brand-logo";
 import {
   COMPONENT_LIBRARY,
   CATEGORY_ORDER,
@@ -41,7 +41,7 @@ export default function Library() {
     <div className="min-h-screen bg-background text-foreground flex flex-col">
       <nav className="border-b border-border bg-surface h-14 flex items-center px-6 sticky top-0 z-10">
         <Link href="/" className="flex items-center gap-2 hover:opacity-80 mr-8">
-          <img src={logoUrl} alt="DeployBro" className="h-5 w-auto" />
+          <BrandLogo className="h-5 w-auto text-foreground" />
           <span className="font-bold tracking-tight text-secondary">/ library</span>
         </Link>
         <div className="ml-auto flex items-center gap-3">

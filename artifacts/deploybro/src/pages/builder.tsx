@@ -53,7 +53,7 @@ import {
   ArrowDownAZ,
   ArrowDown10,
 } from "lucide-react";
-import brandLogoUrl from "@assets/download_1776989236348.png";
+import { BrandLogo } from "@/components/brand-logo";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -1247,12 +1247,7 @@ export default function Builder() {
           style={{ ["--chat-w" as string]: `${chatWidth}px` } as React.CSSProperties}
         >
           <Link href="/dashboard" className="hover:opacity-80 transition-opacity shrink-0 flex items-center">
-            <img
-              src={brandLogoUrl}
-              alt="DeployBro"
-              className="h-5 w-auto select-none"
-              draggable={false}
-            />
+            <BrandLogo className="h-5 w-auto text-foreground" />
           </Link>
           <div className="w-px h-4 bg-border hidden sm:block"></div>
           <div className="flex items-center text-sm font-mono text-secondary min-w-0">
@@ -2324,11 +2319,7 @@ function PreviewEmptyState() {
               "radial-gradient(circle, rgba(59,130,246,0.7) 0%, rgba(59,130,246,0) 70%)",
           }}
         />
-        <img
-          src={brandLogoUrl}
-          alt="DeployBro"
-          className="relative h-10 w-auto opacity-95"
-        />
+        <BrandLogo className="relative h-10 w-auto text-foreground opacity-95" />
       </div>
       <div className="space-y-2 max-w-sm">
         <div className="text-lg font-semibold text-foreground">
@@ -2367,11 +2358,7 @@ function PreviewBuildingState() {
                 "radial-gradient(circle, rgba(59,130,246,0.7) 0%, rgba(59,130,246,0) 70%)",
             }}
           />
-          <img
-            src={brandLogoUrl}
-            alt="DeployBro"
-            className="relative h-7 w-auto"
-          />
+          <BrandLogo className="relative h-7 w-auto text-foreground" />
         </div>
         <div className="flex flex-col">
           <div className="shimmer-text text-base font-semibold leading-tight">

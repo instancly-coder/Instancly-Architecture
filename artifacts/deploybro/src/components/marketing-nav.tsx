@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { Menu } from "lucide-react";
-import logoUrl from "@assets/download_1776989236348.png";
+import { BrandLogo } from "./brand-logo";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 
@@ -25,7 +25,7 @@ export function MarketingNav() {
   return (
     <nav className="sticky top-0 z-50 bg-surface/80 backdrop-blur-md border-b border-border h-14 flex items-center justify-between px-6">
       <Link href="/" className="flex items-center hover:opacity-80 transition-opacity" aria-label="DeployBro">
-        <img src={logoUrl} alt="DeployBro" className="h-5 w-auto object-contain" />
+        <BrandLogo className="h-5 w-auto text-foreground" />
       </Link>
 
       <div className="hidden md:flex items-center gap-6 text-sm text-secondary">

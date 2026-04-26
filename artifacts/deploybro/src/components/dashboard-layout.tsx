@@ -17,7 +17,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import logoUrl from "@assets/download_1776989236348.png";
+import { BrandLogo } from "./brand-logo";
 import { useMe } from "@/lib/api";
 import { authClient, authConfigured } from "@/auth";
 
@@ -49,7 +49,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-background text-foreground flex">
       <header className="md:hidden fixed top-0 inset-x-0 h-14 z-30 bg-surface border-b border-border flex items-center justify-between px-4">
         <Link href="/dashboard" className="flex items-center gap-2">
-          <img src={logoUrl} alt="DeployBro" className="h-5 w-auto" />
+          <BrandLogo className="h-5 w-auto text-foreground" />
         </Link>
         <div className="flex items-center gap-1">
           <button
@@ -76,7 +76,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
       >
         <div className="h-14 border-b border-border flex items-center justify-between px-6 gap-2">
           <Link href="/dashboard" className="flex items-center gap-2">
-            <img src={logoUrl} alt="DeployBro" className="h-5 w-auto" />
+            <BrandLogo className="h-5 w-auto text-foreground" />
           </Link>
           <button
             onClick={() => setOpen(false)}

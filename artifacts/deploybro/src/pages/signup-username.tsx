@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import logoUrl from "@assets/download_1776989236348.png";
+import { BrandLogo } from "@/components/brand-logo";
 import { useMe, useUpdateMe } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -63,7 +63,7 @@ export default function SignupUsername() {
   return (
     <div className="min-h-screen bg-background flex flex-col items-center pt-32 p-6">
       <Link href="/" className="mb-12 hover:opacity-80 transition-opacity" aria-label="DeployBro home">
-        <img src={logoUrl} alt="DeployBro" className="h-8 w-auto" />
+        <BrandLogo className="h-8 w-auto text-foreground" />
       </Link>
 
       <div className="w-full max-w-md">

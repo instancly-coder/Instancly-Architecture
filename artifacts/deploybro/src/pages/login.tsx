@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { useState } from "react";
-import logoUrl from "@assets/download_1776989236348.png";
+import { BrandLogo } from "@/components/brand-logo";
 import { authClient, authConfigured } from "@/auth";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -114,7 +114,7 @@ export default function Login() {
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6">
       <Link href="/" className="mb-8 hover:opacity-80 transition-opacity" aria-label="DeployBro home">
-        <img src={logoUrl} alt="DeployBro" className="h-8 w-auto" />
+        <BrandLogo className="h-8 w-auto text-foreground" />
       </Link>
 
       <div className="w-full max-w-sm bg-surface border border-border rounded-xl p-8 shadow-2xl">

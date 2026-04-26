@@ -1,6 +1,6 @@
 import { type ReactNode } from "react";
 import { Link } from "wouter";
-import logoUrl from "@assets/download_1776989236348.png";
+import { BrandLogo } from "./brand-logo";
 import { useIsAdmin } from "@/lib/api";
 import { ShieldOff } from "lucide-react";
 
@@ -11,7 +11,7 @@ export function AdminLayout({ active, children }: { active: "overview" | "users"
     <div className="min-h-screen bg-background text-foreground flex flex-col">
       <nav className="border-b border-border bg-surface h-14 flex items-center px-6 sticky top-0 z-10">
         <Link href="/" className="flex items-center gap-2 hover:opacity-80 mr-8">
-          <img src={logoUrl} alt="DeployBro" className="h-5 w-auto" />
+          <BrandLogo className="h-5 w-auto text-foreground" />
           <span className="font-bold tracking-tight text-secondary">/ admin</span>
         </Link>
         <div className="flex items-center gap-6 text-sm">

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { Loader2 } from "lucide-react";
-import logoUrl from "@assets/download_1776989236348.png";
+import { BrandLogo } from "@/components/brand-logo";
 import { useCreateProject, useMe } from "@/lib/api";
 import { randomProjectName } from "@/lib/random-name";
 import { toast } from "sonner";
@@ -122,7 +122,7 @@ export default function BuildNew() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-foreground">
-      <img src={logoUrl} alt="DeployBro" className="h-8 w-auto mb-8 opacity-90" />
+      <BrandLogo className="h-8 w-auto mb-8 text-foreground opacity-90" />
       <div className="flex items-center gap-3 text-sm text-secondary">
         <Loader2 className="w-4 h-4 animate-spin" />
         <span>Spinning up your project…</span>

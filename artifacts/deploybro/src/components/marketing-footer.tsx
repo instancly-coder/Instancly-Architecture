@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import logoUrl from "@assets/download_1776989236348.png";
+import { BrandLogo } from "./brand-logo";
 
 export function MarketingFooter() {
   return (
@@ -7,7 +7,7 @@ export function MarketingFooter() {
       <div className="max-w-6xl mx-auto px-6 py-12 grid grid-cols-2 md:grid-cols-5 gap-8">
         <div className="col-span-2 md:col-span-1">
           <Link href="/" className="inline-flex items-center mb-3">
-            <img src={logoUrl} alt="DeployBro" className="h-6 w-auto object-contain" />
+            <BrandLogo className="h-6 w-auto text-foreground" />
           </Link>
           <p className="text-xs text-secondary leading-relaxed">
             Ship apps from a single prompt. Real Postgres, real URLs, no DevOps.
