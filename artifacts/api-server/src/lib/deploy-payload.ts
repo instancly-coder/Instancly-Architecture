@@ -54,7 +54,9 @@ const DEFAULT_PACKAGE_JSON = {
     // to ship the matching npm packages so those names resolve at
     // build time. If you change one, change the other in lockstep.
     "lucide-react": "^0.460.0",
-    recharts: "^2.13.0",
+    // Pin the minor to match the dev-preview CDN URL in
+    // routes/files.ts → hotPatchVisualCdns. Bump in lockstep.
+    recharts: "^2.15.4",
   },
   devDependencies: {
     "@vitejs/plugin-react": "^4.3.4",
@@ -214,6 +216,21 @@ function transformIndexHtmlForVite(html: string): string {
   const PROPTYPES_CDN_RE =
     /<script\b[^>]*\bsrc=["'][^"']*\b(?:unpkg\.com|esm\.sh|cdn\.jsdelivr\.net\/npm)\/prop-types@?[^"']*["'][^>]*>\s*<\/script>\s*/gi;
   out = out.replace(PROPTYPES_CDN_RE, "");
+
+  // The dev-preview hot-patch (and the AI's canonical example) inject
+  // a `<script>window.react=window.React;</script>` shim before the
+  // lucide-react CDN tag — see routes/files.ts → hotPatchVisualCdns.
+  // It's harmless in production (the bundle defines window.React in
+  // main.jsx anyway) but pointless dead weight, so strip it too.
+  const LUCIDE_SHIM_RE =
+    /<script\b[^>]*\bdata-deploybro-lucide-shim\b[^>]*>[\s\S]*?<\/script>\s*/gi;
+  out = out.replace(LUCIDE_SHIM_RE, "");
+  // Also strip the bare un-marked variant that comes straight out of
+  // the AI's canonical example (no data attribute, just the one-line
+  // assignment).
+  const BARE_LUCIDE_SHIM_RE =
+    /<script>\s*window\.react\s*=\s*window\.React\s*;?\s*<\/script>\s*/gi;
+  out = out.replace(BARE_LUCIDE_SHIM_RE, "");
 
   // `<script type="text/babel" src="…">` references the user's .jsx
   // files, which are now part of the bundle entry instead. Strip both

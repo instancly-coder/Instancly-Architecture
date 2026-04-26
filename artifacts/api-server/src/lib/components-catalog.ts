@@ -129,8 +129,8 @@ Rules for file blocks:
 - Use these exact CDNs in index.html, in this order, before any of your scripts:
   • Tailwind v4: \`<script src="https://cdn.tailwindcss.com"></script>\`
   • React 18: \`<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>\` and \`<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>\`
-  • Icons (lucide-react): \`<script crossorigin src="https://unpkg.com/lucide-react@0.460.0/dist/umd/lucide-react.min.js"></script>\` — exposes \`window.LucideReact\`. Each icon is a React component (e.g. \`LucideReact.Heart\`, \`LucideReact.ArrowRight\`).
-  • Charts (recharts) — needs prop-types first: \`<script crossorigin src="https://unpkg.com/prop-types@15/prop-types.min.js"></script>\` then \`<script crossorigin src="https://unpkg.com/recharts@2/umd/Recharts.min.js"></script>\` — exposes \`window.Recharts\`.
+  • Icons (lucide-react): TWO tags in this order — first the React-global shim \`<script>window.react=window.React;</script>\` (lucide-react's UMD bundle reads \`window.react\` lowercase, which is undefined without the shim), THEN \`<script crossorigin src="https://unpkg.com/lucide-react@0.460.0/dist/umd/lucide-react.min.js"></script>\`. Exposes \`window.LucideReact\`. Each icon is a React component (e.g. \`LucideReact.Heart\`, \`LucideReact.ArrowRight\`).
+  • Charts (recharts) — needs prop-types first: \`<script crossorigin src="https://unpkg.com/prop-types@15/prop-types.min.js"></script>\` then \`<script crossorigin src="https://cdn.jsdelivr.net/npm/recharts@2.15.4/umd/Recharts.min.js"></script>\`. Exposes \`window.Recharts\`. (Use the jsdelivr URL with a pinned 2.15.4 version — unpkg's \`recharts@2/umd/...\` redirect is currently broken and 404s.)
   • React Router 6 (UMD) — load THREE scripts in this exact order, all three are required (react-router-dom's UMD bundle depends on the other two being present as globals):
     \`<script crossorigin src="https://unpkg.com/@remix-run/router@1/dist/router.umd.min.js"></script>\`
     \`<script crossorigin src="https://unpkg.com/react-router@6/dist/umd/react-router.production.min.js"></script>\`
@@ -222,11 +222,17 @@ Curly/typographic quotes copied from designs or copy docs (\`'\`, \`'\`, \`"\`, 
   <script crossorigin src="https://unpkg.com/react-router@6/dist/umd/react-router.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-router-dom@6/dist/umd/react-router-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <!-- Icons: every lucide icon is a React component on window.LucideReact -->
+  <!-- Icons: every lucide icon is a React component on window.LucideReact.
+       The shim line is required: lucide-react's UMD bundle internally
+       reads window.react (lowercase) instead of window.React, so without
+       this single line you get "undefined is not an object (forwardRef)". -->
+  <script>window.react=window.React;</script>
   <script crossorigin src="https://unpkg.com/lucide-react@0.460.0/dist/umd/lucide-react.min.js"></script>
-  <!-- Charts: prop-types is a peer dep of recharts, must load first -->
+  <!-- Charts: prop-types is a peer dep of recharts, must load first.
+       Use the jsdelivr URL with a pinned version; unpkg's recharts@2
+       major-range redirect is currently broken and serves a 404 page. -->
   <script crossorigin src="https://unpkg.com/prop-types@15/prop-types.min.js"></script>
-  <script crossorigin src="https://unpkg.com/recharts@2/umd/Recharts.min.js"></script>
+  <script crossorigin src="https://cdn.jsdelivr.net/npm/recharts@2.15.4/umd/Recharts.min.js"></script>
 </head>
 <body class="font-[Inter]">
   <div id="root"></div>

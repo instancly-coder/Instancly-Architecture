@@ -744,8 +744,50 @@ function fixUpReactRouterCdn(html: string): string {
   );
 }
 
+// Hot-patch the lucide-react + recharts CDN tags in already-stored
+// index.html files so the dev preview keeps working without asking the
+// AI to re-emit index.html.
+//
+// Two real bugs we saw in the wild:
+// 1. lucide-react's UMD wrapper internally reads `globalThis.react`
+//    (lowercase) instead of `globalThis.React`, so without a tiny
+//    shim line it throws "undefined is not an object (forwardRef)"
+//    on load. We inject `<script>window.react=window.React;</script>`
+//    immediately BEFORE any lucide-react script tag.
+// 2. unpkg's `recharts@2/umd/Recharts.min.js` major-range redirect
+//    is broken and serves a 404 page (an HTML body) as JS, which
+//    then explodes at parse time. We rewrite that URL to the
+//    equivalent jsdelivr URL pinned to 2.15.4.
+function hotPatchVisualCdns(html: string): string {
+  let out = html;
+
+  // Idempotent shim insert: only add it if a lucide script is present
+  // AND the shim isn't already there.
+  const hasLucide =
+    /<script\b[^>]*\bsrc=["'][^"']*\blucide-react@[^"']*["'][^>]*>\s*<\/script>/i.test(
+      out,
+    );
+  const hasShim = /window\.react\s*=\s*window\.React/.test(out);
+  if (hasLucide && !hasShim) {
+    out = out.replace(
+      /(<script\b[^>]*\bsrc=["'][^"']*\blucide-react@[^"']*["'][^>]*>\s*<\/script>)/i,
+      `<script data-deploybro-lucide-shim>window.react=window.React;</script>\n$1`,
+    );
+  }
+
+  // Rewrite broken unpkg recharts URLs to the working jsdelivr URL.
+  // Matches `unpkg.com/recharts@<anything>/umd/Recharts(.min)?.js` and
+  // pins the replacement to a known-good version.
+  out = out.replace(
+    /(<script\b[^>]*\bsrc=["'])https?:\/\/unpkg\.com\/recharts@[^/]*\/umd\/Recharts(?:\.min)?\.js(["'][^>]*>\s*<\/script>)/gi,
+    `$1https://cdn.jsdelivr.net/npm/recharts@2.15.4/umd/Recharts.min.js$2`,
+  );
+
+  return out;
+}
+
 function injectErrorOverlay(html: string): string {
-  const patched = fixUpReactRouterCdn(html);
+  const patched = hotPatchVisualCdns(fixUpReactRouterCdn(html));
   if (/data-deploybro-error-overlay/.test(patched)) return patched;
   // Inject at the START of <head> so the script-tag renamer runs BEFORE
   // the parser reaches any `<script type="text/babel">` tags further
