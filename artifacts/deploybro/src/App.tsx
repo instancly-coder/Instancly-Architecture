@@ -13,7 +13,8 @@ import { NeonAuthUIProvider } from "@neondatabase/neon-js/auth/react/ui";
 // (theme tokens + safelist for the auth UI) is imported in `index.css`
 // via `@import "@neondatabase/neon-js/ui/tailwind"` so it composes
 // into our single Tailwind build instead of fighting it.
-import { Toaster } from "@/components/ui/toaster";
+import { Toaster as RadixToaster } from "@/components/ui/toaster";
+import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import { initThemeOnce } from "@/hooks/use-theme";
@@ -151,7 +152,8 @@ function App() {
             <Router />
           </AuthProviderShell>
         </WouterRouter>
-        <Toaster />
+        <RadixToaster />
+        <SonnerToaster />
       </TooltipProvider>
     </QueryClientProvider>
   );
