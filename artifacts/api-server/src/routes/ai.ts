@@ -22,6 +22,10 @@ import {
   stripSuggestionsBlock,
   hasProvisionDbDirective,
   stripProvisionDbDirective,
+  parseOpenTabDirective,
+  stripOpenTabDirective,
+  parseRequestSecretDirectives,
+  stripRequestSecretDirectives,
 } from "../lib/file-blocks";
 import { enhancePrompt } from "../lib/prompt-enhancer";
 import { requireAuth, getAuthedUser } from "../middlewares/auth";
@@ -504,11 +508,16 @@ router.post(
       const nextNumber = (maxNumber ?? 0) + 1;
 
       // Store the human-readable transcript with file payloads, the
-      // hidden suggestions block, and any `<deploybro:provision-db />`
-      // directive stripped so the build history stays compact, readable,
-      // and free of internal control tags.
-      const visible = stripProvisionDbDirective(
-        stripSuggestionsBlock(stripFileBlocks(fullText)),
+      // hidden suggestions block, and any internal control directives
+      // (`<deploybro:provision-db />`, `<deploybro:open-tab … />`,
+      // `<deploybro:request-secret … />`) stripped so the build history
+      // stays compact, readable, and free of internal control tags.
+      const visible = stripRequestSecretDirectives(
+        stripOpenTabDirective(
+          stripProvisionDbDirective(
+            stripSuggestionsBlock(stripFileBlocks(fullText)),
+          ),
+        ),
       );
       const aiMessage = errorMessage
         ? `${visible}\n\n[${status}] ${errorMessage}`.slice(0, 4000)
@@ -805,6 +814,12 @@ router.post(
       // its hidden `<suggestions>` block. Sent only on success — there's
       // nothing useful to suggest after an error.
       const suggestions = parseSuggestions(fullText);
+      // Parse control directives off the prose-only view (file blocks
+      // stripped) so an example tag inside a generated file can never
+      // trigger a tab switch or render a fake secret-input bubble.
+      const directiveScan = stripFileBlocks(fullText);
+      const openTab = parseOpenTabDirective(directiveScan);
+      const secretRequests = parseRequestSecretDirectives(directiveScan);
       send("done", {
         ok: true,
         build: {
@@ -817,6 +832,8 @@ router.post(
           filesChanged: written.length,
           files: written,
         },
+        openTab,
+        secretRequests,
         suggestions,
         // null when the AI didn't request a DB; true when we just
         // provisioned one; false when the request was a no-op (already

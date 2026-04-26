@@ -827,3 +827,105 @@ export function useProvisionProjectDb(
     },
   });
 }
+
+// ---------- Project env vars ----------
+//
+// Mirror of `project_env_vars` rows. The list endpoint masks secret
+// values (returns "••••••••") and only returns plaintext for non-secret
+// flags. Use `useRevealProjectEnvVar` for an explicit one-shot reveal.
+export type ApiProjectEnvVar = {
+  id: string;
+  key: string;
+  // Either the masked placeholder ("••••••••") for secrets, or the
+  // plaintext value for non-secret flags.
+  value: string;
+  isSecret: boolean;
+  description: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export function useProjectEnvVars(
+  username: string | undefined,
+  slug: string | undefined,
+) {
+  return useQuery({
+    queryKey: ["projects", username, slug, "env-vars"],
+    enabled: !!username && !!slug,
+    queryFn: () =>
+      request<ApiProjectEnvVar[]>(`/projects/${username}/${slug}/env-vars`),
+  });
+}
+
+export function useUpsertProjectEnvVar(
+  username: string | undefined,
+  slug: string | undefined,
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      key: string;
+      value: string;
+      isSecret?: boolean;
+      description?: string | null;
+    }) =>
+      request<{
+        id: string;
+        key: string;
+        isSecret: boolean;
+        description: string | null;
+        updatedAt: string;
+      }>(
+        `/projects/${username}/${slug}/env-vars/${encodeURIComponent(input.key)}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            value: input.value,
+            isSecret: input.isSecret,
+            description: input.description,
+          }),
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({
+        queryKey: ["projects", username, slug, "env-vars"],
+      });
+    },
+  });
+}
+
+export function useDeleteProjectEnvVar(
+  username: string | undefined,
+  slug: string | undefined,
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (key: string) =>
+      request<void>(
+        `/projects/${username}/${slug}/env-vars/${encodeURIComponent(key)}`,
+        { method: "DELETE" },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({
+        queryKey: ["projects", username, slug, "env-vars"],
+      });
+    },
+  });
+}
+
+// One-shot reveal of a single secret env var's plaintext value. The UI
+// uses this for the "Show" button next to a masked row — the value is
+// returned only for the duration of the request and never cached.
+export function useRevealProjectEnvVar(
+  username: string | undefined,
+  slug: string | undefined,
+) {
+  return useMutation({
+    mutationFn: (key: string) =>
+      request<{ key: string; value: string }>(
+        `/projects/${username}/${slug}/env-vars/${encodeURIComponent(key)}/reveal`,
+        { method: "POST" },
+      ),
+  });
+}

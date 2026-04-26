@@ -47,6 +47,9 @@ import {
   FileCheck,
   FilePen,
   Lock,
+  KeyRound,
+  Eye,
+  EyeOff,
   Loader2,
   Rocket,
   Sparkles,
@@ -107,6 +110,10 @@ import {
   useProjectDbInfo,
   useProjectDbTables,
   useProvisionProjectDb,
+  useProjectEnvVars,
+  useUpsertProjectEnvVar,
+  useDeleteProjectEnvVar,
+  useRevealProjectEnvVar,
   useUpdateProject,
   type ApiBuild,
   type ApiDeployment,
@@ -119,6 +126,7 @@ type TabKey =
   | "preview"
   | "files"
   | "database"
+  | "env"
   | "analytics"
   | "payments"
   | "integrations"
@@ -130,6 +138,7 @@ const TAB_META: Record<TabKey, { label: string; icon: any }> = {
   preview: { label: "Preview", icon: Play },
   files: { label: "Files", icon: FolderTree },
   database: { label: "Database", icon: Database },
+  env: { label: "Env Vars", icon: KeyRound },
   analytics: { label: "Analytics", icon: BarChart3 },
   payments: { label: "Payments", icon: CreditCard },
   integrations: { label: "Integrations", icon: Plug },
@@ -163,6 +172,27 @@ function stripIncompleteFileBlocks(text: string): string {
   // the model is still typing it out.
   {
     const partial = /<deploybro:provision-db[^>]*$/i;
+    text = text.replace(partial, "");
+  }
+  // Same treatment for `<deploybro:open-tab name="…" />` and
+  // `<deploybro:request-secret name="…" … />` — both are control
+  // directives surfaced via the SSE `done` event payload, never
+  // intended to appear as raw XML in the chat. Mirrors the parsers in
+  // api-server/lib/file-blocks.ts.
+  text = text.replace(
+    /<deploybro:open-tab\s+name=["'][a-z0-9_-]{1,32}["']\s*\/?>(?:\s*<\/deploybro:open-tab>)?/gi,
+    "",
+  );
+  {
+    const partial = /<deploybro:open-tab[^>]*$/i;
+    text = text.replace(partial, "");
+  }
+  text = text.replace(
+    /<deploybro:request-secret\b[^>]*\/?>(?:\s*<\/deploybro:request-secret>)?/gi,
+    "",
+  );
+  {
+    const partial = /<deploybro:request-secret[^>]*$/i;
     text = text.replace(partial, "");
   }
   // Hide the trailing `<suggestions>…</suggestions>` block — even while
@@ -319,6 +349,7 @@ function FileNoticeText({ text }: { text: string }) {
 const ADDABLE_TABS: TabKey[] = [
   "files",
   "database",
+  "env",
   "analytics",
   "payments",
   "domains",
@@ -743,6 +774,16 @@ export default function Builder() {
   // list is replaced on every successful build and cleared the moment the
   // next send fires (so stale suggestions don't linger).
   const [quickTasks, setQuickTasks] = useState<string[]>([]);
+  // When the AI emits one or more `<deploybro:request-secret … />`
+  // directives, the SSE done event carries them in `secretRequests`.
+  // We stash them keyed by the freshly-created build's id so the chat
+  // can render a masked input bubble right under that AI turn. Bubbles
+  // remove themselves from the array on submit or skip — when an
+  // entry's array is empty we drop the key entirely so the chat is
+  // clean once the user has resolved every requested value.
+  const [pendingSecretRequests, setPendingSecretRequests] = useState<
+    Record<string, Array<{ name: string; label: string; description: string | null }>>
+  >({});
   // Per-prompt action rows that show under the in-flight assistant bubble:
   // each `status` SSE event closes out the previous step and starts a new
   // one, so the user sees a granular checklist of what's happening
@@ -1149,6 +1190,45 @@ export default function Builder() {
                   .slice(0, 4)
               : [];
             setQuickTasks(sugg);
+            // Server-emitted control directives. `openTab` is a tab key
+            // string (we still validate against TAB_META so a malformed
+            // payload can't crash the UI), `secretRequests` is an array
+            // of {name,label,description} entries we attach to the
+            // freshly-created build by id.
+            const buildId: string | undefined = evt.data?.build?.id;
+            const tabKey = evt.data?.openTab;
+            if (typeof tabKey === "string" && tabKey in TAB_META) {
+              const tk = tabKey as TabKey;
+              // Mirror openTab() inline so we don't depend on a closure
+              // over a function defined further down — also makes it
+              // explicit that an AI-driven open is the same operation
+              // a user would do clicking a tab in the strip.
+              setOpenTabs((tabs) => (tabs.includes(tk) ? tabs : [...tabs, tk]));
+              setActiveTab(tk);
+            }
+            if (buildId && Array.isArray(evt.data?.secretRequests)) {
+              const reqs = (evt.data.secretRequests as unknown[])
+                .filter(
+                  (
+                    r,
+                  ): r is { name: string; label?: string; description?: string | null } =>
+                    !!r &&
+                    typeof r === "object" &&
+                    typeof (r as { name: unknown }).name === "string",
+                )
+                .map((r) => ({
+                  name: r.name,
+                  label: typeof r.label === "string" && r.label.length > 0 ? r.label : r.name,
+                  description:
+                    typeof r.description === "string" && r.description.length > 0
+                      ? r.description
+                      : null,
+                }))
+                .slice(0, 8);
+              if (reqs.length > 0) {
+                setPendingSecretRequests((prev) => ({ ...prev, [buildId]: reqs }));
+              }
+            }
           }
         }
       }
@@ -1522,6 +1602,12 @@ export default function Builder() {
             setRefUrls={setRefUrls}
             quickTasks={quickTasks}
             onStop={() => abortRef.current?.abort()}
+            pendingSecretRequests={pendingSecretRequests}
+            setPendingSecretRequests={setPendingSecretRequests}
+            setOpenTabs={setOpenTabs}
+            setActiveTab={setActiveTab}
+            username={username}
+            slug={slug}
           />
         </aside>
         {/* Drag handle to resize chat */}
@@ -1630,6 +1716,7 @@ export default function Builder() {
               />
             )}
             {activeTab === "database" && <DatabaseView />}
+            {activeTab === "env" && <EnvVarsView />}
             {activeTab === "analytics" && <AnalyticsView />}
             {activeTab === "payments" && <PaymentsView />}
             {activeTab === "integrations" && <IntegrationsView />}
@@ -1709,6 +1796,12 @@ export default function Builder() {
           setRefUrls={setRefUrls}
           quickTasks={quickTasks}
           onStop={() => abortRef.current?.abort()}
+          pendingSecretRequests={pendingSecretRequests}
+          setPendingSecretRequests={setPendingSecretRequests}
+          setOpenTabs={setOpenTabs}
+          setActiveTab={setActiveTab}
+          username={username}
+          slug={slug}
         />
       </div>
     </div>
@@ -1765,6 +1858,12 @@ function ChatPanel({
   setRefUrls,
   quickTasks,
   onStop,
+  pendingSecretRequests,
+  setPendingSecretRequests,
+  setOpenTabs,
+  setActiveTab,
+  username,
+  slug,
 }: {
   chatInput: string;
   setChatInput: (v: string) => void;
@@ -1787,6 +1886,22 @@ function ChatPanel({
   setRefUrls: React.Dispatch<React.SetStateAction<string[]>>;
   quickTasks: string[];
   onStop: () => void;
+  pendingSecretRequests: Record<
+    string,
+    Array<{ name: string; label: string; description: string | null }>
+  >;
+  setPendingSecretRequests: React.Dispatch<
+    React.SetStateAction<
+      Record<
+        string,
+        Array<{ name: string; label: string; description: string | null }>
+      >
+    >
+  >;
+  setOpenTabs: React.Dispatch<React.SetStateAction<TabKey[]>>;
+  setActiveTab: React.Dispatch<React.SetStateAction<TabKey>>;
+  username: string | undefined;
+  slug: string | undefined;
 }) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1910,6 +2025,40 @@ function ChatPanel({
                 <div className="text-sm text-muted-foreground leading-relaxed break-words">
                   <FileNoticeText text={b.aiMessage} />
                 </div>
+
+                {/* Inline secure-input bubbles for any
+                    `<deploybro:request-secret … />` directives the AI
+                    emitted in this turn. Submitting one PUTs the value
+                    to /env-vars (encrypted at rest); skip just removes
+                    the bubble from view. The AI never sees the value —
+                    only that the named key is now set. */}
+                {(pendingSecretRequests[b.id] ?? []).map((req) => (
+                  <SecretRequestBubble
+                    key={req.name}
+                    request={req}
+                    username={username!}
+                    slug={slug!}
+                    onOpenEnvTab={() => {
+                      setOpenTabs((tabs) =>
+                        tabs.includes("env") ? tabs : [...tabs, "env"],
+                      );
+                      setActiveTab("env");
+                    }}
+                    onResolved={() => {
+                      setPendingSecretRequests((prev) => {
+                        const list = (prev[b.id] ?? []).filter(
+                          (r) => r.name !== req.name,
+                        );
+                        if (list.length === 0) {
+                          const next = { ...prev };
+                          delete next[b.id];
+                          return next;
+                        }
+                        return { ...prev, [b.id]: list };
+                      });
+                    }}
+                  />
+                ))}
 
                 {/* Footer: Checkpoint on its own line, then full-width
                     "Worked for…" accordion row with the chevron pinned to
@@ -3309,6 +3458,394 @@ function relativeTime(iso: string | null): string {
   if (h < 24) return `${h} hr ago`;
   const d = Math.floor(h / 24);
   return `${d}d ago`;
+}
+
+// ----------------------------------------------------------------------
+// Inline chat bubble that renders when the AI requested a secret value
+// via `<deploybro:request-secret name="…" label="…" description="…" />`.
+// The user pastes the value into a masked input; submit PUTs it to the
+// project's /env-vars endpoint (encrypted at rest) and the bubble fades
+// out. The AI never sees the raw value — on its next turn it can read
+// the env-vars list (which masks secrets) to know the key is set.
+// ----------------------------------------------------------------------
+function SecretRequestBubble({
+  request,
+  username,
+  slug,
+  onResolved,
+  onOpenEnvTab,
+}: {
+  request: { name: string; label: string; description: string | null };
+  username: string;
+  slug: string;
+  onResolved: () => void;
+  onOpenEnvTab: () => void;
+}) {
+  const upsert = useUpsertProjectEnvVar(username, slug);
+  const [value, setValue] = useState("");
+  const [show, setShow] = useState(false);
+  const submit = async () => {
+    const v = value.trim();
+    if (v.length === 0 || upsert.isPending) return;
+    try {
+      await upsert.mutateAsync({
+        key: request.name,
+        value: v,
+        isSecret: true,
+        description:
+          request.description ?? `Provided via chat for ${request.label}`,
+      });
+      toast.success(`${request.label} saved`);
+      onResolved();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save");
+    }
+  };
+  return (
+    <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 space-y-2">
+      <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+        <Lock className="w-3.5 h-3.5 text-primary shrink-0" />
+        <span className="truncate">{request.label}</span>
+        <span className="font-mono text-[11px] text-secondary truncate">
+          {request.name}
+        </span>
+      </div>
+      {request.description && (
+        <div className="text-xs text-secondary leading-relaxed">
+          {request.description}
+        </div>
+      )}
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <Input
+            type={show ? "text" : "password"}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void submit();
+              }
+            }}
+            placeholder="Paste value…"
+            autoComplete="off"
+            spellCheck={false}
+            className="pr-9 font-mono text-sm h-9"
+            disabled={upsert.isPending}
+          />
+          <button
+            type="button"
+            onClick={() => setShow((s) => !s)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-secondary hover:text-foreground"
+            tabIndex={-1}
+            aria-label={show ? "Hide value" : "Show value"}
+          >
+            {show ? (
+              <EyeOff className="w-4 h-4" />
+            ) : (
+              <Eye className="w-4 h-4" />
+            )}
+          </button>
+        </div>
+        <Button
+          size="sm"
+          onClick={submit}
+          disabled={upsert.isPending || value.trim().length === 0}
+          className="h-9"
+        >
+          {upsert.isPending ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            "Save"
+          )}
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={onResolved}
+          disabled={upsert.isPending}
+          className="h-9"
+        >
+          Skip
+        </Button>
+      </div>
+      <button
+        type="button"
+        onClick={onOpenEnvTab}
+        className="text-[11px] text-secondary hover:text-foreground transition-colors text-left"
+      >
+        Stored encrypted. Available on your next publish. Manage in Env Vars →
+      </button>
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------------
+// Project env vars tab. Lists, edits, and deletes per-project env vars.
+// Secret values are masked in the listing — a "Reveal" action calls a
+// one-shot endpoint that returns the plaintext. New rows can be added
+// from the "Add variable" form at the top.
+// ----------------------------------------------------------------------
+function EnvVarsView() {
+  const params = useParams();
+  const { username, slug } = params;
+  const listQuery = useProjectEnvVars(username, slug);
+  const upsert = useUpsertProjectEnvVar(username, slug);
+  const removeVar = useDeleteProjectEnvVar(username, slug);
+  const reveal = useRevealProjectEnvVar(username, slug);
+
+  const rows = listQuery.data ?? [];
+  const loading = listQuery.isLoading;
+  const error = listQuery.error instanceof Error ? listQuery.error.message : null;
+
+  const [newKey, setNewKey] = useState("");
+  const [newValue, setNewValue] = useState("");
+  const [newIsSecret, setNewIsSecret] = useState(true);
+  const [newDescription, setNewDescription] = useState("");
+  const [showNew, setShowNew] = useState(false);
+  // Per-row reveal cache: when the user clicks "Show" we fetch the
+  // plaintext once and keep it in component state until they click
+  // "Hide". Cleared if they leave the tab (component unmount).
+  const [revealed, setRevealed] = useState<Record<string, string>>({});
+
+  const submitNew = async () => {
+    const k = newKey.trim().toUpperCase();
+    const v = newValue.trim();
+    if (k.length === 0 || v.length === 0 || upsert.isPending) return;
+    try {
+      await upsert.mutateAsync({
+        key: k,
+        value: v,
+        isSecret: newIsSecret,
+        description: newDescription.trim() || null,
+      });
+      toast.success(`${k} saved`);
+      setNewKey("");
+      setNewValue("");
+      setNewDescription("");
+      setShowNew(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save");
+    }
+  };
+
+  const handleReveal = async (key: string) => {
+    if (revealed[key]) {
+      // Toggle hide.
+      setRevealed((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+      return;
+    }
+    try {
+      const r = await reveal.mutateAsync(key);
+      setRevealed((prev) => ({ ...prev, [key]: r.value }));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not reveal value");
+    }
+  };
+
+  const handleDelete = async (key: string) => {
+    if (
+      !window.confirm(
+        `Delete ${key}? This won't remove it from already-deployed sites until your next publish.`,
+      )
+    ) {
+      return;
+    }
+    try {
+      await removeVar.mutateAsync(key);
+      setRevealed((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+      toast.success(`${key} deleted`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not delete");
+    }
+  };
+
+  return (
+    <PaneShell
+      title="Env Vars"
+      subtitle="Per-project environment variables. Encrypted at rest. Pushed to Vercel as encrypted env vars on every publish."
+    >
+      {/* Add form */}
+      <div className="rounded-2xl border border-border bg-surface p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <KeyRound className="w-4 h-4 text-primary" />
+          <span className="text-sm font-medium">Add a variable</span>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Key</Label>
+            <Input
+              value={newKey}
+              onChange={(e) =>
+                setNewKey(e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, ""))
+              }
+              placeholder="STRIPE_SECRET_KEY"
+              spellCheck={false}
+              className="font-mono text-sm"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Value</Label>
+            <div className="relative">
+              <Input
+                type={showNew ? "text" : "password"}
+                value={newValue}
+                onChange={(e) => setNewValue(e.target.value)}
+                placeholder="sk_live_…"
+                autoComplete="off"
+                spellCheck={false}
+                className="pr-9 font-mono text-sm"
+              />
+              <button
+                type="button"
+                onClick={() => setShowNew((s) => !s)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-secondary hover:text-foreground"
+                tabIndex={-1}
+                aria-label={showNew ? "Hide value" : "Show value"}
+              >
+                {showNew ? (
+                  <EyeOff className="w-4 h-4" />
+                ) : (
+                  <Eye className="w-4 h-4" />
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs">Description (optional)</Label>
+          <Input
+            value={newDescription}
+            onChange={(e) => setNewDescription(e.target.value)}
+            placeholder="Where this value comes from, what it's for…"
+            className="text-sm"
+          />
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <label className="flex items-center gap-2 text-xs text-secondary cursor-pointer">
+            <Switch checked={newIsSecret} onCheckedChange={setNewIsSecret} />
+            <span>Treat as secret (mask the value in the listing)</span>
+          </label>
+          <Button
+            onClick={submitNew}
+            disabled={
+              upsert.isPending ||
+              newKey.trim().length === 0 ||
+              newValue.trim().length === 0
+            }
+            className="h-9"
+          >
+            {upsert.isPending ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> Saving…
+              </>
+            ) : (
+              <>
+                <Plus className="w-3.5 h-3.5 mr-1.5" /> Add variable
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+
+      {/* List */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-medium">
+            Variables{" "}
+            <span className="text-secondary font-normal">({rows.length})</span>
+          </h2>
+          <button
+            onClick={() => void listQuery.refetch()}
+            disabled={listQuery.isFetching}
+            className="text-xs text-secondary hover:text-foreground inline-flex items-center gap-1.5"
+          >
+            <RefreshCw
+              className={`w-3 h-3 ${listQuery.isFetching ? "animate-spin" : ""}`}
+            />
+            Refresh
+          </button>
+        </div>
+        {loading && rows.length === 0 ? (
+          <div className="rounded-xl border border-border bg-surface px-6 py-12 text-center text-sm text-secondary flex items-center justify-center gap-2">
+            <Loader2 className="w-4 h-4 animate-spin" /> Loading…
+          </div>
+        ) : error ? (
+          <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+            {error}
+          </div>
+        ) : rows.length === 0 ? (
+          <div className="rounded-2xl border border-border bg-surface px-6 py-12 text-center text-sm text-secondary">
+            No env vars yet. Add one above, or the AI will ask for any it
+            needs while building.
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-border bg-surface divide-y divide-border overflow-hidden">
+            {rows.map((row) => {
+              const shown = revealed[row.key];
+              const display = shown ?? row.value;
+              return (
+                <div key={row.id} className="p-3 space-y-1.5">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="font-mono text-sm font-medium truncate">
+                      {row.key}
+                    </span>
+                    {row.isSecret && (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-primary/10 text-primary text-[10px] font-medium">
+                        <Lock className="w-2.5 h-2.5" /> SECRET
+                      </span>
+                    )}
+                    <div className="ml-auto flex items-center gap-1 shrink-0">
+                      {row.isSecret && (
+                        <button
+                          onClick={() => handleReveal(row.key)}
+                          disabled={reveal.isPending}
+                          className="text-xs text-secondary hover:text-foreground inline-flex items-center gap-1 px-2 py-1 rounded hover:bg-surface-raised transition-colors"
+                        >
+                          {shown ? (
+                            <>
+                              <EyeOff className="w-3 h-3" /> Hide
+                            </>
+                          ) : (
+                            <>
+                              <Eye className="w-3 h-3" /> Show
+                            </>
+                          )}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleDelete(row.key)}
+                        disabled={removeVar.isPending}
+                        className="text-xs text-secondary hover:text-destructive inline-flex items-center gap-1 px-2 py-1 rounded hover:bg-surface-raised transition-colors"
+                      >
+                        <Trash2 className="w-3 h-3" /> Delete
+                      </button>
+                    </div>
+                  </div>
+                  <div className="font-mono text-xs text-foreground break-all bg-surface-raised rounded px-2 py-1.5">
+                    {display}
+                  </div>
+                  {row.description && (
+                    <div className="text-xs text-secondary">
+                      {row.description}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </PaneShell>
+  );
 }
 
 function DatabaseView() {

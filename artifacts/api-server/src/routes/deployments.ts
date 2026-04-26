@@ -5,6 +5,7 @@ import {
   usersTable,
   projectFilesTable,
   deploymentsTable,
+  projectEnvVarsTable,
 } from "@workspace/db";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { requireAuth, getAuthedUser } from "../middlewares/auth";
@@ -208,6 +209,34 @@ async function runPublishPipeline(args: {
     // creates one from the Database tab, the next publish will pick it up.
     if (plainDatabaseUrl) {
       await upsertEnvVar(vercelProject.id, "DATABASE_URL", plainDatabaseUrl);
+    }
+
+    // ---------- 4b. Push every project env var into Vercel ----------
+    // Read the project_env_vars rows the user (or the AI's
+    // request-secret directive) has populated and forward each one to
+    // Vercel as an encrypted env var. We do this on EVERY publish so
+    // edits made between deploys land — Vercel's `upsertEnvVar` is
+    // idempotent. A single var failing to encrypt or upsert is logged
+    // but does NOT abort the publish — partial config is better than
+    // no deploy at all when only one var is broken.
+    const envVarRows = await db
+      .select()
+      .from(projectEnvVarsTable)
+      .where(eq(projectEnvVarsTable.projectId, projectId));
+    for (const row of envVarRows) {
+      // Defence-in-depth: also skip DATABASE_URL here in case a stale
+      // pre-reservation row is still in the table; the column on the
+      // projects row is the canonical source.
+      if (row.key === "DATABASE_URL") continue;
+      try {
+        const plain = decryptSecret(row.valueEncrypted);
+        await upsertEnvVar(vercelProject.id, row.key, plain);
+      } catch (err) {
+        logger.warn(
+          { err, projectId, key: row.key },
+          "Skipping env var on publish (decrypt or upsert failed)",
+        );
+      }
     }
 
     // ---------- 5. Create the deployment ----------

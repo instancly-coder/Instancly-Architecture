@@ -12,6 +12,7 @@ import aiRouter from "./ai";
 import filesRouter from "./files";
 import deploymentsRouter from "./deployments";
 import domainsRouter from "./domains";
+import envVarsRouter from "./env-vars";
 
 const router: IRouter = Router();
 
@@ -28,5 +29,6 @@ router.use(aiRouter);
 router.use(filesRouter);
 router.use(deploymentsRouter);
 router.use(domainsRouter);
+router.use(envVarsRouter);
 
 export default router;

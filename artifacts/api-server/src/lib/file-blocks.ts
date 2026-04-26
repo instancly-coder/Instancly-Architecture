@@ -193,6 +193,108 @@ export function stripProvisionDbDirective(text: string): string {
     .replace(/\n[ \t]*\n[ \t]*\n/g, "\n\n");
 }
 
+// `<deploybro:open-tab name="env" />` — the AI uses this to send the
+// user to a specific tab in the builder after a reply (e.g. "I've added
+// the env var, opening the Env Vars tab so you can see it"). Whitelisted
+// tab names are enforced server-side; an unknown name is ignored.
+const OPEN_TAB_RE =
+  /<deploybro:open-tab\s+name=["']([a-z0-9_-]{1,32})["']\s*\/?>(?:\s*<\/deploybro:open-tab>)?/gi;
+
+const VALID_TAB_NAMES = new Set<string>([
+  "preview",
+  "files",
+  "database",
+  "env",
+  "analytics",
+  "payments",
+  "integrations",
+  "domains",
+  "history",
+  "settings",
+]);
+
+// Returns the LAST valid tab name the AI asked to open in this reply,
+// or null if none were emitted. We pick the last so a model that
+// (incorrectly) emits multiple directives still ends up on a single
+// deterministic tab — the most recent intent wins.
+export function parseOpenTabDirective(text: string): string | null {
+  OPEN_TAB_RE.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let last: string | null = null;
+  while ((match = OPEN_TAB_RE.exec(text)) !== null) {
+    const name = match[1].toLowerCase();
+    if (VALID_TAB_NAMES.has(name)) last = name;
+  }
+  return last;
+}
+
+export function stripOpenTabDirective(text: string): string {
+  OPEN_TAB_RE.lastIndex = 0;
+  return text.replace(OPEN_TAB_RE, "").replace(/\n[ \t]*\n[ \t]*\n/g, "\n\n");
+}
+
+// `<deploybro:request-secret name="STRIPE_SECRET_KEY" label="Stripe
+// secret key" description="From dashboard.stripe.com/apikeys" />` —
+// the AI uses this when a feature it just built (or is about to build)
+// needs a secret value that ONLY the user can supply. The chat UI
+// renders a masked input bubble for each request right beneath the AI
+// message; submitting it PUTs the value to /env-vars and the AI never
+// sees it. We deliberately do NOT support inline values — the AI must
+// only request secrets, never set them itself.
+//
+// Attribute order is flexible (name|label|description in any order),
+// values can be single or double quoted, and the tag may be self-closing
+// or paired. `name` is required; the rest fall back to humanised
+// defaults if missing.
+const REQUEST_SECRET_RE =
+  /<deploybro:request-secret\b([^>]*)\/?>(?:\s*<\/deploybro:request-secret>)?/gi;
+
+export type RequestedSecret = {
+  name: string;
+  label: string;
+  description: string | null;
+};
+
+function attr(haystack: string, name: string): string | null {
+  const re = new RegExp(`\\b${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`, "i");
+  const m = haystack.match(re);
+  if (!m) return null;
+  const v = (m[1] ?? m[2] ?? "").trim();
+  return v.length > 0 ? v : null;
+}
+
+const SECRET_NAME_RE = /^[A-Z][A-Z0-9_]{0,127}$/;
+
+export function parseRequestSecretDirectives(text: string): RequestedSecret[] {
+  REQUEST_SECRET_RE.lastIndex = 0;
+  const out: RequestedSecret[] = [];
+  const seen = new Set<string>();
+  let match: RegExpExecArray | null;
+  while ((match = REQUEST_SECRET_RE.exec(text)) !== null) {
+    const attrs = match[1] ?? "";
+    const rawName = attr(attrs, "name");
+    if (!rawName) continue;
+    const name = rawName.trim().toUpperCase();
+    if (!SECRET_NAME_RE.test(name)) continue;
+    if (seen.has(name)) continue;
+    seen.add(name);
+    const label = attr(attrs, "label") ?? name;
+    const description = attr(attrs, "description");
+    out.push({ name, label, description });
+    // Cap at 8 per reply — anything more is almost certainly a model
+    // loop and would overwhelm the chat UI.
+    if (out.length >= 8) break;
+  }
+  return out;
+}
+
+export function stripRequestSecretDirectives(text: string): string {
+  REQUEST_SECRET_RE.lastIndex = 0;
+  return text
+    .replace(REQUEST_SECRET_RE, "")
+    .replace(/\n[ \t]*\n[ \t]*\n/g, "\n\n");
+}
+
 // Defends the dev preview against the most common second-build regression:
 // the AI introduces a NEW `.jsx` file (a component or page) but forgets to
 // re-emit `index.html` with a matching `<script type="text/babel" src="…">`
