@@ -789,7 +789,18 @@ export default function Builder() {
   // We need a stable ref to handleSend so the auto-prompt effect can call
   // the latest version without listing every dependency it transitively
   // touches.
-  const handleSendRef = useRef<((overridePrompt?: string) => void) | null>(null);
+  const handleSendRef = useRef<
+    | ((
+        overridePrompt?: string,
+        overrides?: {
+          modelKey?: "haiku" | "sonnet" | "opus";
+          planMode?: boolean;
+          urls?: string[];
+          files?: File[];
+        },
+      ) => void)
+    | null
+  >(null);
   const [activeFile, setActiveFile] = useState<string>("src/app/page.tsx");
   const [openBuildId, setOpenBuildId] = useState<string | null>(null);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
@@ -1510,8 +1521,8 @@ export default function Builder() {
             {activeTab === "preview" && (
               <PreviewPane
                 key={iframeKey}
-                username={username}
-                slug={slug}
+                username={username!}
+                slug={slug!}
                 viewport={viewport}
                 setViewport={setViewport}
                 isBuilding={isStreaming}
@@ -1520,8 +1531,8 @@ export default function Builder() {
             )}
             {activeTab === "files" && (
               <FilesPane
-                username={username}
-                slug={slug}
+                username={username!}
+                slug={slug!}
                 activeFile={activeFile}
                 setActiveFile={setActiveFile}
               />
