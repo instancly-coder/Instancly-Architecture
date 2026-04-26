@@ -226,6 +226,32 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Project"
+    patch:
+      operationId: updateProject
+      tags: [projects]
+      summary: Update a project's listing fields (owner only)
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema: { type: string }
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProjectBody"
+      responses:
+        "200":
+          description: The updated project detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
   /projects/{username}/{slug}/builds:
     get:
       operationId: listProjectBuilds
@@ -611,6 +637,57 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/ExploreItem"
+  /templates:
+    get:
+      operationId: listTemplates
+      tags: [explore]
+      summary: List admin-featured public templates
+      responses:
+        "200":
+          description: Templates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TemplateItem"
+  /admin/templates:
+    get:
+      operationId: listAdminTemplates
+      tags: [admin]
+      summary: All public projects, with featured status, for admin curation
+      responses:
+        "200":
+          description: Admin templates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminTemplateItem"
+  /admin/projects/{id}/feature-template:
+    patch:
+      operationId: setProjectFeaturedTemplate
+      tags: [admin]
+      summary: Toggle a project's admin-featured-template flag
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetFeaturedTemplateBody"
+      responses:
+        "200":
+          description: Updated row
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminTemplateItem"
   /admin/me:
     get:
       operationId: getAdminMe
@@ -786,7 +863,11 @@ components:
         framework: { type: string }
         status: { type: string }
         isPublic: { type: boolean }
+        isFeaturedTemplate: { type: boolean }
         clones: { type: integer }
+        coverImageUrl:
+          type: string
+          nullable: true
         lastBuiltAt:
           type: string
           format: date-time
@@ -802,7 +883,9 @@ components:
         - framework
         - status
         - isPublic
+        - isFeaturedTemplate
         - clones
+        - coverImageUrl
         - lastBuiltAt
         - buildsCount
     ProjectOwner:
@@ -829,6 +912,13 @@ components:
         framework: { type: string }
         status: { type: string }
         isPublic: { type: boolean }
+        isFeaturedTemplate: { type: boolean }
+        features:
+          type: array
+          items: { type: string }
+        coverImageUrl:
+          type: string
+          nullable: true
         clones: { type: integer }
         createdAt:
           type: string
@@ -851,12 +941,29 @@ components:
         - framework
         - status
         - isPublic
+        - isFeaturedTemplate
+        - features
+        - coverImageUrl
         - clones
         - createdAt
         - lastBuiltAt
         - owner
         - buildsCount
         - lastBuildAt
+    UpdateProjectBody:
+      type: object
+      description: Patch any subset of project listing/visibility fields.
+      properties:
+        name: { type: string }
+        description: { type: string }
+        framework: { type: string }
+        isPublic: { type: boolean }
+        features:
+          type: array
+          items: { type: string }
+        coverImageUrl:
+          type: string
+          nullable: true
     Build:
       type: object
       properties:
@@ -931,6 +1038,9 @@ components:
         description: { type: string }
         framework: { type: string }
         clones: { type: integer }
+        coverImageUrl:
+          type: string
+          nullable: true
         lastBuiltAt:
           type: string
           format: date-time
@@ -943,9 +1053,76 @@ components:
         - description
         - framework
         - clones
+        - coverImageUrl
         - lastBuiltAt
         - author
         - authorDisplayName
+    TemplateItem:
+      type: object
+      description: A public, admin-featured template surfaced on /templates.
+      properties:
+        id: { type: string }
+        name: { type: string }
+        slug: { type: string }
+        description: { type: string }
+        framework: { type: string }
+        features:
+          type: array
+          items: { type: string }
+        coverImageUrl:
+          type: string
+          nullable: true
+        clones: { type: integer }
+        author: { type: string }
+        authorDisplayName: { type: string }
+      required:
+        - id
+        - name
+        - slug
+        - description
+        - framework
+        - features
+        - coverImageUrl
+        - clones
+        - author
+        - authorDisplayName
+    AdminTemplateItem:
+      type: object
+      description: Admin curation row — every public project, featured or not.
+      properties:
+        id: { type: string }
+        name: { type: string }
+        slug: { type: string }
+        description: { type: string }
+        framework: { type: string }
+        coverImageUrl:
+          type: string
+          nullable: true
+        clones: { type: integer }
+        isFeaturedTemplate: { type: boolean }
+        author: { type: string }
+        authorDisplayName: { type: string }
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - slug
+        - description
+        - framework
+        - coverImageUrl
+        - clones
+        - isFeaturedTemplate
+        - author
+        - authorDisplayName
+        - createdAt
+    SetFeaturedTemplateBody:
+      type: object
+      properties:
+        isFeaturedTemplate: { type: boolean }
+      required:
+        - isFeaturedTemplate
     FileEncoding:
       type: string
       enum: [utf8, base64]

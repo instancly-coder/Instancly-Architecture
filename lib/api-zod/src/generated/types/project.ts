@@ -15,6 +15,9 @@ export interface Project {
   framework: string;
   status: string;
   isPublic: boolean;
+  isFeaturedTemplate: boolean;
+  features: string[];
+  coverImageUrl: string | null;
   clones: number;
   createdAt: string;
   lastBuiltAt: string;

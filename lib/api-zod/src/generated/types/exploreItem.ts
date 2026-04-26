@@ -13,6 +13,7 @@ export interface ExploreItem {
   description: string;
   framework: string;
   clones: number;
+  coverImageUrl: string | null;
   lastBuiltAt: string;
   author: string;
   authorDisplayName: string;

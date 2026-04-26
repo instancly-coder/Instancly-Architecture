@@ -72,7 +72,9 @@ export interface ProjectListItem {
   framework: string;
   status: string;
   isPublic: boolean;
+  isFeaturedTemplate: boolean;
   clones: number;
+  coverImageUrl: string | null;
   lastBuiltAt: string;
   createdAt?: string;
   buildsCount: number;
@@ -93,12 +95,27 @@ export interface Project {
   framework: string;
   status: string;
   isPublic: boolean;
+  isFeaturedTemplate: boolean;
+  features: string[];
+  coverImageUrl: string | null;
   clones: number;
   createdAt: string;
   lastBuiltAt: string;
   owner: ProjectOwner;
   buildsCount: number;
   lastBuildAt: string | null;
+}
+
+/**
+ * Patch any subset of project listing/visibility fields.
+ */
+export interface UpdateProjectBody {
+  name?: string;
+  description?: string;
+  framework?: string;
+  isPublic?: boolean;
+  features?: string[];
+  coverImageUrl?: string | null;
 }
 
 export interface Build {
@@ -146,9 +163,47 @@ export interface ExploreItem {
   description: string;
   framework: string;
   clones: number;
+  coverImageUrl: string | null;
   lastBuiltAt: string;
   author: string;
   authorDisplayName: string;
+}
+
+/**
+ * A public, admin-featured template surfaced on /templates.
+ */
+export interface TemplateItem {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  framework: string;
+  features: string[];
+  coverImageUrl: string | null;
+  clones: number;
+  author: string;
+  authorDisplayName: string;
+}
+
+/**
+ * Admin curation row — every public project, featured or not.
+ */
+export interface AdminTemplateItem {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  framework: string;
+  coverImageUrl: string | null;
+  clones: number;
+  isFeaturedTemplate: boolean;
+  author: string;
+  authorDisplayName: string;
+  createdAt: string;
+}
+
+export interface SetFeaturedTemplateBody {
+  isFeaturedTemplate: boolean;
 }
 
 export type FileEncoding = (typeof FileEncoding)[keyof typeof FileEncoding];

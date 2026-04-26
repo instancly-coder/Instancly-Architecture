@@ -6,18 +6,18 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface ProjectListItem {
+/**
+ * A public, admin-featured template surfaced on /templates.
+ */
+export interface TemplateItem {
   id: string;
   name: string;
   slug: string;
   description: string;
   framework: string;
-  status: string;
-  isPublic: boolean;
-  isFeaturedTemplate: boolean;
-  clones: number;
+  features: string[];
   coverImageUrl: string | null;
-  lastBuiltAt: string;
-  createdAt?: string;
-  buildsCount: number;
+  clones: number;
+  author: string;
+  authorDisplayName: string;
 }

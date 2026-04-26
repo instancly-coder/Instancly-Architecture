@@ -6,18 +6,19 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface ProjectListItem {
+/**
+ * Admin curation row — every public project, featured or not.
+ */
+export interface AdminTemplateItem {
   id: string;
   name: string;
   slug: string;
   description: string;
   framework: string;
-  status: string;
-  isPublic: boolean;
-  isFeaturedTemplate: boolean;
-  clones: number;
   coverImageUrl: string | null;
-  lastBuiltAt: string;
-  createdAt?: string;
-  buildsCount: number;
+  clones: number;
+  isFeaturedTemplate: boolean;
+  author: string;
+  authorDisplayName: string;
+  createdAt: string;
 }

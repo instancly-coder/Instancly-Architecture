@@ -84,7 +84,9 @@ export const ListMyProjectsResponseItem = zod.object({
   framework: zod.string(),
   status: zod.string(),
   isPublic: zod.boolean(),
+  isFeaturedTemplate: zod.boolean(),
   clones: zod.number(),
+  coverImageUrl: zod.string().nullable(),
   lastBuiltAt: zod.string().datetime({}),
   createdAt: zod.string().datetime({}).optional(),
   buildsCount: zod.number(),
@@ -126,7 +128,9 @@ export const RenameMyProjectResponse = zod.object({
   framework: zod.string(),
   status: zod.string(),
   isPublic: zod.boolean(),
+  isFeaturedTemplate: zod.boolean(),
   clones: zod.number(),
+  coverImageUrl: zod.string().nullable(),
   lastBuiltAt: zod.string().datetime({}),
   createdAt: zod.string().datetime({}).optional(),
   buildsCount: zod.number(),
@@ -190,7 +194,9 @@ export const ListUserProjectsResponseItem = zod.object({
   framework: zod.string(),
   status: zod.string(),
   isPublic: zod.boolean(),
+  isFeaturedTemplate: zod.boolean(),
   clones: zod.number(),
+  coverImageUrl: zod.string().nullable(),
   lastBuiltAt: zod.string().datetime({}),
   createdAt: zod.string().datetime({}).optional(),
   buildsCount: zod.number(),
@@ -213,6 +219,52 @@ export const GetProjectResponse = zod.object({
   framework: zod.string(),
   status: zod.string(),
   isPublic: zod.boolean(),
+  isFeaturedTemplate: zod.boolean(),
+  features: zod.array(zod.string()),
+  coverImageUrl: zod.string().nullable(),
+  clones: zod.number(),
+  createdAt: zod.string().datetime({}),
+  lastBuiltAt: zod.string().datetime({}),
+  owner: zod.object({
+    id: zod.string(),
+    username: zod.string(),
+    displayName: zod.string(),
+    avatarUrl: zod.string().nullable(),
+  }),
+  buildsCount: zod.number(),
+  lastBuildAt: zod.string().datetime({}).nullable(),
+});
+
+/**
+ * @summary Update a project's listing fields (owner only)
+ */
+export const UpdateProjectParams = zod.object({
+  username: zod.string(),
+  slug: zod.string(),
+});
+
+export const UpdateProjectBody = zod
+  .object({
+    name: zod.string().optional(),
+    description: zod.string().optional(),
+    framework: zod.string().optional(),
+    isPublic: zod.boolean().optional(),
+    features: zod.array(zod.string()).optional(),
+    coverImageUrl: zod.string().nullish(),
+  })
+  .describe("Patch any subset of project listing\/visibility fields.");
+
+export const UpdateProjectResponse = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  slug: zod.string(),
+  description: zod.string(),
+  framework: zod.string(),
+  status: zod.string(),
+  isPublic: zod.boolean(),
+  isFeaturedTemplate: zod.boolean(),
+  features: zod.array(zod.string()),
+  coverImageUrl: zod.string().nullable(),
   clones: zod.number(),
   createdAt: zod.string().datetime({}),
   lastBuiltAt: zod.string().datetime({}),
@@ -615,11 +667,80 @@ export const ExploreResponseItem = zod.object({
   description: zod.string(),
   framework: zod.string(),
   clones: zod.number(),
+  coverImageUrl: zod.string().nullable(),
   lastBuiltAt: zod.string().datetime({}),
   author: zod.string(),
   authorDisplayName: zod.string(),
 });
 export const ExploreResponse = zod.array(ExploreResponseItem);
+
+/**
+ * @summary List admin-featured public templates
+ */
+export const ListTemplatesResponseItem = zod
+  .object({
+    id: zod.string(),
+    name: zod.string(),
+    slug: zod.string(),
+    description: zod.string(),
+    framework: zod.string(),
+    features: zod.array(zod.string()),
+    coverImageUrl: zod.string().nullable(),
+    clones: zod.number(),
+    author: zod.string(),
+    authorDisplayName: zod.string(),
+  })
+  .describe("A public, admin-featured template surfaced on \/templates.");
+export const ListTemplatesResponse = zod.array(ListTemplatesResponseItem);
+
+/**
+ * @summary All public projects, with featured status, for admin curation
+ */
+export const ListAdminTemplatesResponseItem = zod
+  .object({
+    id: zod.string(),
+    name: zod.string(),
+    slug: zod.string(),
+    description: zod.string(),
+    framework: zod.string(),
+    coverImageUrl: zod.string().nullable(),
+    clones: zod.number(),
+    isFeaturedTemplate: zod.boolean(),
+    author: zod.string(),
+    authorDisplayName: zod.string(),
+    createdAt: zod.string().datetime({}),
+  })
+  .describe("Admin curation row — every public project, featured or not.");
+export const ListAdminTemplatesResponse = zod.array(
+  ListAdminTemplatesResponseItem,
+);
+
+/**
+ * @summary Toggle a project's admin-featured-template flag
+ */
+export const SetProjectFeaturedTemplateParams = zod.object({
+  id: zod.string(),
+});
+
+export const SetProjectFeaturedTemplateBody = zod.object({
+  isFeaturedTemplate: zod.boolean(),
+});
+
+export const SetProjectFeaturedTemplateResponse = zod
+  .object({
+    id: zod.string(),
+    name: zod.string(),
+    slug: zod.string(),
+    description: zod.string(),
+    framework: zod.string(),
+    coverImageUrl: zod.string().nullable(),
+    clones: zod.number(),
+    isFeaturedTemplate: zod.boolean(),
+    author: zod.string(),
+    authorDisplayName: zod.string(),
+    createdAt: zod.string().datetime({}),
+  })
+  .describe("Admin curation row — every public project, featured or not.");
 
 /**
  * @summary Whether the current user is an admin

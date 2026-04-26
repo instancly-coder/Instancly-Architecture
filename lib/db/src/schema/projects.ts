@@ -7,6 +7,7 @@ import {
   uuid,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { usersTable } from "./users";
 
 export const projectsTable = pgTable(
@@ -22,6 +23,17 @@ export const projectsTable = pgTable(
     framework: text("framework").default("React").notNull(),
     status: text("status").default("live").notNull(),
     isPublic: boolean("is_public").default(true).notNull(),
+    // Admin-curated flag — only featured projects appear on the public
+    // /templates page. Authors can set isPublic themselves; only admins
+    // can flip this on.
+    isFeaturedTemplate: boolean("is_featured_template").default(false).notNull(),
+    // Bullet-list of headline features shown on the project's marketing
+    // card and the dedicated template page. Stored as a Postgres text[]
+    // for cheap server-side filtering later if needed.
+    features: text("features").array().default(sql`'{}'::text[]`).notNull(),
+    // Hosted image URL used as the card thumbnail on /templates and
+    // /explore. Nullable — falls back to the first-letter avatar.
+    coverImageUrl: text("cover_image_url"),
     clones: integer("clones").default(0).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     lastBuiltAt: timestamp("last_built_at", { withTimezone: true }).defaultNow().notNull(),

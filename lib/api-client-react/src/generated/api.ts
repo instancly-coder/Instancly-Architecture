@@ -22,6 +22,7 @@ import type {
   AdminMe,
   AdminRecentBuild,
   AdminStats,
+  AdminTemplateItem,
   AdminUser,
   AppConfig,
   Build,
@@ -42,9 +43,12 @@ import type {
   PublishResponse,
   PublishStatus,
   RenameProjectBody,
+  SetFeaturedTemplateBody,
   SetPrimaryDomainResponse,
+  TemplateItem,
   Transaction,
   UpdateMeBody,
+  UpdateProjectBody,
   UploadProjectFileBody,
   User,
 } from "./api.schemas";
@@ -1012,6 +1016,94 @@ export function useGetProject<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Update a project's listing fields (owner only)
+ */
+export const getUpdateProjectUrl = (username: string, slug: string) => {
+  return `/api/projects/${username}/${slug}`;
+};
+
+export const updateProject = async (
+  username: string,
+  slug: string,
+  updateProjectBody: UpdateProjectBody,
+  options?: RequestInit,
+): Promise<Project> => {
+  return customFetch<Project>(getUpdateProjectUrl(username, slug), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateProjectBody),
+  });
+};
+
+export const getUpdateProjectMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateProject>>,
+    TError,
+    { username: string; slug: string; data: BodyType<UpdateProjectBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateProject>>,
+  TError,
+  { username: string; slug: string; data: BodyType<UpdateProjectBody> },
+  TContext
+> => {
+  const mutationKey = ["updateProject"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateProject>>,
+    { username: string; slug: string; data: BodyType<UpdateProjectBody> }
+  > = (props) => {
+    const { username, slug, data } = props ?? {};
+
+    return updateProject(username, slug, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateProjectMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateProject>>
+>;
+export type UpdateProjectMutationBody = BodyType<UpdateProjectBody>;
+export type UpdateProjectMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update a project's listing fields (owner only)
+ */
+export const useUpdateProject = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateProject>>,
+    TError,
+    { username: string; slug: string; data: BodyType<UpdateProjectBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateProject>>,
+  TError,
+  { username: string; slug: string; data: BodyType<UpdateProjectBody> },
+  TContext
+> => {
+  return useMutation(getUpdateProjectMutationOptions(options));
+};
 
 /**
  * @summary List builds for a project
@@ -2528,6 +2620,244 @@ export function useExplore<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary List admin-featured public templates
+ */
+export const getListTemplatesUrl = () => {
+  return `/api/templates`;
+};
+
+export const listTemplates = async (
+  options?: RequestInit,
+): Promise<TemplateItem[]> => {
+  return customFetch<TemplateItem[]>(getListTemplatesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListTemplatesQueryKey = () => {
+  return [`/api/templates`] as const;
+};
+
+export const getListTemplatesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listTemplates>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listTemplates>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListTemplatesQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listTemplates>>> = ({
+    signal,
+  }) => listTemplates({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listTemplates>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListTemplatesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listTemplates>>
+>;
+export type ListTemplatesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List admin-featured public templates
+ */
+
+export function useListTemplates<
+  TData = Awaited<ReturnType<typeof listTemplates>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listTemplates>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListTemplatesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary All public projects, with featured status, for admin curation
+ */
+export const getListAdminTemplatesUrl = () => {
+  return `/api/admin/templates`;
+};
+
+export const listAdminTemplates = async (
+  options?: RequestInit,
+): Promise<AdminTemplateItem[]> => {
+  return customFetch<AdminTemplateItem[]>(getListAdminTemplatesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListAdminTemplatesQueryKey = () => {
+  return [`/api/admin/templates`] as const;
+};
+
+export const getListAdminTemplatesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listAdminTemplates>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listAdminTemplates>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListAdminTemplatesQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listAdminTemplates>>
+  > = ({ signal }) => listAdminTemplates({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listAdminTemplates>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListAdminTemplatesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listAdminTemplates>>
+>;
+export type ListAdminTemplatesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary All public projects, with featured status, for admin curation
+ */
+
+export function useListAdminTemplates<
+  TData = Awaited<ReturnType<typeof listAdminTemplates>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listAdminTemplates>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListAdminTemplatesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Toggle a project's admin-featured-template flag
+ */
+export const getSetProjectFeaturedTemplateUrl = (id: string) => {
+  return `/api/admin/projects/${id}/feature-template`;
+};
+
+export const setProjectFeaturedTemplate = async (
+  id: string,
+  setFeaturedTemplateBody: SetFeaturedTemplateBody,
+  options?: RequestInit,
+): Promise<AdminTemplateItem> => {
+  return customFetch<AdminTemplateItem>(getSetProjectFeaturedTemplateUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(setFeaturedTemplateBody),
+  });
+};
+
+export const getSetProjectFeaturedTemplateMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setProjectFeaturedTemplate>>,
+    TError,
+    { id: string; data: BodyType<SetFeaturedTemplateBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setProjectFeaturedTemplate>>,
+  TError,
+  { id: string; data: BodyType<SetFeaturedTemplateBody> },
+  TContext
+> => {
+  const mutationKey = ["setProjectFeaturedTemplate"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setProjectFeaturedTemplate>>,
+    { id: string; data: BodyType<SetFeaturedTemplateBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return setProjectFeaturedTemplate(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetProjectFeaturedTemplateMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setProjectFeaturedTemplate>>
+>;
+export type SetProjectFeaturedTemplateMutationBody =
+  BodyType<SetFeaturedTemplateBody>;
+export type SetProjectFeaturedTemplateMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Toggle a project's admin-featured-template flag
+ */
+export const useSetProjectFeaturedTemplate = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setProjectFeaturedTemplate>>,
+    TError,
+    { id: string; data: BodyType<SetFeaturedTemplateBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof setProjectFeaturedTemplate>>,
+  TError,
+  { id: string; data: BodyType<SetFeaturedTemplateBody> },
+  TContext
+> => {
+  return useMutation(getSetProjectFeaturedTemplateMutationOptions(options));
+};
 
 /**
  * @summary Whether the current user is an admin
