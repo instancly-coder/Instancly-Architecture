@@ -227,6 +227,40 @@ if (typeof window !== "undefined") {
 await import("./user-bundle.jsx");
 `;
 
+// Strip top-level declarations from user .jsx files that would
+// collide with the names our preamble injects (`React`, `ReactDOM`,
+// `useState`, …). The CDN-style code the AI emits commonly contains
+// `const { useState, useEffect } = React;` at the top of each file —
+// harmless under `<script type="text/babel">` but a syntax error after
+// concatenation when the preamble already declares the same names at
+// module scope. We also strip stray `import … from "react"` /
+// `react-dom` lines that some AI variants emit "just in case" — those
+// would clash with the preamble's namespace import of the same module.
+//
+// The regex is intentionally conservative: it only matches **whole-line**
+// patterns, anchored to the start of a line (allowing leading
+// whitespace), so destructures used inside functions or nested blocks
+// are left untouched. Stripped lines are commented out (not deleted)
+// so build-error stack traces still map to original source lines.
+function sanitizeForPreamble(code: string): string {
+  const STRIP_PATTERNS: RegExp[] = [
+    // `import * as X from "react"`, `import X from "react"`,
+    // `import { useState } from "react"`, with or without trailing `;`.
+    // Covers react, react-dom, and react-dom/client.
+    /^[ \t]*import\s+[^;\n]*?\s+from\s+["'](?:react|react-dom|react-dom\/client)["'];?[ \t]*$/gm,
+    // Bare side-effect import: `import "react";` (rare but legal).
+    /^[ \t]*import\s+["'](?:react|react-dom|react-dom\/client)["'];?[ \t]*$/gm,
+    // `const|let|var { useState, useEffect, … } = React;`
+    // (also matches `window.React`, `ReactDOM`, `window.ReactDOM`).
+    /^[ \t]*(?:const|let|var)\s*\{[^}]*\}\s*=\s*(?:window\.)?(?:React|ReactDOM)\s*;?[ \t]*$/gm,
+  ];
+  let out = code;
+  for (const re of STRIP_PATTERNS) {
+    out = out.replace(re, (m) => `// [deploybro] stripped: ${m.trim()}`);
+  }
+  return out;
+}
+
 // Wrap the original CDN-style project in a Vite project and replace
 // `index.html` with a build-friendly version. Returns the rewritten
 // file list. Caller still runs the size budget + base64 encode pass.
@@ -270,14 +304,75 @@ function transformCdnReactToVite(
   // Concatenate all user .jsx files in dependency-friendly order. Each
   // file gets a header comment so build errors can be traced back to
   // the original source.
+  //
+  // Critical: the CDN-style code the AI generates relies on `React`,
+  // `ReactDOM`, and the React hooks (`useState`, `useEffect`, …) being
+  // available as bare globals — that's how `<script src="react.umd.js">`
+  // works in the dev preview. In a Vite-bundled ES module those names
+  // are **undefined identifiers** at build time, so Rollup fails with
+  // "React is not defined" / "useState is not defined" before the
+  // `window.React = React` line in main.jsx can even run.
+  //
+  // We fix this by prepending real ES-module imports to the merged
+  // bundle, then destructuring every hook + helper the AI is taught to
+  // emit (see `lib/components-catalog.ts` system prompt). This keeps
+  // the user code completely unchanged while making it resolvable at
+  // build time *and* runtime.
+  const USER_BUNDLE_PREAMBLE = `// Auto-injected at publish time. Brings the CDN-style globals
+// (React, ReactDOM, useState, …) into module scope so the user's
+// unmodified code resolves at build time AND runtime.
+import * as React from "react";
+import * as ReactDOM from "react-dom";
+import * as ReactDOMClient from "react-dom/client";
+
+const {
+  Fragment,
+  StrictMode,
+  Suspense,
+  Children,
+  Component,
+  PureComponent,
+  cloneElement,
+  createContext,
+  createElement,
+  createRef,
+  forwardRef,
+  isValidElement,
+  lazy,
+  memo,
+  startTransition,
+  useCallback,
+  useContext,
+  useDebugValue,
+  useDeferredValue,
+  useEffect,
+  useId,
+  useImperativeHandle,
+  useInsertionEffect,
+  useLayoutEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  useTransition,
+} = React;
+
+// Some AI variants call \`ReactDOM.createRoot\` (React 18) which lives on
+// react-dom/client, others call legacy \`ReactDOM.render\`. Merge both
+// surfaces so either style works without the user touching their code.
+const _ReactDOMUnified = Object.assign({}, ReactDOM, ReactDOMClient);
+const { createRoot, hydrateRoot, render, hydrate, unmountComponentAtNode, createPortal, flushSync } = _ReactDOMUnified;
+
+`;
   const ordered = orderJsxFilesForConcat(jsxBodies.map((b) => b.path));
   const byPath = new Map(jsxBodies.map((b) => [b.path, b.content] as const));
-  const merged = ordered
-    .map((p) => `// === ${p} ===\n${byPath.get(p) ?? ""}\n`)
+  const userCode = ordered
+    .map((p) => `// === ${p} ===\n${sanitizeForPreamble(byPath.get(p) ?? "")}\n`)
     .join("\n");
   out.push({
     path: "src/user-bundle.jsx",
-    content: merged,
+    content: USER_BUNDLE_PREAMBLE + userCode,
     encoding: "utf8",
   });
 
