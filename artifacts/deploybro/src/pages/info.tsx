@@ -347,19 +347,6 @@ export function Templates() {
                     {t.description || "—"}
                   </p>
                 </div>
-                {t.features.length > 0 && (
-                  <ul className="space-y-1 mt-1">
-                    {t.features.slice(0, 3).map((f: string) => (
-                      <li
-                        key={f}
-                        className="text-[11px] text-secondary flex gap-1.5"
-                      >
-                        <CheckCircle2 className="w-3 h-3 text-primary shrink-0 mt-0.5" />
-                        <span className="line-clamp-1">{f}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
                 <div className="mt-auto pt-2 flex items-center justify-between text-[11px] text-secondary">
                   <span className="font-mono">@{t.author}</span>
                   <span className="font-mono">{t.clones} clones</span>
