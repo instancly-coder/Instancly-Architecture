@@ -145,18 +145,49 @@ Rules for file blocks:
 
 ## String quoting (read this — the #1 source of compile errors)
 
-Babel parses every \`.jsx\` file as real JavaScript. An unescaped apostrophe inside a single-quoted string is a hard syntax error and the whole preview goes red. Get this right every time:
+Babel parses every \`.jsx\` file as real JavaScript. **Mismatched or unescaped quotes are the single biggest cause of red-screen previews.** Get this right every time, every string.
 
-- ✅ **Default to double quotes for any JS/JSX string literal that contains a possessive or contraction.**
+### The two rules that prevent every quote-related crash
+
+1. **Use a different delimiter than the characters that appear in the string.**
+   - String contains an apostrophe (\`'\`)? Wrap it in **double quotes**: \`"today's price"\`.
+   - String contains a double quote (\`"\`)? Wrap it in **single quotes**: \`'He said "hi"'\`.
+   - String contains both? Use **template literals** (backticks): \\\`She said "today's the day"\\\`.
+
+2. **The apostrophe character is \`'\` (U+0027), NOT \`"\`.** When you write the contraction "I've", the second character is an apostrophe \`'\`, *not* a double quote. This is the exact bug that breaks builds:
+
+   ❌ WRONG — uses \`"\` instead of \`'\` inside a double-quoted string, closing it mid-word:
+   \`quote: "I"ve been a customer for years."\`  ← parses as \`"I"\` + garbage
+   \`body: "We"re open every day."\`              ← parses as \`"We"\` + garbage
+   \`label: "Don"t miss out!"\`                   ← parses as \`"Don"\` + garbage
+
+   ✅ RIGHT — apostrophe \`'\` for the contraction, \`"\` only as the string delimiter:
+   \`quote: "I've been a customer for years."\`
+   \`body: "We're open every day."\`
+   \`label: "Don't miss out!"\`
+
+### Concrete picks for common cases
+
+- **Long marketing copy with contractions or possessives** → double quotes:
   \`body: "We quote you a firm number based on today's spot price."\`
-- ✅ **Use template literals (backticks) when the string mixes both kinds of quotes**, or when you need interpolation.
-  \`label: \\\`He said "hi" to today's customer\\\`\`
-- ❌ **Never** write \`'today's'\`, \`'we're'\`, \`'don't'\`, \`'you'll'\`, \`'it's'\` inside single-quoted JS strings — that closes the string at the apostrophe and breaks the file.
-- If you must keep single quotes, escape every apostrophe: \`'today\\\\'s'\` (rarely worth it — just use double quotes).
-- The same rule applies to JSX prop values: prefer \`title="It's live"\` over \`title='It's live'\`. Inside JSX text children (between tags), apostrophes are fine: \`<p>It's live</p>\`.
-- Watch out for **smart quotes** (\`'\`, \`'\`, \`"\`, \`"\`) sneaking in from copywriting — only use straight ASCII quotes (\`'\` and \`"\`) in code. Smart quotes inside identifiers or string delimiters are also a parse error.
+- **Strings with embedded double quotes** (e.g. quoted speech) → single quotes:
+  \`testimonial: 'They told me "you can trust this team" — and they were right.'\`
+- **Strings with both, or anything you're unsure about** → backticks:
+  \\\`headline: \\\\\\\`She said "today's the day" with a smile.\\\\\\\`\\\`
+- **Short URL paths, route names, IDs** → single quotes are fine because they have no apostrophes:
+  \`'/about'\`, \`'submit'\`, \`'primary'\`
 
-When in doubt: **double quotes for strings, backticks for anything tricky.** Save single quotes for short tokens with no apostrophes (e.g. \`'/about'\`, \`'submit'\`).
+### JSX attribute values
+
+- \`<button title="It's live">\` ✅
+- \`<button title='It"s live'>\` ❌ (same trap, different syntax)
+- Inside JSX **text children** (between tags), apostrophes are always fine: \`<p>It's live</p>\`
+
+### Smart quotes are not quotes
+
+Curly/typographic quotes copied from designs or copy docs (\`'\`, \`'\`, \`"\`, \`"\`) are different Unicode characters than ASCII \`'\` and \`"\`. JavaScript will not accept them as string delimiters and will throw "Unexpected character". Always type straight ASCII quotes when writing code.
+
+**Self-check before emitting any \`.jsx\` file:** for every string literal, count the delimiter characters. If a string is wrapped in \`"..."\` and contains a \`"\` inside that isn't escaped or replaced with \`'\`, the file will not parse. Fix it before sending.
 
 ## Canonical example (memorise this shape)
 
