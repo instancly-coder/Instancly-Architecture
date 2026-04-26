@@ -174,9 +174,13 @@ function stripIncompleteFileBlocks(text: string): string {
 // `_(writing path…)_` so historical builds render with the new look too.
 function FileNoticeText({ text }: { text: string }) {
   // Normalize legacy markers up front so we have a single split below.
+  // Also collapse runs of 2+ blank lines (often emitted around file
+  // markers upstream) down to a single newline so the rendered prose
+  // doesn't stack vertical whitespace between Creating/Created rows.
   const normalized = text
     .replace(/_\(updated \*\*([^*]+)\*\*\)_/g, "[[FILE_DONE:$1]]")
-    .replace(/_\(writing ([^)]+?)…\)_/g, "[[FILE_PENDING:$1]]");
+    .replace(/_\(writing ([^)]+?)…\)_/g, "[[FILE_PENDING:$1]]")
+    .replace(/\n[ \t]*\n[\s\n]*/g, "\n");
   // Split on whole marker tokens, keeping the markers as their own
   // entries. Adjacent markers are separated by surrounding "" entries
   // which we filter out below.
@@ -189,7 +193,7 @@ function FileNoticeText({ text }: { text: string }) {
           return (
             <div
               key={i}
-              className="flex items-center gap-2 text-[12px] leading-snug text-secondary/90 my-1"
+              className="flex items-center gap-2 text-[12px] leading-snug text-secondary/90"
             >
               <FileCheck className="w-3.5 h-3.5 shrink-0 text-emerald-500" />
               <span>
@@ -204,7 +208,7 @@ function FileNoticeText({ text }: { text: string }) {
           return (
             <div
               key={i}
-              className="flex items-center gap-2 text-[12px] leading-snug text-secondary/90 my-1"
+              className="flex items-center gap-2 text-[12px] leading-snug text-secondary/90"
             >
               <FilePen className="w-3.5 h-3.5 shrink-0 text-primary animate-pulse" />
               <span>
@@ -222,7 +226,7 @@ function FileNoticeText({ text }: { text: string }) {
         if (!part || /^\s*$/.test(part)) return null;
         return (
           <span key={i} className="whitespace-pre-wrap">
-            {part}
+            {part.replace(/^\n+|\n+$/g, "")}
           </span>
         );
       })}
@@ -1699,6 +1703,39 @@ function ChatPanel({
     setAttachments((prev) => [...prev, ...Array.from(files)].slice(0, 6));
   };
 
+  // --- Auto-scroll while the AI is streaming ---
+  // Keep the latest "Creating …" / "Created …" row in view, but only if
+  // the user is already near the bottom — if they've scrolled up to read
+  // an earlier turn we leave them alone. `stickToBottom` flips false the
+  // moment they scroll up by more than a small slack and flips true again
+  // when they return to the bottom.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const stickToBottom = useRef(true);
+  const onScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const distanceFromBottom =
+      el.scrollHeight - el.scrollTop - el.clientHeight;
+    stickToBottom.current = distanceFromBottom < 80;
+  };
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !stickToBottom.current) return;
+    // Defer until after layout flushes the new rows so scrollHeight is
+    // accurate. requestAnimationFrame instead of setTimeout(0) so we
+    // batch with the paint and don't fight a user's in-flight scroll.
+    const id = requestAnimationFrame(() => {
+      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [
+    typed,
+    pendingPrompt,
+    streamSteps.length,
+    pastBuilds.length,
+    isStreaming,
+  ]);
+
   const addUrl = () => {
     const raw = urlDraft.trim();
     if (!raw) return;
@@ -1722,7 +1759,11 @@ function ChatPanel({
 
   return (
     <>
-      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-5">
+      <div
+        ref={scrollRef}
+        onScroll={onScroll}
+        className="flex-1 overflow-y-auto p-4 flex flex-col gap-3 scroll-smooth"
+      >
         {/* Conversation thread (oldest first, like a chat) */}
         {[...pastBuilds].reverse().map((b) => {
           const open = openBuildId === b.id;
