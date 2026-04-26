@@ -2,8 +2,9 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { useExplore } from "@/lib/api";
+import { useExplore, useMe } from "@/lib/api";
 import { Shell } from "@/pages/info";
+import { DashboardLayout } from "@/components/dashboard-layout";
 
 const FRAMEWORKS = ["all", "Next.js", "React", "Vue", "Vanilla"];
 const SORTS = [
@@ -12,30 +13,46 @@ const SORTS = [
   { value: "alpha", label: "A → Z" },
 ];
 
-export default function Explore() {
-  const [framework, setFramework] = useState("all");
-  const [sort, setSort] = useState("popular");
-  const [q, setQ] = useState("");
-
-  const { data: projects = [], isLoading } = useExplore({ q, framework, sort });
-
+function SearchField({
+  q,
+  onChange,
+  className = "",
+}: {
+  q: string;
+  onChange: (v: string) => void;
+  className?: string;
+}) {
   return (
-    <Shell
-      eyebrow="Explore"
-      title="Explore Projects"
-      intro="Browse what builders are shipping on DeployBro right now. Clone any project to start your own remix."
-      headerActions={
-        <div className="relative w-full md:w-72">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary" />
-          <Input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search projects..."
-            className="pl-9 bg-surface border-border"
-          />
-        </div>
-      }
-    >
+    <div className={`relative ${className}`}>
+      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary" />
+      <Input
+        value={q}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Search projects..."
+        className="pl-9 bg-surface border-border"
+      />
+    </div>
+  );
+}
+
+function ExploreBody({
+  framework,
+  setFramework,
+  sort,
+  setSort,
+  projects,
+  isLoading,
+}: {
+  framework: string;
+  setFramework: (v: string) => void;
+  sort: string;
+  setSort: (v: string) => void;
+  projects: ReturnType<typeof useExplore>["data"];
+  isLoading: boolean;
+}) {
+  const list = projects ?? [];
+  return (
+    <>
       <div className="flex items-center gap-2 mb-8 overflow-x-auto pb-2 no-scrollbar">
         {FRAMEWORKS.map((f) => (
           <button
@@ -67,11 +84,11 @@ export default function Explore() {
 
       {isLoading ? (
         <div className="text-secondary text-sm">Loading…</div>
-      ) : projects.length === 0 ? (
+      ) : list.length === 0 ? (
         <div className="text-secondary text-sm">No projects match.</div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {projects.map((project) => (
+          {list.map((project) => (
             <Link key={project.id} href={`/${project.author}/${project.slug}`}>
               <div className="group border border-border bg-surface rounded-xl overflow-hidden hover-elevate cursor-pointer">
                 <div className="h-32 bg-surface-raised border-b border-border flex items-center justify-center">
@@ -94,6 +111,74 @@ export default function Explore() {
           ))}
         </div>
       )}
+    </>
+  );
+}
+
+export default function Explore() {
+  const [framework, setFramework] = useState("all");
+  const [sort, setSort] = useState("popular");
+  const [q, setQ] = useState("");
+
+  const { data: projects = [], isLoading } = useExplore({ q, framework, sort });
+  // `useMe` 401s for logged-out visitors and resolves with the user
+  // when signed in. We pick the dashboard chrome only once we have a
+  // confirmed session — while it's loading we render the public Shell
+  // so first paint matches what an anonymous visitor would see (no
+  // sidebar flash for the common public-traffic case).
+  const { data: me } = useMe();
+  const isAuthed = !!me?.username;
+
+  // Signed-in: dashboard sidebar + header consistent with Projects /
+  // Library / Billing. The page heading lives inside the main column
+  // so we don't double up titles with the sidebar chrome.
+  if (isAuthed) {
+    return (
+      <DashboardLayout>
+        <div className="px-4 md:px-8 py-6 md:py-8 max-w-6xl mx-auto">
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-6">
+            <div>
+              <div className="text-xs uppercase tracking-wider text-secondary mb-1">
+                Explore
+              </div>
+              <h1 className="text-2xl md:text-3xl font-bold">Explore Projects</h1>
+              <p className="text-sm text-secondary mt-1 max-w-2xl">
+                Browse what builders are shipping on DeployBro right now. Clone
+                any project to start your own remix.
+              </p>
+            </div>
+            <SearchField q={q} onChange={setQ} className="w-full md:w-72" />
+          </div>
+          <ExploreBody
+            framework={framework}
+            setFramework={setFramework}
+            sort={sort}
+            setSort={setSort}
+            projects={projects}
+            isLoading={isLoading}
+          />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  // Public / logged-out: keep the marketing Shell so the page still
+  // shows the marketing nav + footer for SEO and signup conversion.
+  return (
+    <Shell
+      eyebrow="Explore"
+      title="Explore Projects"
+      intro="Browse what builders are shipping on DeployBro right now. Clone any project to start your own remix."
+      headerActions={<SearchField q={q} onChange={setQ} className="w-full md:w-72" />}
+    >
+      <ExploreBody
+        framework={framework}
+        setFramework={setFramework}
+        sort={sort}
+        setSort={setSort}
+        projects={projects}
+        isLoading={isLoading}
+      />
     </Shell>
   );
 }
