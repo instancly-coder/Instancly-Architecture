@@ -5,6 +5,7 @@ import {
   GetUserResponse,
   ListUserProjectsResponse,
 } from "@workspace/api-zod";
+import { setReferralCookieIfAbsent } from "../lib/referral-attribution";
 
 const router: IRouter = Router();
 
@@ -15,6 +16,12 @@ router.get("/users/:username", async (req: Request, res: Response): Promise<void
     res.status(404).json({ status: "error", message: "User not found" });
     return;
   }
+
+  // Drop the short-lived attribution cookie so a later signup from this
+  // visitor is credited back to this creator. Helper guards against
+  // overwriting an existing cookie (first-touch wins) and skips the
+  // write when an `auth_token` is already present.
+  setReferralCookieIfAbsent(req, res, user.id);
 
   const [stats] = await db
     .select({

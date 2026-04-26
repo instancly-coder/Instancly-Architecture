@@ -5,6 +5,7 @@ import {
   usersTable,
   projectsTable,
   projectDomainsTable,
+  referralEarningsTable,
   transactionsTable,
 } from "@workspace/db";
 import {
@@ -14,7 +15,10 @@ import {
   ListMyTransactionsResponse,
   RenameMyProjectResponse,
   CreateMyProjectResponse,
+  GetMyEarningsSummaryResponse,
+  ListMyEarningsResponse,
 } from "@workspace/api-zod";
+import { DEFAULT_REFERRAL_COMMISSION_PCT } from "../lib/referral-commission";
 import { authConfigured, getAuthedUser } from "../middlewares/auth";
 import { removeProjectDomain } from "../lib/vercel";
 import { logger } from "../lib/logger";
@@ -152,6 +156,101 @@ router.get("/me/projects", async (req: Request, res: Response): Promise<void> =>
   );
   res.json(data);
 });
+
+router.get(
+  "/me/earnings/summary",
+  async (req: Request, res: Response): Promise<void> => {
+    const user = await getMe(req);
+    if (!user) {
+      res.status(401).json({ status: "error", message: "Unauthenticated" });
+      return;
+    }
+
+    // Aggregate the entire history in one round-trip. `paid` and `pending`
+    // are computed via FILTER clauses so a future "voided" or "reversed"
+    // status doesn't accidentally land in either bucket — only the
+    // explicit statuses we recognise contribute. `totalEarned` is the
+    // gross of everything that hasn't been reversed (paid + pending).
+    const [agg] = await db
+      .select({
+        total: sql<string>`coalesce(sum(${referralEarningsTable.amount}) filter (where ${referralEarningsTable.status} in ('pending','paid')), 0)`,
+        pending: sql<string>`coalesce(sum(${referralEarningsTable.amount}) filter (where ${referralEarningsTable.status} = 'pending'), 0)`,
+        paid: sql<string>`coalesce(sum(${referralEarningsTable.amount}) filter (where ${referralEarningsTable.status} = 'paid'), 0)`,
+      })
+      .from(referralEarningsTable)
+      .where(eq(referralEarningsTable.referrerUserId, user.id));
+
+    res.json(
+      GetMyEarningsSummaryResponse.parse({
+        totalEarned: Number(agg?.total ?? 0),
+        pending: Number(agg?.pending ?? 0),
+        paid: Number(agg?.paid ?? 0),
+        commissionPct:
+          user.referralCommissionPct ?? DEFAULT_REFERRAL_COMMISSION_PCT,
+      }),
+    );
+  },
+);
+
+router.get(
+  "/me/earnings",
+  async (req: Request, res: Response): Promise<void> => {
+    const user = await getMe(req);
+    if (!user) {
+      res.status(401).json({ status: "error", message: "Unauthenticated" });
+      return;
+    }
+
+    // Left-join the referred user (always present, but we still LEFT JOIN
+    // so a deleted user doesn't drop the row) and the source project (may
+    // be NULL because attribution can come from a public profile view, not
+    // just a template). The schema deliberately doesn't FK-constrain
+    // `sourceProjectId` so a deleted template leaves the credit row in
+    // place — see the comment on `users.referredViaProjectId`.
+    const rows = await db
+      .select({
+        id: referralEarningsTable.id,
+        amount: referralEarningsTable.amount,
+        commissionPct: referralEarningsTable.commissionPct,
+        status: referralEarningsTable.status,
+        kind: referralEarningsTable.kind,
+        createdAt: referralEarningsTable.createdAt,
+        paidAt: referralEarningsTable.paidAt,
+        referredUsername: usersTable.username,
+        sourceProjectSlug: projectsTable.slug,
+        sourceProjectName: projectsTable.name,
+      })
+      .from(referralEarningsTable)
+      .leftJoin(
+        usersTable,
+        eq(usersTable.id, referralEarningsTable.referredUserId),
+      )
+      .leftJoin(
+        projectsTable,
+        eq(projectsTable.id, referralEarningsTable.sourceProjectId),
+      )
+      .where(eq(referralEarningsTable.referrerUserId, user.id))
+      .orderBy(desc(referralEarningsTable.createdAt))
+      .limit(200);
+
+    res.json(
+      ListMyEarningsResponse.parse(
+        rows.map((r) => ({
+          id: r.id,
+          amount: Number(r.amount),
+          commissionPct: r.commissionPct,
+          status: r.status,
+          kind: r.kind,
+          referredUsername: r.referredUsername,
+          sourceProjectSlug: r.sourceProjectSlug,
+          sourceProjectName: r.sourceProjectName,
+          createdAt: r.createdAt.toISOString(),
+          paidAt: r.paidAt ? r.paidAt.toISOString() : null,
+        })),
+      ),
+    );
+  },
+);
 
 router.get("/me/transactions", async (req: Request, res: Response): Promise<void> => {
   const user = await getMe(req);

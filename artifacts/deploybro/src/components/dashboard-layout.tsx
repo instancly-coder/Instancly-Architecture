@@ -9,6 +9,7 @@ import {
   Menu,
   X,
   Library,
+  Coins,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -26,6 +27,7 @@ const NAV = [
   { href: "/explore", label: "Explore", icon: Code },
   { href: "/library", label: "Library", icon: Library },
   { href: "/dashboard/billing", label: "Billing", icon: CreditCard },
+  { href: "/dashboard/earnings", label: "Earnings", icon: Coins },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];
 

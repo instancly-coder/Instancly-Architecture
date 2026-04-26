@@ -6,13 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface AdminUser {
-  id: string;
-  username: string;
-  email: string;
-  plan: string;
-  balance: number;
-  status: string;
-  signupDate: string;
+export interface UpdateUserCommissionBody {
+  /**
+   * @minimum 0
+   * @maximum 100
+   */
   referralCommissionPct: number | null;
 }

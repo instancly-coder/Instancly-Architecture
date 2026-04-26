@@ -363,6 +363,35 @@ export interface AdminUser {
   balance: number;
   status: string;
   signupDate: string;
+  referralCommissionPct: number | null;
+}
+
+export interface UpdateUserCommissionBody {
+  /**
+   * @minimum 0
+   * @maximum 100
+   */
+  referralCommissionPct: number | null;
+}
+
+export interface EarningsSummary {
+  totalEarned: number;
+  pending: number;
+  paid: number;
+  commissionPct: number;
+}
+
+export interface Earning {
+  id: string;
+  amount: number;
+  commissionPct: number;
+  status: string;
+  kind: string;
+  referredUsername: string | null;
+  sourceProjectSlug: string | null;
+  sourceProjectName: string | null;
+  createdAt: string;
+  paidAt: string | null;
 }
 
 export interface AdminCostByModel {

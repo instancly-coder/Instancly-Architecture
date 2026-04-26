@@ -788,8 +788,67 @@ export const ListAdminUsersResponseItem = zod.object({
   balance: zod.number(),
   status: zod.string(),
   signupDate: zod.string(),
+  referralCommissionPct: zod.number().nullable(),
 });
 export const ListAdminUsersResponse = zod.array(ListAdminUsersResponseItem);
+
+/**
+ * Sets `users.referralCommissionPct` for the given user. Pass `null` to clear the override and fall back to the platform default (15%).
+
+ * @summary Override a user's referral commission %
+ */
+export const UpdateAdminUserCommissionPctParams = zod.object({
+  id: zod.string(),
+});
+
+export const updateAdminUserCommissionPctBodyReferralCommissionPctMin = 0;
+export const updateAdminUserCommissionPctBodyReferralCommissionPctMax = 100;
+
+export const UpdateAdminUserCommissionPctBody = zod.object({
+  referralCommissionPct: zod
+    .number()
+    .min(updateAdminUserCommissionPctBodyReferralCommissionPctMin)
+    .max(updateAdminUserCommissionPctBodyReferralCommissionPctMax)
+    .nullable(),
+});
+
+export const UpdateAdminUserCommissionPctResponse = zod.object({
+  id: zod.string(),
+  username: zod.string(),
+  email: zod.string(),
+  plan: zod.string(),
+  balance: zod.number(),
+  status: zod.string(),
+  signupDate: zod.string(),
+  referralCommissionPct: zod.number().nullable(),
+});
+
+/**
+ * @summary Aggregate referral earnings for the current user
+ */
+export const GetMyEarningsSummaryResponse = zod.object({
+  totalEarned: zod.number(),
+  pending: zod.number(),
+  paid: zod.number(),
+  commissionPct: zod.number(),
+});
+
+/**
+ * @summary Per-row referral earnings history for the current user
+ */
+export const ListMyEarningsResponseItem = zod.object({
+  id: zod.string(),
+  amount: zod.number(),
+  commissionPct: zod.number(),
+  status: zod.string(),
+  kind: zod.string(),
+  referredUsername: zod.string().nullable(),
+  sourceProjectSlug: zod.string().nullable(),
+  sourceProjectName: zod.string().nullable(),
+  createdAt: zod.string().datetime({}),
+  paidAt: zod.string().datetime({}).nullable(),
+});
+export const ListMyEarningsResponse = zod.array(ListMyEarningsResponseItem);
 
 /**
  * @summary AI cost broken down by model

@@ -3,6 +3,7 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import pinoHttp from "pino-http";
 import router from "./routes";
+import stripeWebhookRouter from "./routes/stripe-webhook";
 import { logger } from "./lib/logger";
 import { tryAuth } from "./middlewares/auth";
 
@@ -29,6 +30,14 @@ app.use(
 );
 app.use(cors({ origin: true, credentials: true }));
 app.use(cookieParser());
+
+// Stripe webhook MUST be mounted before the global JSON parser. Stripe
+// signs the raw byte stream, so re-parsing into a JS object and back into
+// JSON would change the bytes (key ordering, whitespace) and the HMAC
+// would never match. The webhook router has its own `express.raw()` body
+// parser scoped to its single POST handler.
+app.use("/api", stripeWebhookRouter);
+
 // Image attachments for AI builds arrive as base64 inside the JSON body —
 // up to 5 images of ~5MB each, plus headroom for the prompt and URL list.
 // 30MB is comfortably above that ceiling without inviting abuse.

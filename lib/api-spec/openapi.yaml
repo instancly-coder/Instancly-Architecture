@@ -740,6 +740,58 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AdminUser"
+  /admin/users/{id}/commission-pct:
+    patch:
+      operationId: updateAdminUserCommissionPct
+      tags: [admin]
+      summary: Override a user's referral commission %
+      description: >
+        Sets `users.referralCommissionPct` for the given user. Pass `null`
+        to clear the override and fall back to the platform default (15%).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserCommissionBody"
+      responses:
+        "200":
+          description: Updated row
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+  /me/earnings/summary:
+    get:
+      operationId: getMyEarningsSummary
+      tags: [me]
+      summary: Aggregate referral earnings for the current user
+      responses:
+        "200":
+          description: Summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EarningsSummary"
+  /me/earnings:
+    get:
+      operationId: listMyEarnings
+      tags: [me]
+      summary: Per-row referral earnings history for the current user
+      responses:
+        "200":
+          description: Earnings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Earning"
   /admin/cost-by-model:
     get:
       operationId: listAdminCostByModel
@@ -1401,6 +1453,10 @@ components:
         balance: { type: number }
         status: { type: string }
         signupDate: { type: string }
+        # NULL = use the platform default (15%). Stored as an integer percent.
+        referralCommissionPct:
+          type: integer
+          nullable: true
       required:
         - id
         - username
@@ -1409,6 +1465,65 @@ components:
         - balance
         - status
         - signupDate
+        - referralCommissionPct
+    UpdateUserCommissionBody:
+      type: object
+      properties:
+        # NULL clears the override and falls back to the platform default.
+        referralCommissionPct:
+          type: integer
+          nullable: true
+          minimum: 0
+          maximum: 100
+      required:
+        - referralCommissionPct
+    EarningsSummary:
+      type: object
+      properties:
+        totalEarned: { type: number }
+        pending: { type: number }
+        paid: { type: number }
+        commissionPct: { type: integer }
+      required:
+        - totalEarned
+        - pending
+        - paid
+        - commissionPct
+    Earning:
+      type: object
+      properties:
+        id: { type: string }
+        amount: { type: number }
+        commissionPct: { type: integer }
+        status: { type: string }
+        kind: { type: string }
+        referredUsername:
+          type: string
+          nullable: true
+        sourceProjectSlug:
+          type: string
+          nullable: true
+        sourceProjectName:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        paidAt:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - amount
+        - commissionPct
+        - status
+        - kind
+        - referredUsername
+        - sourceProjectSlug
+        - sourceProjectName
+        - createdAt
+        - paidAt
     AdminCostByModel:
       type: object
       properties:

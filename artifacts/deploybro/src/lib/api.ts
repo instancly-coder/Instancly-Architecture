@@ -19,6 +19,8 @@ import type {
   DomainDnsMismatch,
   DomainSuggestedRecord,
   DomainVerificationRecord,
+  Earning as GeneratedEarning,
+  EarningsSummary as GeneratedEarningsSummary,
   ExploreItem,
   Me,
   Project,
@@ -126,6 +128,23 @@ export function useMyTransactions() {
   return useQuery({
     queryKey: ["me", "transactions"],
     queryFn: () => request<ApiTransaction[]>("/me/transactions"),
+  });
+}
+
+export type ApiEarning = GeneratedEarning;
+export type ApiEarningsSummary = GeneratedEarningsSummary;
+
+export function useMyEarningsSummary() {
+  return useQuery({
+    queryKey: ["me", "earnings", "summary"],
+    queryFn: () => request<ApiEarningsSummary>("/me/earnings/summary"),
+  });
+}
+
+export function useMyEarnings() {
+  return useQuery({
+    queryKey: ["me", "earnings"],
+    queryFn: () => request<ApiEarning[]>("/me/earnings"),
   });
 }
 
@@ -416,6 +435,22 @@ export function useAdminRecentBuilds() {
 }
 export function useAdminUsers() {
   return useQuery({ queryKey: ["admin", "users"], queryFn: () => request<AdminUser[]>("/admin/users") });
+}
+
+export function useUpdateUserCommissionPct() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: string; referralCommissionPct: number | null }) =>
+      request<AdminUser>(`/admin/users/${vars.id}/commission-pct`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          referralCommissionPct: vars.referralCommissionPct,
+        }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "users"] });
+    },
+  });
 }
 export function useAdminCostByModel() {
   return useQuery({ queryKey: ["admin", "cost-by-model"], queryFn: () => request<AdminCostByModel[]>("/admin/cost-by-model") });

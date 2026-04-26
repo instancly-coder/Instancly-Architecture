@@ -3,6 +3,10 @@ import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
 import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { logger } from "../lib/logger";
+import {
+  clearReferralCookie,
+  readReferralAttribution,
+} from "../lib/referral-attribution";
 
 const JWKS_URL = process.env.AUTH_JWKS_URL;
 const ISSUER = process.env.AUTH_ISSUER_URL;
@@ -73,7 +77,11 @@ function extractToken(req: Request): string | null {
   return cookieToken ?? null;
 }
 
-async function ensureUser(payload: JWTPayload): Promise<AuthedUser> {
+async function ensureUser(
+  payload: JWTPayload,
+  req: Request,
+  res: Response,
+): Promise<AuthedUser> {
   const sub = String(payload.sub ?? "");
   const email =
     String(payload.email ?? payload.preferred_username ?? `${sub}@unknown`);
@@ -120,6 +128,16 @@ async function ensureUser(payload: JWTPayload): Promise<AuthedUser> {
     finalUsername = `${username}-${n++}`;
   }
 
+  // Read the referral attribution cookie BEFORE inserting so we can stamp
+  // the new row with `referredByUserId` / `referredViaProjectId` in a
+  // single insert. We also clear the cookie afterwards (regardless of
+  // whether we found one) so a shared device doesn't re-attribute the
+  // next person who signs up on it to the same creator.
+  //
+  // We pass `null` for selfUserId because the user doesn't exist yet —
+  // there is no "self" to compare against until after the insert.
+  const attribution = readReferralAttribution(req, null);
+
   const [created] = await db
     .insert(usersTable)
     .values({
@@ -127,8 +145,15 @@ async function ensureUser(payload: JWTPayload): Promise<AuthedUser> {
       username: finalUsername,
       displayName,
       avatarUrl: (payload.picture as string | undefined) ?? null,
+      referredByUserId: attribution?.referrerUserId ?? null,
+      referredViaProjectId: attribution?.referredViaProjectId ?? null,
     })
     .returning();
+
+  // Always clear the cookie post-signup, even when no usable
+  // attribution was found, so a malformed/expired cookie can't linger
+  // on a shared device and re-attribute the next person who signs up.
+  clearReferralCookie(res);
 
   return {
     id: created.id,
@@ -219,7 +244,7 @@ async function getOrCreateDevUser(): Promise<AuthedUser> {
  */
 export async function tryAuth(
   req: Request,
-  _res: Response,
+  res: Response,
   next: NextFunction,
 ): Promise<void> {
   const token = jwks ? extractToken(req) : null;
@@ -245,7 +270,7 @@ export async function tryAuth(
       if (typeof payload.sub !== "string" || !payload.sub.trim()) {
         throw new Error("token is missing a non-empty 'sub' claim");
       }
-      const user = await ensureUser(payload);
+      const user = await ensureUser(payload, req, res);
       (req as AuthedRequest).auth = { payload, user };
       return next();
     } catch (err) {

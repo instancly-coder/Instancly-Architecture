@@ -13,6 +13,7 @@ import {
   CreateProjectBuildResponse,
 } from "@workspace/api-zod";
 import { requireAuth, getAuthedUser } from "../middlewares/auth";
+import { setReferralCookieIfAbsent } from "../lib/referral-attribution";
 import { decryptSecret, encryptSecret } from "../lib/secret-cipher";
 import { provisionAppDatabase, parentProjectId } from "../lib/neon";
 import { logger } from "../lib/logger";
@@ -36,6 +37,15 @@ router.get("/projects/:username/:slug", async (req: Request, res: Response): Pro
     return;
   }
   const { project, user } = row;
+
+  // Public template / project view: drop a first-touch referral cookie so a
+  // later signup from this visitor is credited to this creator AND tagged
+  // with the specific project they clicked through. Only public projects
+  // count as templates worth attributing — viewing a private project (which
+  // requires auth anyway) shouldn't seed an attribution.
+  if (project.isPublic) {
+    setReferralCookieIfAbsent(req, res, user.id, project.id);
+  }
 
   const [counts] = await db
     .select({

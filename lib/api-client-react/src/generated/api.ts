@@ -31,6 +31,8 @@ import type {
   CreateProjectResponse,
   DeleteProjectFileResponse,
   Deployment,
+  Earning,
+  EarningsSummary,
   ExploreItem,
   ExploreParams,
   HealthStatus,
@@ -49,6 +51,7 @@ import type {
   Transaction,
   UpdateMeBody,
   UpdateProjectBody,
+  UpdateUserCommissionBody,
   UploadProjectFileBody,
   User,
 } from "./api.schemas";
@@ -3149,6 +3152,246 @@ export function useListAdminUsers<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getListAdminUsersQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Sets `users.referralCommissionPct` for the given user. Pass `null` to clear the override and fall back to the platform default (15%).
+
+ * @summary Override a user's referral commission %
+ */
+export const getUpdateAdminUserCommissionPctUrl = (id: string) => {
+  return `/api/admin/users/${id}/commission-pct`;
+};
+
+export const updateAdminUserCommissionPct = async (
+  id: string,
+  updateUserCommissionBody: UpdateUserCommissionBody,
+  options?: RequestInit,
+): Promise<AdminUser> => {
+  return customFetch<AdminUser>(getUpdateAdminUserCommissionPctUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateUserCommissionBody),
+  });
+};
+
+export const getUpdateAdminUserCommissionPctMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateAdminUserCommissionPct>>,
+    TError,
+    { id: string; data: BodyType<UpdateUserCommissionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateAdminUserCommissionPct>>,
+  TError,
+  { id: string; data: BodyType<UpdateUserCommissionBody> },
+  TContext
+> => {
+  const mutationKey = ["updateAdminUserCommissionPct"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateAdminUserCommissionPct>>,
+    { id: string; data: BodyType<UpdateUserCommissionBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateAdminUserCommissionPct(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateAdminUserCommissionPctMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateAdminUserCommissionPct>>
+>;
+export type UpdateAdminUserCommissionPctMutationBody =
+  BodyType<UpdateUserCommissionBody>;
+export type UpdateAdminUserCommissionPctMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Override a user's referral commission %
+ */
+export const useUpdateAdminUserCommissionPct = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateAdminUserCommissionPct>>,
+    TError,
+    { id: string; data: BodyType<UpdateUserCommissionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateAdminUserCommissionPct>>,
+  TError,
+  { id: string; data: BodyType<UpdateUserCommissionBody> },
+  TContext
+> => {
+  return useMutation(getUpdateAdminUserCommissionPctMutationOptions(options));
+};
+
+/**
+ * @summary Aggregate referral earnings for the current user
+ */
+export const getGetMyEarningsSummaryUrl = () => {
+  return `/api/me/earnings/summary`;
+};
+
+export const getMyEarningsSummary = async (
+  options?: RequestInit,
+): Promise<EarningsSummary> => {
+  return customFetch<EarningsSummary>(getGetMyEarningsSummaryUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMyEarningsSummaryQueryKey = () => {
+  return [`/api/me/earnings/summary`] as const;
+};
+
+export const getGetMyEarningsSummaryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyEarningsSummary>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyEarningsSummary>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetMyEarningsSummaryQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMyEarningsSummary>>
+  > = ({ signal }) => getMyEarningsSummary({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyEarningsSummary>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMyEarningsSummaryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyEarningsSummary>>
+>;
+export type GetMyEarningsSummaryQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Aggregate referral earnings for the current user
+ */
+
+export function useGetMyEarningsSummary<
+  TData = Awaited<ReturnType<typeof getMyEarningsSummary>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyEarningsSummary>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMyEarningsSummaryQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Per-row referral earnings history for the current user
+ */
+export const getListMyEarningsUrl = () => {
+  return `/api/me/earnings`;
+};
+
+export const listMyEarnings = async (
+  options?: RequestInit,
+): Promise<Earning[]> => {
+  return customFetch<Earning[]>(getListMyEarningsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListMyEarningsQueryKey = () => {
+  return [`/api/me/earnings`] as const;
+};
+
+export const getListMyEarningsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listMyEarnings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listMyEarnings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListMyEarningsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listMyEarnings>>> = ({
+    signal,
+  }) => listMyEarnings({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listMyEarnings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListMyEarningsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listMyEarnings>>
+>;
+export type ListMyEarningsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Per-row referral earnings history for the current user
+ */
+
+export function useListMyEarnings<
+  TData = Awaited<ReturnType<typeof listMyEarnings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listMyEarnings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListMyEarningsQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

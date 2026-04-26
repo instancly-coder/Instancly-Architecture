@@ -125,6 +125,7 @@ router.get("/admin/users", requireAdmin, async (_req: Request, res: Response): P
       balance: usersTable.balance,
       status: usersTable.status,
       createdAt: usersTable.createdAt,
+      referralCommissionPct: usersTable.referralCommissionPct,
     })
     .from(usersTable)
     .orderBy(desc(usersTable.createdAt));
@@ -138,10 +139,74 @@ router.get("/admin/users", requireAdmin, async (_req: Request, res: Response): P
         balance: Number(r.balance),
         status: r.status,
         signupDate: r.createdAt.toISOString().slice(0, 10),
+        referralCommissionPct: r.referralCommissionPct,
       })),
     ),
   );
 });
+
+// Override (or clear) a single user's referral commission %. Pass `null`
+// to fall back to the platform default. We deliberately don't accept a
+// blank `{}` body — the field is required in the request schema so the
+// "did the admin mean to clear it?" intent is unambiguous.
+router.patch(
+  "/admin/users/:id/commission-pct",
+  requireAdmin,
+  async (req: Request, res: Response): Promise<void> => {
+    const id = String(req.params.id);
+    const body = (req.body ?? {}) as { referralCommissionPct?: unknown };
+
+    if (!("referralCommissionPct" in body)) {
+      res.status(400).json({
+        status: "error",
+        message: "referralCommissionPct is required (use null to clear).",
+      });
+      return;
+    }
+    const raw = body.referralCommissionPct;
+    let nextValue: number | null;
+    if (raw === null) {
+      nextValue = null;
+    } else if (typeof raw === "number" && Number.isInteger(raw) && raw >= 0 && raw <= 100) {
+      nextValue = raw;
+    } else {
+      res.status(400).json({
+        status: "error",
+        message: "referralCommissionPct must be an integer 0-100, or null.",
+      });
+      return;
+    }
+
+    const [updated] = await db
+      .update(usersTable)
+      .set({ referralCommissionPct: nextValue })
+      .where(eq(usersTable.id, id))
+      .returning({
+        id: usersTable.id,
+        username: usersTable.username,
+        email: usersTable.email,
+        plan: usersTable.plan,
+        balance: usersTable.balance,
+        status: usersTable.status,
+        createdAt: usersTable.createdAt,
+        referralCommissionPct: usersTable.referralCommissionPct,
+      });
+    if (!updated) {
+      res.status(404).json({ status: "error", message: "User not found" });
+      return;
+    }
+    res.json({
+      id: updated.id,
+      username: updated.username,
+      email: updated.email,
+      plan: updated.plan,
+      balance: Number(updated.balance),
+      status: updated.status,
+      signupDate: updated.createdAt.toISOString().slice(0, 10),
+      referralCommissionPct: updated.referralCommissionPct,
+    });
+  },
+);
 
 // Admin curation list — every public project, marked with whether it's
 // currently surfaced on /templates. We deliberately include unfeatured

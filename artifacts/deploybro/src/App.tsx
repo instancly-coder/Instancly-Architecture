@@ -31,6 +31,7 @@ import SignupUsername from "@/pages/signup-username";
 import Handler from "@/pages/handler";
 import Dashboard from "@/pages/dashboard";
 import Billing from "@/pages/dashboard/billing";
+import Earnings from "@/pages/dashboard/earnings";
 import Settings from "@/pages/dashboard/settings";
 import Explore from "@/pages/explore";
 import Library from "@/pages/library";
@@ -82,6 +83,7 @@ function Router() {
       <Route path="/handler/:rest*" component={Handler} />
       <Route path="/dashboard" component={gated(Dashboard)} />
       <Route path="/dashboard/billing" component={gated(Billing)} />
+      <Route path="/dashboard/earnings" component={gated(Earnings)} />
       <Route path="/dashboard/settings" component={gated(Settings)} />
       <Route path="/explore" component={Explore} />
       <Route path="/pricing" component={Pricing} />
