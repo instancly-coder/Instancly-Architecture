@@ -129,7 +129,7 @@ export default function Project() {
                 <div className="w-3 h-3 rounded-full bg-gray-300"></div>
               </div>
               <div className="mx-auto text-xs font-mono text-gray-500 bg-white px-24 py-1 rounded border border-gray-200">
-                {slug}-{username}.deploybro.app
+                {slug}.deploybro.app
               </div>
             </div>
             <div className="flex-1 flex items-center justify-center bg-gray-50 text-black">

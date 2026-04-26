@@ -93,10 +93,17 @@ export type VercelDeployment = {
 };
 
 // Vercel project names are 1-100 chars, lowercase, allow `[a-z0-9-]`. We
-// derive from `<slug>-<username>` so re-publishes can find the same project.
-export function projectNameFor(username: string, slug: string): string {
-  const raw = `${slug}-${username}`.toLowerCase();
-  const safe = raw.replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+// derive from the project's slug only so the live URL stays clean
+// (`<slug>.deploybro.com`) and re-publishes can find the same project.
+// Slugs are unique per-user in our DB; on the rare cross-user collision
+// Vercel will reject the duplicate name and the publish surfaces an error.
+// The `username` param is kept in the signature so call sites don't churn.
+export function projectNameFor(_username: string, slug: string): string {
+  const safe = slug
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
   return safe.slice(0, 100) || "deploybro-app";
 }
 
