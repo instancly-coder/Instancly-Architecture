@@ -3111,17 +3111,21 @@ function PaneShell({
 }) {
   return (
     <div className="absolute inset-0 overflow-auto bg-background">
-      <div className="max-w-7xl mx-auto px-4 md:px-8 py-6 md:py-8">
-        <div className="flex flex-wrap items-end justify-between gap-3 mb-6 pb-5 border-b border-border">
+      <div className="w-full px-5 md:px-8 lg:px-10 xl:px-12 py-6 md:py-8 lg:py-10">
+        <div className="flex flex-wrap items-end justify-between gap-3 mb-7 pb-5 border-b border-border">
           <div className="min-w-0">
-            <h1 className="text-xl md:text-2xl font-bold tracking-tight">
+            <h1 className="text-xl md:text-2xl lg:text-[26px] font-bold tracking-tight">
               {title}
             </h1>
             {subtitle && (
-              <p className="text-sm text-secondary mt-1 max-w-2xl">{subtitle}</p>
+              <p className="text-sm text-secondary mt-1.5 max-w-2xl leading-relaxed">
+                {subtitle}
+              </p>
             )}
           </div>
-          {actions && <div className="flex items-center gap-2">{actions}</div>}
+          {actions && (
+            <div className="flex items-center gap-2 flex-wrap">{actions}</div>
+          )}
         </div>
         <div className="space-y-8 pb-8">{children}</div>
       </div>
@@ -3225,7 +3229,7 @@ function IntegrationsView() {
           title="Available services"
           hint="Tap any service to connect or manage credentials."
         />
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
           {items.map((it) => (
             <div
               key={it.name}
@@ -4615,8 +4619,8 @@ function SettingsPane({
       title="Project settings"
       subtitle="Configure routing, visibility, and project metadata."
     >
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 rounded-xl border border-border bg-surface p-6 space-y-4">
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-6">
+        <div className="rounded-xl border border-border bg-surface p-6 space-y-5">
           <div className="grid gap-2">
             <Label htmlFor="name">Project name</Label>
             <Input
