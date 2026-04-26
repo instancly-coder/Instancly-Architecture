@@ -731,12 +731,6 @@ export default function Builder() {
   // code" → "Saving generated files" → "Done") rather than a single
   // shimmering spinner that hides the actual phase.
   const [streamSteps, setStreamSteps] = useState<StreamStep[]>([]);
-  // The "Used $X · Remaining: $Y" line shown after a generation finishes.
-  // Cleared when the user fires the next prompt so it always reflects the
-  // most recent build.
-  const [lastUsage, setLastUsage] = useState<
-    { cost: number; balance: number | null; model: string } | null
-  >(null);
   // Lifted from ChatPanel so handleSend (declared here) can read which model
   // the user picked and pass its key to the backend. Both desktop and mobile
   // ChatPanel instances share this single state, which is the right UX too.
@@ -946,7 +940,6 @@ export default function Builder() {
     setPendingPrompt(prompt);
     setPhase("Thinking");
     setTyped("");
-    setLastUsage(null);
     // Clear any chips from the previous turn the moment a new send fires —
     // they belonged to a different reply and would be misleading next to
     // an in-flight build.
@@ -1103,17 +1096,10 @@ export default function Builder() {
             generatingPushed = true;
           }
         } else if (evt.event === "usage") {
-          // The server tells us exactly what this generation cost and what's
-          // left in the balance, so we can show "Used $X · Remaining: $Y"
-          // without re-fetching just to render that line.
-          setLastUsage({
-            cost: Number(evt.data?.cost ?? 0),
-            balance:
-              evt.data?.balance != null && Number.isFinite(Number(evt.data.balance))
-                ? Number(evt.data.balance)
-                : null,
-            model: String(evt.data?.model ?? selectedModel),
-          });
+          // Server still sends per-generation cost + remaining balance,
+          // but the in-chat "Used $X · Remaining $Y" line was removed
+          // per UX feedback. Intentionally a no-op here so we can
+          // bring it back without server changes if we change our minds.
         } else if (evt.event === "error") {
           // Server marks operator-side outages (out of API credits, key
           // revoked, provider down) with code "upstream_unavailable" so we
@@ -1504,7 +1490,6 @@ export default function Builder() {
             pastBuilds={pastBuilds}
             selectedModel={selectedModel}
             setSelectedModel={setSelectedModel}
-            lastUsage={lastUsage}
             planMode={planMode}
             setPlanMode={setPlanMode}
             attachments={attachments}
@@ -1686,7 +1671,6 @@ export default function Builder() {
           pastBuilds={pastBuilds}
           selectedModel={selectedModel}
           setSelectedModel={setSelectedModel}
-          lastUsage={lastUsage}
           planMode={planMode}
           setPlanMode={setPlanMode}
           attachments={attachments}
@@ -1743,7 +1727,6 @@ function ChatPanel({
   pastBuilds,
   selectedModel,
   setSelectedModel,
-  lastUsage,
   planMode,
   setPlanMode,
   attachments,
@@ -1766,7 +1749,6 @@ function ChatPanel({
   pastBuilds: PastBuild[];
   selectedModel: string;
   setSelectedModel: (v: string) => void;
-  lastUsage: { cost: number; balance: number | null; model: string } | null;
   planMode: boolean;
   setPlanMode: (v: boolean) => void;
   attachments: File[];
@@ -1820,6 +1802,30 @@ function ChatPanel({
     pastBuilds.length,
     isStreaming,
   ]);
+
+  // Belt-and-braces: keep the chat pinned to the bottom whenever the
+  // content's intrinsic size changes (new file marker, suggestions chips
+  // appearing, the streaming bubble collapsing 600ms after a build
+  // finishes, etc.). Without this, react-query refetches that grow
+  // pastBuilds AFTER the streaming bubble has already shrunk can leave
+  // the latest assistant message just below the fold until the user
+  // scrolls. ResizeObserver fires synchronously after layout, so we
+  // jump (no smooth animation) to avoid stacking competing animations.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => {
+      if (!stickToBottom.current) return;
+      el.scrollTop = el.scrollHeight;
+    });
+    ro.observe(el);
+    // Observe the inner content too — the flex column's children grow
+    // even when the scroll container itself doesn't change size.
+    for (const child of Array.from(el.children)) {
+      ro.observe(child);
+    }
+    return () => ro.disconnect();
+  }, []);
 
   const addUrl = () => {
     const raw = urlDraft.trim();
@@ -1875,7 +1881,10 @@ function ChatPanel({
                   <FileNoticeText text={b.aiMessage} />
                 </div>
 
-                {/* Footer: Checkpoint on its own line, then clickable price/time */}
+                {/* Footer: Checkpoint on its own line, then full-width
+                    "Worked for…" accordion row with the chevron pinned to
+                    the right. Clicking anywhere on the row toggles the
+                    cost details below. */}
                 <div className="pt-1 space-y-1.5 text-xs text-secondary">
                   <button
                     onClick={() =>
@@ -1888,11 +1897,12 @@ function ChatPanel({
                   </button>
                   <button
                     onClick={() => setOpenBuildId(open ? null : b.id)}
-                    className="font-mono inline-flex items-center gap-1 hover:text-primary underline-offset-2 hover:underline transition-colors"
+                    aria-expanded={open}
+                    className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-md border border-border bg-surface hover:bg-surface-raised hover:border-primary/40 font-mono text-left transition-colors"
                   >
-                    Worked for {durationLabel}
+                    <span>Worked for {durationLabel}</span>
                     <ChevronDown
-                      className={`w-3 h-3 transition-transform ${
+                      className={`w-3.5 h-3.5 shrink-0 transition-transform ${
                         open ? "rotate-180" : ""
                       }`}
                     />
@@ -1975,26 +1985,6 @@ function ChatPanel({
             {/* The per-step icon list used to live here, but the AI's prose
                 narrative above already tells the user what's happening — the
                 redundant labels added noise without adding information. */}
-          </div>
-        )}
-
-        {/* Post-generation usage line. Persistent until the next prompt
-            so the user has time to read what the build cost. */}
-        {!isStreaming && lastUsage && (
-          <div className="text-[11px] text-secondary leading-relaxed border-l-2 border-border pl-2">
-            This generation used{" "}
-            <span className="text-foreground font-medium">
-              ${lastUsage.cost.toFixed(2)}
-            </span>{" "}
-            from your balance.
-            {lastUsage.balance != null && (
-              <>
-                {" "}Remaining:{" "}
-                <span className="text-foreground font-medium">
-                  ${lastUsage.balance.toFixed(2)}
-                </span>
-              </>
-            )}
           </div>
         )}
 
