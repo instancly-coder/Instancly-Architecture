@@ -538,10 +538,44 @@ const ERROR_OVERLAY_SCRIPT = `<script data-deploybro-error-overlay>
   // Strategy: fetch all external scripts in parallel for speed, queue the
   // execution, and process the queue strictly left-to-right so each
   // script's globals are visible to every script after it.
+  // Scan source for top-level PascalCase declarations and force-expose
+  // them as window globals. The canonical multi-file pattern relies on
+  // \`function Home() {}\` becoming window.Home automatically (which
+  // happens via sloppy-mode indirect eval), but the AI sometimes writes
+  // \`const Home = () => {}\` instead — \`const\` is block-scoped and
+  // does NOT leak to window. By auto-appending \`window.Home = Home\`
+  // for every top-level component declaration, both styles work and
+  // every later script can reference Home regardless of how it was
+  // declared. PascalCase only — leaves regular helpers (camelCase) and
+  // local consts alone.
+  function exposeGlobals(source) {
+    var names = {};
+    var patterns = [
+      /^(?:export\\s+(?:default\\s+)?)?function\\s+([A-Z][A-Za-z0-9_]*)\\s*\\(/gm,
+      /^(?:export\\s+)?(?:const|let|var)\\s+([A-Z][A-Za-z0-9_]*)\\s*=/gm,
+      /^(?:export\\s+(?:default\\s+)?)?class\\s+([A-Z][A-Za-z0-9_]*)\\b/gm,
+    ];
+    for (var i = 0; i < patterns.length; i++) {
+      var re = patterns[i];
+      var m;
+      while ((m = re.exec(source))) names[m[1]] = true;
+    }
+    var keys = Object.keys(names);
+    if (!keys.length) return source;
+    var tail = "\\n;";
+    for (var j = 0; j < keys.length; j++) {
+      var n = keys[j];
+      // typeof guard handles the case where the binding ended up in
+      // a temporal dead zone or wasn't actually declared at top level.
+      tail += "try{if(typeof " + n + "!==\\"undefined\\")window." + n + "=" + n + ";}catch(_){}";
+    }
+    return source + tail;
+  }
   function transformAndExec(source, filename, presets) {
+    var prepared = exposeGlobals(source);
     var transformed;
     try {
-      transformed = window.Babel.transform(source, {
+      transformed = window.Babel.transform(prepared, {
         presets: presets,
         filename: filename,
         sourceMaps: false,
@@ -559,7 +593,8 @@ const ERROR_OVERLAY_SCRIPT = `<script data-deploybro-error-overlay>
       // Babel-standalone's default behaviour for <script> tags). This
       // is what makes top-level \`function Home() {}\` declarations
       // become \`window.Home\`, which the canonical multi-file pattern
-      // depends on.
+      // depends on. exposeGlobals() above handles \`const Home = ...\`
+      // and other declaration styles that don't auto-leak.
       (0, eval)(withPragma);
     } catch (runtimeErr) {
       var stack = runtimeErr && runtimeErr.stack ? String(runtimeErr.stack) : "";
