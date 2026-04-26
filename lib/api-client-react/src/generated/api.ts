@@ -35,6 +35,8 @@ import type {
   EarningsSummary,
   ExploreItem,
   ExploreParams,
+  FinalizeUploadBody,
+  FinalizeUploadResponse,
   HealthStatus,
   Me,
   Project,
@@ -47,12 +49,15 @@ import type {
   RenameProjectBody,
   SetFeaturedTemplateBody,
   SetPrimaryDomainResponse,
+  StorageError,
   TemplateItem,
   Transaction,
   UpdateMeBody,
   UpdateProjectBody,
   UpdateUserCommissionBody,
   UploadProjectFileBody,
+  UploadUrlRequest,
+  UploadUrlResponse,
   User,
 } from "./api.schemas";
 
@@ -3474,3 +3479,185 @@ export function useListAdminCostByModel<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * Returns a presigned PUT URL the browser uploads bytes to. The
+request body carries metadata only (name, size, contentType) — never
+the file itself. Auth is required so anonymous callers can't mint
+upload URLs against our bucket.
+
+ * @summary Request a presigned URL for direct-to-GCS upload
+ */
+export const getRequestUploadUrlUrl = () => {
+  return `/api/storage/uploads/request-url`;
+};
+
+export const requestUploadUrl = async (
+  uploadUrlRequest: UploadUrlRequest,
+  options?: RequestInit,
+): Promise<UploadUrlResponse> => {
+  return customFetch<UploadUrlResponse>(getRequestUploadUrlUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(uploadUrlRequest),
+  });
+};
+
+export const getRequestUploadUrlMutationOptions = <
+  TError = ErrorType<StorageError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof requestUploadUrl>>,
+    TError,
+    { data: BodyType<UploadUrlRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof requestUploadUrl>>,
+  TError,
+  { data: BodyType<UploadUrlRequest> },
+  TContext
+> => {
+  const mutationKey = ["requestUploadUrl"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof requestUploadUrl>>,
+    { data: BodyType<UploadUrlRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return requestUploadUrl(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RequestUploadUrlMutationResult = NonNullable<
+  Awaited<ReturnType<typeof requestUploadUrl>>
+>;
+export type RequestUploadUrlMutationBody = BodyType<UploadUrlRequest>;
+export type RequestUploadUrlMutationError = ErrorType<StorageError>;
+
+/**
+ * @summary Request a presigned URL for direct-to-GCS upload
+ */
+export const useRequestUploadUrl = <
+  TError = ErrorType<StorageError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof requestUploadUrl>>,
+    TError,
+    { data: BodyType<UploadUrlRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof requestUploadUrl>>,
+  TError,
+  { data: BodyType<UploadUrlRequest> },
+  TContext
+> => {
+  return useMutation(getRequestUploadUrlMutationOptions(options));
+};
+
+/**
+ * Sets the ACL policy on a freshly-uploaded object (owner = caller,
+plus a public/private flag). Required because /storage/objects/*
+deny-lists any object that has no policy attached. Re-finalize is
+only allowed for the original owner.
+
+ * @summary Finalize an uploaded object by stamping its ACL
+ */
+export const getFinalizeUploadUrl = () => {
+  return `/api/storage/uploads/finalize`;
+};
+
+export const finalizeUpload = async (
+  finalizeUploadBody: FinalizeUploadBody,
+  options?: RequestInit,
+): Promise<FinalizeUploadResponse> => {
+  return customFetch<FinalizeUploadResponse>(getFinalizeUploadUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(finalizeUploadBody),
+  });
+};
+
+export const getFinalizeUploadMutationOptions = <
+  TError = ErrorType<StorageError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof finalizeUpload>>,
+    TError,
+    { data: BodyType<FinalizeUploadBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof finalizeUpload>>,
+  TError,
+  { data: BodyType<FinalizeUploadBody> },
+  TContext
+> => {
+  const mutationKey = ["finalizeUpload"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof finalizeUpload>>,
+    { data: BodyType<FinalizeUploadBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return finalizeUpload(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type FinalizeUploadMutationResult = NonNullable<
+  Awaited<ReturnType<typeof finalizeUpload>>
+>;
+export type FinalizeUploadMutationBody = BodyType<FinalizeUploadBody>;
+export type FinalizeUploadMutationError = ErrorType<StorageError>;
+
+/**
+ * @summary Finalize an uploaded object by stamping its ACL
+ */
+export const useFinalizeUpload = <
+  TError = ErrorType<StorageError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof finalizeUpload>>,
+    TError,
+    { data: BodyType<FinalizeUploadBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof finalizeUpload>>,
+  TError,
+  { data: BodyType<FinalizeUploadBody> },
+  TContext
+> => {
+  return useMutation(getFinalizeUploadMutationOptions(options));
+};

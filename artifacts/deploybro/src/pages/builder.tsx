@@ -56,6 +56,8 @@ import {
   Upload,
   ArrowDownAZ,
   ArrowDown10,
+  UploadCloud,
+  Camera,
 } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { Button } from "@/components/ui/button";
@@ -5124,6 +5126,7 @@ function SettingsPane({
   project: ApiProject | undefined;
 }) {
   const update = useUpdateProject(username, slug);
+  const { data: publishStatus } = usePublishStatus(username, slug);
 
   // Local form state, seeded from server data once loaded. Stored as raw
   // strings (one feature per line) so the textarea behaves like a normal
@@ -5132,6 +5135,95 @@ function SettingsPane({
   const [featuresText, setFeaturesText] = useState("");
   const [coverImageUrl, setCoverImageUrl] = useState("");
   const [isPublic, setIsPublic] = useState(true);
+
+  // Cover image upload state — drag-and-drop / file-picker upload zone
+  // pushes the file straight to object storage and writes the resulting
+  // public URL into `coverImageUrl`. The user still has to click Save to
+  // persist it on the project, which keeps the UX consistent with the
+  // rest of this pane (every other field is pending until Save).
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [showUrlInput, setShowUrlInput] = useState(false);
+
+  const liveUrl =
+    publishStatus?.publishStatus === "live" ? publishStatus.liveUrl : null;
+
+  const handleCoverUpload = async (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please choose an image file (PNG, JPG, GIF, WebP).");
+      return;
+    }
+    // 10MB ceiling — covers high-res screenshots without inviting abuse.
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Cover images must be smaller than 10 MB.");
+      return;
+    }
+    setIsUploading(true);
+    try {
+      const r = await fetch("/api/storage/uploads/request-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: file.name,
+          size: file.size,
+          contentType: file.type || "application/octet-stream",
+        }),
+      });
+      if (!r.ok) {
+        const body = (await r.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error || "Could not get upload URL");
+      }
+      const data = (await r.json()) as { uploadURL: string; objectPath: string };
+      const put = await fetch(data.uploadURL, {
+        method: "PUT",
+        body: file,
+        headers: { "Content-Type": file.type || "application/octet-stream" },
+      });
+      if (!put.ok) throw new Error("Upload failed");
+      // Stamp the freshly-uploaded object with an ACL policy. Cover
+      // images are public-by-design (they render on the public Explore
+      // and Templates galleries) so we set visibility=public, with the
+      // current user as the owner. Without this finalize step, the
+      // server's /storage/objects/* route would 404 the URL — uploaded
+      // objects are deny-listed until they're explicitly claimed.
+      const finalize = await fetch("/api/storage/uploads/finalize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          objectPath: data.objectPath,
+          visibility: "public",
+        }),
+      });
+      if (!finalize.ok) {
+        const body = (await finalize.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        throw new Error(body.error || "Failed to finalize upload");
+      }
+      // `objectPath` already starts with `/objects/` — prepend the storage
+      // mount path to get the URL the browser can render.
+      setCoverImageUrl(`/api/storage${data.objectPath}`);
+      toast.success("Cover image uploaded — click Save to apply.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleUseLiveScreenshot = () => {
+    if (!liveUrl) return;
+    // mshots is WordPress.com's free public screenshot service. The image
+    // refreshes from the live URL on demand, which is exactly what we want
+    // for a "use a screenshot of my live site" cover — no caching layer to
+    // bust when the project changes.
+    const url = `https://s.wordpress.com/mshots/v1/${encodeURIComponent(
+      liveUrl,
+    )}?w=1200&h=630`;
+    setCoverImageUrl(url);
+    toast.success("Live-site screenshot set — click Save to apply.");
+  };
 
   // Re-seed when the project loads or when a save completes (the success
   // path re-fetches and we want any server-side normalisation — feature
@@ -5231,17 +5323,139 @@ function SettingsPane({
             </span>
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="cover">Cover image URL</Label>
-            <Input
-              id="cover"
-              value={coverImageUrl}
-              onChange={(e) => setCoverImageUrl(e.target.value)}
-              placeholder="https://…/cover.png"
-              className="bg-background border-border font-mono"
-            />
-            <span className="text-[11px] text-secondary">
-              Used as the thumbnail on Explore and the Templates gallery.
-            </span>
+            <Label>Cover image</Label>
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                if (!isUploading) setIsDragging(true);
+              }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDragging(false);
+                if (isUploading) return;
+                const file = e.dataTransfer.files?.[0];
+                if (file) void handleCoverUpload(file);
+              }}
+              onClick={() => {
+                if (!isUploading) fileInputRef.current?.click();
+              }}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if ((e.key === "Enter" || e.key === " ") && !isUploading) {
+                  e.preventDefault();
+                  fileInputRef.current?.click();
+                }
+              }}
+              className={`relative flex items-center gap-4 rounded-lg border border-dashed p-4 transition-colors cursor-pointer ${
+                isDragging
+                  ? "border-primary bg-primary/5"
+                  : "border-border bg-background hover:border-primary/60"
+              } ${isUploading ? "opacity-60 cursor-wait" : ""}`}
+              data-testid="cover-image-dropzone"
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void handleCoverUpload(file);
+                  // Allow re-selecting the same file later.
+                  e.target.value = "";
+                }}
+              />
+              <div className="w-20 h-14 rounded-md overflow-hidden bg-surface-raised border border-border flex items-center justify-center shrink-0">
+                {coverImageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={coverImageUrl}
+                    alt="Cover preview"
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).style.display =
+                        "none";
+                    }}
+                  />
+                ) : (
+                  <ImageIcon className="w-5 h-5 text-secondary" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  {isUploading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Uploading…
+                    </>
+                  ) : (
+                    <>
+                      <UploadCloud className="w-4 h-4 text-secondary" />
+                      Drop a screenshot here or click to upload
+                    </>
+                  )}
+                </div>
+                <p className="text-[11px] text-secondary mt-0.5">
+                  PNG, JPG, GIF, or WebP — up to 10 MB. Used as the thumbnail
+                  on Explore and Templates.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              {liveUrl ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={handleUseLiveScreenshot}
+                  disabled={isUploading}
+                  className="h-7 text-xs"
+                  data-testid="use-live-screenshot-button"
+                >
+                  <Camera className="w-3.5 h-3.5 mr-1.5" />
+                  Use a screenshot of my live site
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => setShowUrlInput((v) => !v)}
+                className="h-7 text-xs text-secondary"
+                data-testid="toggle-cover-url-input"
+              >
+                <Link2 className="w-3.5 h-3.5 mr-1.5" />
+                {showUrlInput ? "Hide URL field" : "Or paste a URL"}
+              </Button>
+              {coverImageUrl ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setCoverImageUrl("")}
+                  disabled={isUploading}
+                  className="h-7 text-xs text-secondary ml-auto"
+                  data-testid="clear-cover-image"
+                >
+                  <X className="w-3.5 h-3.5 mr-1.5" />
+                  Remove
+                </Button>
+              ) : null}
+            </div>
+
+            {showUrlInput ? (
+              <Input
+                id="cover"
+                value={coverImageUrl}
+                onChange={(e) => setCoverImageUrl(e.target.value)}
+                placeholder="https://…/cover.png"
+                className="bg-background border-border font-mono mt-1"
+                data-testid="cover-image-url-input"
+              />
+            ) : null}
           </div>
           <div className="flex items-center justify-between pt-2">
             <Label htmlFor="public" className="flex flex-col gap-1">

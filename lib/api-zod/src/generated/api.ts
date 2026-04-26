@@ -860,3 +860,53 @@ export const ListAdminCostByModelResponseItem = zod.object({
 export const ListAdminCostByModelResponse = zod.array(
   ListAdminCostByModelResponseItem,
 );
+
+/**
+ * Returns a presigned PUT URL the browser uploads bytes to. The
+request body carries metadata only (name, size, contentType) — never
+the file itself. Auth is required so anonymous callers can't mint
+upload URLs against our bucket.
+
+ * @summary Request a presigned URL for direct-to-GCS upload
+ */
+
+export const RequestUploadUrlBody = zod.object({
+  name: zod.string().min(1),
+  size: zod.number().min(1),
+  contentType: zod.string().min(1),
+});
+
+export const RequestUploadUrlResponse = zod.object({
+  uploadURL: zod.string().url(),
+  objectPath: zod.string(),
+  metadata: zod.object({
+    name: zod.string().min(1),
+    size: zod.number().min(1),
+    contentType: zod.string().min(1),
+  }),
+});
+
+/**
+ * Sets the ACL policy on a freshly-uploaded object (owner = caller,
+plus a public/private flag). Required because /storage/objects/*
+deny-lists any object that has no policy attached. Re-finalize is
+only allowed for the original owner.
+
+ * @summary Finalize an uploaded object by stamping its ACL
+ */
+export const finalizeUploadBodyObjectPathRegExp = new RegExp("^\/objects");
+
+export const FinalizeUploadBody = zod.object({
+  objectPath: zod
+    .string()
+    .regex(finalizeUploadBodyObjectPathRegExp)
+    .describe(
+      "Object path returned by requestUploadUrl, starting with \/objects\/.",
+    ),
+  visibility: zod.enum(["public", "private"]),
+});
+
+export const FinalizeUploadResponse = zod.object({
+  objectPath: zod.string(),
+  visibility: zod.enum(["public", "private"]),
+});

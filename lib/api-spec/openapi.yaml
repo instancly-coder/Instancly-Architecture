@@ -30,6 +30,8 @@ tags:
     description: Custom domains attached to a project
   - name: admin
     description: Admin dashboard endpoints
+  - name: storage
+    description: Object storage upload and serving endpoints
 paths:
   /healthz:
     get:
@@ -806,6 +808,94 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AdminCostByModel"
+  /storage/uploads/request-url:
+    post:
+      operationId: requestUploadUrl
+      tags: [storage]
+      summary: Request a presigned URL for direct-to-GCS upload
+      description: |
+        Returns a presigned PUT URL the browser uploads bytes to. The
+        request body carries metadata only (name, size, contentType) — never
+        the file itself. Auth is required so anonymous callers can't mint
+        upload URLs against our bucket.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadUrlRequest"
+      responses:
+        "200":
+          description: Presigned upload URL generated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadUrlResponse"
+        "400":
+          description: Missing or invalid required fields
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StorageError"
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StorageError"
+        "500":
+          description: Failed to generate upload URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StorageError"
+  /storage/uploads/finalize:
+    post:
+      operationId: finalizeUpload
+      tags: [storage]
+      summary: Finalize an uploaded object by stamping its ACL
+      description: |
+        Sets the ACL policy on a freshly-uploaded object (owner = caller,
+        plus a public/private flag). Required because /storage/objects/*
+        deny-lists any object that has no policy attached. Re-finalize is
+        only allowed for the original owner.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FinalizeUploadBody"
+      responses:
+        "200":
+          description: Object finalized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinalizeUploadResponse"
+        "400":
+          description: Missing or invalid required fields
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StorageError"
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StorageError"
+        "404":
+          description: Object not found or not owned by caller
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StorageError"
+        "500":
+          description: Failed to finalize upload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StorageError"
 components:
   schemas:
     HealthStatus:
@@ -1532,3 +1622,63 @@ components:
       required:
         - model
         - total
+    UploadUrlRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        size:
+          type: integer
+          minimum: 1
+        contentType:
+          type: string
+          minLength: 1
+      required:
+        - name
+        - size
+        - contentType
+    UploadUrlResponse:
+      type: object
+      properties:
+        uploadURL:
+          type: string
+          format: uri
+        objectPath:
+          type: string
+        metadata:
+          $ref: "#/components/schemas/UploadUrlRequest"
+      required:
+        - uploadURL
+        - objectPath
+        - metadata
+    FinalizeUploadBody:
+      type: object
+      properties:
+        objectPath:
+          type: string
+          description: Object path returned by requestUploadUrl, starting with /objects/.
+          pattern: "^/objects/"
+        visibility:
+          type: string
+          enum: [public, private]
+      required:
+        - objectPath
+        - visibility
+    FinalizeUploadResponse:
+      type: object
+      properties:
+        objectPath:
+          type: string
+        visibility:
+          type: string
+          enum: [public, private]
+      required:
+        - objectPath
+        - visibility
+    StorageError:
+      type: object
+      properties:
+        error: { type: string }
+      required:
+        - error

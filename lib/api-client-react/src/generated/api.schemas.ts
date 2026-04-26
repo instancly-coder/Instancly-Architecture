@@ -399,6 +399,55 @@ export interface AdminCostByModel {
   total: number;
 }
 
+export interface UploadUrlRequest {
+  /** @minLength 1 */
+  name: string;
+  /** @minimum 1 */
+  size: number;
+  /** @minLength 1 */
+  contentType: string;
+}
+
+export interface UploadUrlResponse {
+  uploadURL: string;
+  objectPath: string;
+  metadata: UploadUrlRequest;
+}
+
+export type FinalizeUploadBodyVisibility =
+  (typeof FinalizeUploadBodyVisibility)[keyof typeof FinalizeUploadBodyVisibility];
+
+export const FinalizeUploadBodyVisibility = {
+  public: "public",
+  private: "private",
+} as const;
+
+export interface FinalizeUploadBody {
+  /**
+   * Object path returned by requestUploadUrl, starting with /objects/.
+   * @pattern ^/objects/
+   */
+  objectPath: string;
+  visibility: FinalizeUploadBodyVisibility;
+}
+
+export type FinalizeUploadResponseVisibility =
+  (typeof FinalizeUploadResponseVisibility)[keyof typeof FinalizeUploadResponseVisibility];
+
+export const FinalizeUploadResponseVisibility = {
+  public: "public",
+  private: "private",
+} as const;
+
+export interface FinalizeUploadResponse {
+  objectPath: string;
+  visibility: FinalizeUploadResponseVisibility;
+}
+
+export interface StorageError {
+  error: string;
+}
+
 export type ExploreParams = {
   q?: string;
   framework?: string;

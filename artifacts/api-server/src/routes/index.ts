@@ -13,6 +13,7 @@ import filesRouter from "./files";
 import deploymentsRouter from "./deployments";
 import domainsRouter from "./domains";
 import envVarsRouter from "./env-vars";
+import storageRouter from "./storage";
 
 const router: IRouter = Router();
 
@@ -30,5 +31,6 @@ router.use(filesRouter);
 router.use(deploymentsRouter);
 router.use(domainsRouter);
 router.use(envVarsRouter);
+router.use(storageRouter);
 
 export default router;
