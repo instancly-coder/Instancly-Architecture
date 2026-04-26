@@ -598,18 +598,57 @@ const ERROR_OVERLAY_SCRIPT = `<script data-deploybro-error-overlay>
 })();
 </script>`;
 
+// react-router-dom v6's UMD bundle is just the DOM-specific layer — it
+// expects `window.ReactRouter` (from `react-router`) and
+// `window.RemixRouter` (from `@remix-run/router`) to already be loaded.
+// Older AI-generated projects only included the `react-router-dom` script
+// and crash at runtime with "undefined is not an object (evaluating
+// 'r.Routes')". We patch their HTML on-the-fly so existing previews work
+// without forcing the user to regenerate.
+function fixUpReactRouterCdn(html: string): string {
+  const hasRrd = /unpkg\.com\/react-router-dom@/i.test(html);
+  if (!hasRrd) return html;
+  const hasReactRouter =
+    /unpkg\.com\/react-router@(?!dom)/i.test(html) ||
+    /unpkg\.com\/react-router\/dist\//i.test(html) ||
+    /unpkg\.com\/react-router\b(?!-dom)/i.test(html);
+  const hasRemixRouter = /unpkg\.com\/@remix-run\/router/i.test(html);
+  if (hasReactRouter && hasRemixRouter) return html;
+  // Build only the missing scripts and inject them immediately before the
+  // first `react-router-dom` script tag so load order stays correct.
+  const missing: string[] = [];
+  if (!hasRemixRouter) {
+    missing.push(
+      `<script crossorigin src="https://unpkg.com/@remix-run/router@1/dist/router.umd.min.js"></script>`,
+    );
+  }
+  if (!hasReactRouter) {
+    missing.push(
+      `<script crossorigin src="https://unpkg.com/react-router@6/dist/umd/react-router.production.min.js"></script>`,
+    );
+  }
+  return html.replace(
+    /<script\b[^>]*\bsrc=["'][^"']*unpkg\.com\/react-router-dom@[^"']*["'][^>]*>\s*<\/script>/i,
+    (m) => `${missing.join("\n")}\n${m}`,
+  );
+}
+
 function injectErrorOverlay(html: string): string {
-  if (/data-deploybro-error-overlay/.test(html)) return html;
+  const patched = fixUpReactRouterCdn(html);
+  if (/data-deploybro-error-overlay/.test(patched)) return patched;
   // Inject at the START of <head> so the script-tag renamer runs BEFORE
   // the parser reaches any `<script type="text/babel">` tags further
   // down the page. Falls back to body / prepend if no <head>.
-  if (/<head[^>]*>/i.test(html)) {
-    return html.replace(/<head[^>]*>/i, (m) => `${m}\n${ERROR_OVERLAY_SCRIPT}`);
+  if (/<head[^>]*>/i.test(patched)) {
+    return patched.replace(
+      /<head[^>]*>/i,
+      (m) => `${m}\n${ERROR_OVERLAY_SCRIPT}`,
+    );
   }
-  if (/<\/body>/i.test(html)) {
-    return html.replace(/<\/body>/i, `${ERROR_OVERLAY_SCRIPT}\n</body>`);
+  if (/<\/body>/i.test(patched)) {
+    return patched.replace(/<\/body>/i, `${ERROR_OVERLAY_SCRIPT}\n</body>`);
   }
-  return ERROR_OVERLAY_SCRIPT + "\n" + html;
+  return ERROR_OVERLAY_SCRIPT + "\n" + patched;
 }
 
 function emptyHtml(headline = "Your app will appear here"): string {

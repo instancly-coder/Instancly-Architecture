@@ -1846,41 +1846,9 @@ function ChatPanel({
               <FileNoticeText text={typed} />
             </div>
 
-            {/* Granular per-prompt action checklist. Each row reflects a
-                phase of the build pipeline as it happens; the active row
-                spins, completed rows show a check, and any errored row
-                shows an X. Replaces the old single shimmer dot so the
-                user can see exactly what the system is doing. */}
-            {streamSteps.length > 0 && (
-              <ul className="space-y-1 pt-0.5">
-                {streamSteps.map((step) => (
-                  <li
-                    key={step.id}
-                    className="flex items-center gap-2 text-[11px] font-mono"
-                  >
-                    {step.status === "in_progress" ? (
-                      <Loader2 className="w-3 h-3 text-primary animate-spin shrink-0" />
-                    ) : step.status === "done" ? (
-                      <Check className="w-3 h-3 text-emerald-500 shrink-0" />
-                    ) : (
-                      <X className="w-3 h-3 text-destructive shrink-0" />
-                    )}
-                    <span
-                      className={
-                        step.status === "in_progress"
-                          ? "uppercase tracking-wider text-foreground/80"
-                          : step.status === "error"
-                            ? "uppercase tracking-wider text-destructive"
-                            : "uppercase tracking-wider text-muted-foreground"
-                      }
-                    >
-                      {step.label}
-                      {step.status === "in_progress" ? "…" : ""}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
+            {/* The per-step icon list used to live here, but the AI's prose
+                narrative above already tells the user what's happening — the
+                redundant labels added noise without adding information. */}
           </div>
         )}
 

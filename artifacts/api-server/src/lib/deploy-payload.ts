@@ -169,12 +169,17 @@ function transformIndexHtmlForVite(html: string): string {
     /<script\b[^>]*\bsrc=["'][^"']*\b(?:unpkg\.com|esm\.sh|cdn\.jsdelivr\.net\/npm)\/react(?:-dom)?@?\d?[^"']*["'][^>]*>\s*<\/script>\s*/gi;
   out = out.replace(REACT_CDN_RE, "");
 
-  // React Router UMD CDN — same reasoning. The bundle imports
-  // `react-router-dom` from npm so we don't want the UMD copy fighting
-  // for the `ReactRouterDOM` global.
+  // React Router UMD CDNs — same reasoning. The bundle imports
+  // `react-router-dom` from npm so we don't want the UMD copies fighting
+  // for the `ReactRouterDOM` global. v6's UMD ships in three pieces
+  // (@remix-run/router, react-router, react-router-dom) so we strip all
+  // three.
   const RRD_CDN_RE =
     /<script\b[^>]*\bsrc=["'][^"']*\b(?:unpkg\.com|esm\.sh|cdn\.jsdelivr\.net\/npm)\/react-router(?:-dom)?@?\d?[^"']*["'][^>]*>\s*<\/script>\s*/gi;
   out = out.replace(RRD_CDN_RE, "");
+  const REMIX_ROUTER_CDN_RE =
+    /<script\b[^>]*\bsrc=["'][^"']*\b(?:unpkg\.com|esm\.sh|cdn\.jsdelivr\.net\/npm)\/@remix-run\/router@?\d?[^"']*["'][^>]*>\s*<\/script>\s*/gi;
+  out = out.replace(REMIX_ROUTER_CDN_RE, "");
 
   // Babel-standalone — only needed in the dev preview's no-build setup.
   // Bundled JSX is transformed at build time so this script just adds

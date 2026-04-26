@@ -129,7 +129,10 @@ Rules for file blocks:
 - Use these exact CDNs in index.html, in this order, before any of your scripts:
   • Tailwind v4: \`<script src="https://cdn.tailwindcss.com"></script>\`
   • React 18: \`<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>\` and \`<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>\`
-  • React Router 6 (UMD): \`<script crossorigin src="https://unpkg.com/react-router-dom@6/dist/umd/react-router-dom.production.min.js"></script>\`
+  • React Router 6 (UMD) — load THREE scripts in this exact order, all three are required (react-router-dom's UMD bundle depends on the other two being present as globals):
+    \`<script crossorigin src="https://unpkg.com/@remix-run/router@1/dist/router.umd.min.js"></script>\`
+    \`<script crossorigin src="https://unpkg.com/react-router@6/dist/umd/react-router.production.min.js"></script>\`
+    \`<script crossorigin src="https://unpkg.com/react-router-dom@6/dist/umd/react-router-dom.production.min.js"></script>\`
   • Babel standalone: \`<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>\`
 - Mount React into a \`<div id="root"></div>\` from \`app.jsx\`, loaded LAST with \`<script type="text/babel" data-presets="react" src="app.jsx"></script>\`.
 - Routing is provided by \`window.ReactRouterDOM\`: use \`BrowserRouter\`, \`Routes\`, \`Route\`, \`Link\`, \`NavLink\`, \`Outlet\`, \`useNavigate\`, \`useParams\`, \`useLocation\`. Reference them from the global, e.g. \`const { BrowserRouter, Routes, Route, Link } = ReactRouterDOM;\` at the top of \`app.jsx\` or any file that needs them.
@@ -155,6 +158,8 @@ Rules for file blocks:
   <script src="https://cdn.tailwindcss.com"></script>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/@remix-run/router@1/dist/router.umd.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-router@6/dist/umd/react-router.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-router-dom@6/dist/umd/react-router-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
