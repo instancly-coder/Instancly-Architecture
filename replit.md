@@ -98,6 +98,8 @@ New projects get a friendly two-word name like "Swift Otter" (slugified to `swif
 
 Per-project public listing fields (`description`, `features text[]`, `coverImageUrl`) are owner-editable from the builder Settings pane via `PATCH /api/projects/:username/:slug`. Public projects with `isFeaturedTemplate=true` (admin-only toggle) appear on the curated `/templates` page; admin curation lives at `/admin/templates`. Schema groundwork for Phase 2 referral attribution + commission payouts is in place: `users.referredByUserId`/`referredViaProjectId`/`referralCommissionPct` (default 15%) and the new `referral_earnings` table — none of these are wired into a flow yet.
 
+Three official starter templates are seeded under the reserved `deploybro` user: `bro-cloud-saas` (dark indigo SaaS landing), `studio-bro-agency` (cream/serif creative agency), and `bro-folio-portfolio` (minimal monochrome dev portfolio). Each is a 7-file React Router app (index.html + app.jsx + 4 pages + 2 components). The idempotent seed script lives at `artifacts/api-server/scripts/seed-templates.mjs` — re-running it updates copy in place and replaces the file set inside a single transaction.
+
 ## Publish to Vercel + Neon
 
 The Publish flow in the builder deploys to Vercel and (when the user has provisioned a per-project DB via the Database tab) wires `DATABASE_URL` into the deployed app. Pro-plan-gated. Pipeline runs in-process (no external job queue).
