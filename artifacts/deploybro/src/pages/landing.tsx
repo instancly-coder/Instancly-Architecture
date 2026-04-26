@@ -31,9 +31,11 @@ import {
 
 // Mirror the builder's model list so the homepage picker shows the same
 // options. Free plan is server-side locked to Economy Bro regardless of choice.
-const HOME_MODELS: { name: string; key: "haiku" | "opus"; note: string }[] = [
-  { name: "Economy Bro", key: "haiku", note: "Fast & cheap"   },
-  { name: "Power Bro",   key: "opus",  note: "Most capable"   },
+// Plan mode server-side auto-upgrades paid users to Power Bro.
+const HOME_MODELS: { name: string; key: "haiku" | "sonnet" | "opus"; note: string }[] = [
+  { name: "Economy Bro", key: "haiku",  note: "Fast & cheap"   },
+  { name: "Smart Bro",   key: "sonnet", note: "Balanced (recommended)" },
+  { name: "Power Bro",   key: "opus",   note: "Most capable"   },
 ];
 
 const PROMPT_SUGGESTIONS = [

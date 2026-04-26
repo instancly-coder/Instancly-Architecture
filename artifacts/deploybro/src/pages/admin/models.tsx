@@ -4,8 +4,9 @@ import { AdminLayout } from "@/components/admin-layout";
 import { useAdminCostByModel } from "@/lib/api";
 
 const CONFIGURED_MODELS = [
-  { name: "Economy Bro", provider: "Anthropic · Haiku 4.5", costRange: "£0.005 - £0.025" },
-  { name: "Power Bro",   provider: "Anthropic · Opus",      costRange: "£0.02 - £0.10"   },
+  { name: "Economy Bro", provider: "Anthropic · Haiku 4.5",  costRange: "£0.005 - £0.025" },
+  { name: "Smart Bro",   provider: "Anthropic · Sonnet 4.5", costRange: "£0.012 - £0.06"  },
+  { name: "Power Bro",   provider: "Anthropic · Opus",       costRange: "£0.02 - £0.10"   },
 ];
 
 export default function AdminModels() {

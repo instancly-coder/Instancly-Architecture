@@ -67,18 +67,19 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-// Two Claude-backed tiers under DeployBro branding. `key` maps to the
-// backend model registry. Economy Bro = Claude Haiku 4.5 (fast & cheap),
-// Power Bro = Claude Opus (slower, most capable).
+// Three Claude-backed tiers under DeployBro branding. `key` maps to the
+// backend model registry. Plan mode server-side auto-upgrades paid users
+// to Power Bro regardless of which tier is selected here.
 const AVAILABLE_MODELS: {
   name: string;
   provider: string;
   costRange: string;
-  key: "haiku" | "opus";
+  key: "haiku" | "sonnet" | "opus";
   note: string;
 }[] = [
-  { name: "Economy Bro", provider: "Anthropic · Haiku 4.5", costRange: "$0.005 - $0.025", key: "haiku", note: "Fast & cheap" },
-  { name: "Power Bro",   provider: "Anthropic · Opus",      costRange: "$0.02 - $0.10",   key: "opus",  note: "Most capable" },
+  { name: "Economy Bro", provider: "Anthropic · Haiku 4.5",  costRange: "$0.005 - $0.025", key: "haiku",  note: "Fast & cheap" },
+  { name: "Smart Bro",   provider: "Anthropic · Sonnet 4.5", costRange: "$0.012 - $0.06",  key: "sonnet", note: "Balanced (recommended)" },
+  { name: "Power Bro",   provider: "Anthropic · Opus",       costRange: "$0.02 - $0.10",   key: "opus",   note: "Most capable" },
 ];
 import {
   useMe,
@@ -745,7 +746,7 @@ export default function Builder() {
     // before the send fires — that was a real timing race.
     let overrides:
       | {
-          modelKey?: "haiku" | "opus";
+          modelKey?: "haiku" | "sonnet" | "opus";
           planMode?: boolean;
           urls?: string[];
           files?: File[];

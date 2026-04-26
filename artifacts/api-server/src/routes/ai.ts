@@ -31,28 +31,37 @@ const anthropic = aiConfigured ? new Anthropic({ apiKey }) : null;
 
 // Per-million-token pricing in USD. These are the marked-up rates the user
 // pays — model cost + platform margin baked in. Update one place to reprice.
-// We expose two tiers under DeployBro branding:
+// We expose three tiers under DeployBro branding:
 //   - Economy Bro → Claude Haiku 4.5 (cheap, fast, default)
-//   - Power Bro   → Claude Opus      (expensive, most capable)
-// Old keys ("sonnet") sent by stale clients fall back to DEFAULT_MODEL.
-type ModelKey = "haiku" | "opus";
+//   - Smart Bro   → Claude Sonnet 4.5 (balanced middle tier)
+//   - Power Bro   → Claude Opus       (expensive, most capable; auto-picked in plan mode)
+type ModelKey = "haiku" | "sonnet" | "opus";
 const MODELS: Record<
   ModelKey,
   { id: string; display: string; rates: { input: number; output: number } }
 > = {
-  haiku: { id: "claude-haiku-4-5", display: "Economy Bro", rates: { input: 5,  output: 25 } },
-  opus:  { id: "claude-opus-4-5",  display: "Power Bro",   rates: { input: 20, output: 100 } },
+  haiku:  { id: "claude-haiku-4-5",  display: "Economy Bro", rates: { input: 5,  output: 25 } },
+  sonnet: { id: "claude-sonnet-4-6", display: "Smart Bro",   rates: { input: 12, output: 60 } },
+  opus:   { id: "claude-opus-4-5",   display: "Power Bro",   rates: { input: 20, output: 100 } },
 };
 const DEFAULT_MODEL: ModelKey = "haiku";
 
-// Free plan is locked to Economy Bro (Haiku) regardless of what the client requests.
-function pickModel(requested: unknown, plan: string | null | undefined): ModelKey {
-  const k =
-    typeof requested === "string" && requested in MODELS
-      ? (requested as ModelKey)
-      : DEFAULT_MODEL;
+// Resolve which Claude model to run for a given request.
+// Rules, in priority order:
+//   1. Free plan is locked to Economy Bro (Haiku) regardless of any other input.
+//   2. Plan mode auto-upgrades paid users to Power Bro (Opus) — planning benefits
+//      most from the strongest model, and the user explicitly opted in.
+//   3. Otherwise, honour the client's requested key, falling back to the default.
+function pickModel(
+  requested: unknown,
+  plan: string | null | undefined,
+  planMode: boolean,
+): ModelKey {
   if ((plan ?? "Free").toLowerCase() === "free") return "haiku";
-  return k;
+  if (planMode) return "opus";
+  return typeof requested === "string" && requested in MODELS
+    ? (requested as ModelKey)
+    : DEFAULT_MODEL;
 }
 
 // ---------- SSRF-safe URL fetching ----------
@@ -380,10 +389,11 @@ router.post(
     let aborted = clientGone;
     let stream: ReturnType<typeof anthropic.messages.stream> | null = null;
 
-    // Resolve which Claude model to run. Free plan is forced to Haiku; paid
-    // tiers honour the client's choice. The chosen model also determines the
-    // per-token rates used to bill the user's balance after the build.
-    const modelKey = pickModel(req.body?.model, ownerPlan);
+    // Resolve which Claude model to run. Free plan is forced to Economy Bro;
+    // plan mode auto-upgrades paid users to Power Bro; otherwise we honour
+    // the client's choice. The chosen model also determines the per-token
+    // rates used to bill the user's balance after the build.
+    const modelKey = pickModel(req.body?.model, ownerPlan, planMode);
     const modelInfo = MODELS[modelKey];
 
     // Pull existing project files so the model can reason about prior code.
