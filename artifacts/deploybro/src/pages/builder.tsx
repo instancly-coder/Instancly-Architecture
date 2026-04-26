@@ -174,22 +174,57 @@ function stripIncompleteFileBlocks(text: string): string {
 // `_(writing path…)_` so historical builds render with the new look too.
 function FileNoticeText({ text }: { text: string }) {
   // Normalize legacy markers up front so we have a single split below.
-  // Also collapse runs of 2+ blank lines (often emitted around file
-  // markers upstream) down to a single newline so the rendered prose
-  // doesn't stack vertical whitespace between Creating/Created rows.
+  // Also normalize CRLF so blank-line paragraph splitting is robust
+  // across server/client newline styles.
   const normalized = text
+    .replace(/\r\n?/g, "\n")
     .replace(/_\(updated \*\*([^*]+)\*\*\)_/g, "[[FILE_DONE:$1]]")
-    .replace(/_\(writing ([^)]+?)…\)_/g, "[[FILE_PENDING:$1]]")
-    .replace(/\n[ \t]*\n[\s\n]*/g, "\n");
+    .replace(/_\(writing ([^)]+?)…\)_/g, "[[FILE_PENDING:$1]]");
+
   // Split on whole marker tokens, keeping the markers as their own
-  // entries. Adjacent markers are separated by surrounding "" entries
-  // which we filter out below.
-  const parts = normalized.split(/(\[\[FILE_(?:DONE|PENDING):[^\]]+\]\])/g);
+  // entries. We then walk the tokens and produce a flat list of
+  // typed blocks: paragraphs of prose + the two kinds of file rows.
+  // Splitting prose on blank lines lets us render each paragraph
+  // as its own <p> so the wrapper's space-y gives consistent
+  // paragraph rhythm without leaving file rows stranded.
+  type Block =
+    | { kind: "para"; text: string }
+    | { kind: "file_done"; path: string }
+    | { kind: "file_pending"; path: string };
+
+  const tokens = normalized.split(/(\[\[FILE_(?:DONE|PENDING):[^\]]+\]\])/g);
+  const blocks: Block[] = [];
+  for (const tok of tokens) {
+    const done = tok.match(/^\[\[FILE_DONE:(.+)\]\]$/);
+    if (done) {
+      blocks.push({ kind: "file_done", path: done[1] });
+      continue;
+    }
+    const pending = tok.match(/^\[\[FILE_PENDING:(.+)\]\]$/);
+    if (pending) {
+      blocks.push({ kind: "file_pending", path: pending[1] });
+      continue;
+    }
+    if (!tok) continue;
+    // Split prose on blank lines into paragraphs. Single newlines
+    // inside a paragraph are preserved via whitespace-pre-wrap so
+    // intentional line breaks (e.g. a short list) still show.
+    // Drop chunks that are pure whitespace (spaces/tabs/newlines)
+    // so leading/trailing pad between markers doesn't render as an
+    // empty paragraph row.
+    const paras = tok
+      .split(/\n[ \t]*\n+/)
+      .map((p) => p.replace(/^\n+|\n+$/g, ""))
+      .filter((p) => p.trim().length > 0);
+    for (const p of paras) blocks.push({ kind: "para", text: p });
+  }
+
+  if (blocks.length === 0) return null;
+
   return (
-    <>
-      {parts.map((part, i) => {
-        const done = part.match(/^\[\[FILE_DONE:(.+)\]\]$/);
-        if (done) {
+    <div className="space-y-2">
+      {blocks.map((b, i) => {
+        if (b.kind === "file_done") {
           return (
             <div
               key={i}
@@ -198,13 +233,12 @@ function FileNoticeText({ text }: { text: string }) {
               <FileCheck className="w-3.5 h-3.5 shrink-0 text-emerald-500" />
               <span>
                 Created{" "}
-                <span className="font-mono text-foreground/90">{done[1]}</span>
+                <span className="font-mono text-foreground/90">{b.path}</span>
               </span>
             </div>
           );
         }
-        const pending = part.match(/^\[\[FILE_PENDING:(.+)\]\]$/);
-        if (pending) {
+        if (b.kind === "file_pending") {
           return (
             <div
               key={i}
@@ -213,24 +247,19 @@ function FileNoticeText({ text }: { text: string }) {
               <FilePen className="w-3.5 h-3.5 shrink-0 text-primary animate-pulse" />
               <span>
                 Creating{" "}
-                <span className="font-mono text-foreground/90">{pending[1]}</span>
+                <span className="font-mono text-foreground/90">{b.path}</span>
                 <span className="text-muted-foreground">…</span>
               </span>
             </div>
           );
         }
-        // Trim collapsed whitespace produced by the marker split (we
-        // emit blank lines around marker tokens upstream so the prose
-        // doesn't run into the inline file rows). An empty span here
-        // would still take up vertical room, so skip outright.
-        if (!part || /^\s*$/.test(part)) return null;
         return (
-          <span key={i} className="whitespace-pre-wrap">
-            {part.replace(/^\n+|\n+$/g, "")}
-          </span>
+          <p key={i} className="whitespace-pre-wrap leading-relaxed">
+            {b.text}
+          </p>
         );
       })}
-    </>
+    </div>
   );
 }
 
