@@ -2001,7 +2001,7 @@ function ChatPanel({
             chips are stale or about to be replaced. Click drops the text
             into the input and focuses it; the user can edit before send. */}
         {!isStreaming && quickTasks.length > 0 && chatInput.trim().length === 0 && (
-          <div className="flex flex-wrap gap-1.5 mb-2">
+          <div className="flex gap-1.5 mb-2 overflow-x-auto no-scrollbar -mx-3 px-3">
             {quickTasks.map((task, i) => (
               <button
                 key={`qt-${i}`}
@@ -2009,11 +2009,10 @@ function ChatPanel({
                   setChatInput(task);
                   inputRef.current?.focus();
                 }}
-                className="inline-flex items-center gap-1 max-w-full px-2.5 py-1 rounded-full border border-border bg-surface-raised hover:bg-background hover:border-primary/40 text-[11px] text-foreground transition-colors text-left"
+                className="inline-flex items-center shrink-0 whitespace-nowrap px-2.5 py-1 rounded-full border border-border bg-surface-raised hover:bg-background hover:border-primary/40 text-[11px] text-foreground transition-colors text-left"
                 title={task}
               >
-                <Sparkles className="w-3 h-3 text-primary shrink-0" />
-                <span className="truncate">{task}</span>
+                {task}
               </button>
             ))}
           </div>
