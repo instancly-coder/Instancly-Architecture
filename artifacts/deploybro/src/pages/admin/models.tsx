@@ -4,12 +4,8 @@ import { AdminLayout } from "@/components/admin-layout";
 import { useAdminCostByModel } from "@/lib/api";
 
 const CONFIGURED_MODELS = [
-  { name: "Claude Sonnet 4.5", provider: "Anthropic", costRange: "£0.01 - £0.05" },
-  { name: "Claude Opus", provider: "Anthropic", costRange: "£0.05 - £0.20" },
-  { name: "GPT-4o", provider: "OpenAI", costRange: "£0.02 - £0.10" },
-  { name: "GPT-4o mini", provider: "OpenAI", costRange: "£0.005 - £0.02" },
-  { name: "Gemini 2.5 Pro", provider: "Google", costRange: "£0.01 - £0.04" },
-  { name: "Gemini Flash", provider: "Google", costRange: "£0.002 - £0.01" },
+  { name: "Economy Bro", provider: "Anthropic · Haiku 4.5", costRange: "£0.005 - £0.025" },
+  { name: "Power Bro",   provider: "Anthropic · Opus",      costRange: "£0.02 - £0.10"   },
 ];
 
 export default function AdminModels() {

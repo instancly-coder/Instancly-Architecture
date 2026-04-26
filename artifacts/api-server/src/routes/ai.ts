@@ -31,18 +31,21 @@ const anthropic = aiConfigured ? new Anthropic({ apiKey }) : null;
 
 // Per-million-token pricing in USD. These are the marked-up rates the user
 // pays — model cost + platform margin baked in. Update one place to reprice.
-type ModelKey = "haiku" | "sonnet" | "opus";
+// We expose two tiers under DeployBro branding:
+//   - Economy Bro → Claude Haiku 4.5 (cheap, fast, default)
+//   - Power Bro   → Claude Opus      (expensive, most capable)
+// Old keys ("sonnet") sent by stale clients fall back to DEFAULT_MODEL.
+type ModelKey = "haiku" | "opus";
 const MODELS: Record<
   ModelKey,
   { id: string; display: string; rates: { input: number; output: number } }
 > = {
-  haiku:  { id: "claude-haiku-4-5",  display: "Claude Haiku 4.5",  rates: { input: 5,  output: 25 } },
-  sonnet: { id: "claude-sonnet-4-6", display: "Claude Sonnet 4.5", rates: { input: 12, output: 60 } },
-  opus:   { id: "claude-opus-4-5",   display: "Claude Opus",       rates: { input: 20, output: 100 } },
+  haiku: { id: "claude-haiku-4-5", display: "Economy Bro", rates: { input: 5,  output: 25 } },
+  opus:  { id: "claude-opus-4-5",  display: "Power Bro",   rates: { input: 20, output: 100 } },
 };
-const DEFAULT_MODEL: ModelKey = "sonnet";
+const DEFAULT_MODEL: ModelKey = "haiku";
 
-// Free plan is locked to Haiku regardless of what the client requests.
+// Free plan is locked to Economy Bro (Haiku) regardless of what the client requests.
 function pickModel(requested: unknown, plan: string | null | undefined): ModelKey {
   const k =
     typeof requested === "string" && requested in MODELS

@@ -67,22 +67,18 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-// `key` maps to a backend model registry entry. Models without a key still
-// render in the picker but currently fall back to the default Sonnet model
-// on the server until those providers are wired up.
+// Two Claude-backed tiers under DeployBro branding. `key` maps to the
+// backend model registry. Economy Bro = Claude Haiku 4.5 (fast & cheap),
+// Power Bro = Claude Opus (slower, most capable).
 const AVAILABLE_MODELS: {
   name: string;
   provider: string;
   costRange: string;
-  key?: "haiku" | "sonnet" | "opus";
+  key: "haiku" | "opus";
+  note: string;
 }[] = [
-  { name: "Claude Haiku 4.5", provider: "Anthropic", costRange: "$0.005 - $0.025", key: "haiku" },
-  { name: "Claude Sonnet 4.5", provider: "Anthropic", costRange: "$0.012 - $0.06", key: "sonnet" },
-  { name: "Claude Opus", provider: "Anthropic", costRange: "$0.02 - $0.10", key: "opus" },
-  { name: "GPT-4o", provider: "OpenAI", costRange: "$0.02 - $0.10" },
-  { name: "GPT-4o mini", provider: "OpenAI", costRange: "$0.005 - $0.02" },
-  { name: "Gemini 2.5 Pro", provider: "Google", costRange: "$0.01 - $0.04" },
-  { name: "Gemini Flash", provider: "Google", costRange: "$0.002 - $0.01" },
+  { name: "Economy Bro", provider: "Anthropic · Haiku 4.5", costRange: "$0.005 - $0.025", key: "haiku", note: "Fast & cheap" },
+  { name: "Power Bro",   provider: "Anthropic · Opus",      costRange: "$0.02 - $0.10",   key: "opus",  note: "Most capable" },
 ];
 import {
   useMe,
@@ -700,11 +696,9 @@ export default function Builder() {
   // Lifted from ChatPanel so handleSend (declared here) can read which model
   // the user picked and pass its key to the backend. Both desktop and mobile
   // ChatPanel instances share this single state, which is the right UX too.
-  // Default to Sonnet by name (not by list index) so reordering the picker
-  // never silently downgrades the default model for paid users.
-  const [selectedModel, setSelectedModel] = useState<string>(
-    "Claude Sonnet 4.5",
-  );
+  // Default to Economy Bro by name (not by list index) so reordering the
+  // picker never silently changes the default model.
+  const [selectedModel, setSelectedModel] = useState<string>("Economy Bro");
   // Plan mode: when ON, the AI prepends a numbered plan before any code, so
   // big changes don't scroll past unexplained.
   const [planMode, setPlanMode] = useState<boolean>(false);
@@ -751,7 +745,7 @@ export default function Builder() {
     // before the send fires — that was a real timing race.
     let overrides:
       | {
-          modelKey?: "haiku" | "sonnet" | "opus";
+          modelKey?: "haiku" | "opus";
           planMode?: boolean;
           urls?: string[];
           files?: File[];
@@ -771,7 +765,7 @@ export default function Builder() {
         const modelEntry = AVAILABLE_MODELS.find((m) => m.key === s.model);
         if (modelEntry) {
           setSelectedModel(modelEntry.name);
-          overrides.modelKey = modelEntry.key as "haiku" | "sonnet" | "opus";
+          overrides.modelKey = modelEntry.key;
         }
         if (s.planMode) {
           setPlanMode(true);
@@ -932,8 +926,9 @@ export default function Builder() {
     const controller = new AbortController();
     abortRef.current = controller;
 
-    // Map the picker's display name to the backend model key. Falsy `key`
-    // (e.g. an OpenAI/Gemini option) means "let the server use its default".
+    // Map the picker's display name to the backend model key. If the
+    // current selection isn't in the catalog (e.g. stale state from an
+    // older build), fall through and let the server use its default.
     const modelKey =
       overrides?.modelKey ??
       AVAILABLE_MODELS.find((m) => m.name === selectedModel)?.key;

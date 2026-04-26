@@ -30,11 +30,10 @@ import {
 } from "@/components/ui/popover";
 
 // Mirror the builder's model list so the homepage picker shows the same
-// options. Free plan is server-side locked to Haiku regardless of choice.
-const HOME_MODELS: { name: string; key?: "haiku" | "sonnet" | "opus"; note: string }[] = [
-  { name: "Claude Haiku 4.5",  key: "haiku",  note: "Fast & cheap"           },
-  { name: "Claude Sonnet 4.5", key: "sonnet", note: "Balanced (recommended)" },
-  { name: "Claude Opus",       key: "opus",   note: "Most capable"           },
+// options. Free plan is server-side locked to Economy Bro regardless of choice.
+const HOME_MODELS: { name: string; key: "haiku" | "opus"; note: string }[] = [
+  { name: "Economy Bro", key: "haiku", note: "Fast & cheap"   },
+  { name: "Power Bro",   key: "opus",  note: "Most capable"   },
 ];
 
 const PROMPT_SUGGESTIONS = [
@@ -188,7 +187,7 @@ const FEATURES = [
   { icon: Globe, title: "One-click publish", body: "Live on the web in seconds. Custom domain when you're ready." },
   { icon: BarChart3, title: "Live analytics", body: "Page views, signups, revenue — without dropping a script." },
   { icon: CreditCard, title: "Payments-ready", body: "Stripe wired up so you can charge for what you ship." },
-  { icon: Cpu, title: "Pick your model", body: "Claude, GPT, Gemini. Switch any time. Cost shown live." },
+  { icon: Cpu, title: "Pick your model", body: "Economy Bro for speed, Power Bro for the hard stuff. Cost shown live." },
 ];
 
 const TESTIMONIALS = [
@@ -234,7 +233,7 @@ export default function Landing() {
 
   // Prompt-box composer state — mirrors the builder so the experience is
   // continuous when the user lands in the editor.
-  const [selectedModel, setSelectedModel] = useState<string>("Claude Sonnet 4.5");
+  const [selectedModel, setSelectedModel] = useState<string>("Economy Bro");
   const [planMode, setPlanMode] = useState<boolean>(false);
   const [refUrls, setRefUrls] = useState<string[]>([]);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
@@ -311,7 +310,7 @@ export default function Landing() {
     // Strategy: try with images first; if it throws, retry without images
     // and tell the user (in the editor) that they need to re-attach.
     try {
-      const modelKey = HOME_MODELS.find((m) => m.name === selectedModel)?.key ?? "sonnet";
+      const modelKey = HOME_MODELS.find((m) => m.name === selectedModel)?.key ?? "haiku";
       const baseSettings: Record<string, unknown> = { model: modelKey, planMode };
       if (refUrls.length > 0) baseSettings.urls = refUrls;
 
