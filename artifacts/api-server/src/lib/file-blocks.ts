@@ -252,22 +252,21 @@ export function injectOrphanScripts(
       orphans.length === 1 ? "" : "s"
     } the AI forgot to re-emit in index.html -->\n  ${tags}\n  `;
 
-  // Prefer to inject right BEFORE the app.jsx tag so the canonical load
-  // order is preserved (hooks → components → pages → app.jsx LAST).
+  // Inject right BEFORE the existing `app.jsx` script tag so the canonical
+  // load order is preserved (hooks → components → pages → app.jsx LAST).
+  // If no `app.jsx` script tag exists in this HTML we deliberately bail
+  // and return the original — without an anchor we have no safe place to
+  // insert that's guaranteed to keep the right load order, and silently
+  // adding scripts to a project the AI didn't bootstrap as a multi-file
+  // React app would mask the real failure rather than fix it. The error
+  // overlay surfaces whatever crash happens next so the user sees it.
   const APP_TAG_RE =
     /<script\b[^>]*\btype\s*=\s*["']text\/babel["'][^>]*\bsrc\s*=\s*["'](?:\.\/?|\/)?app\.jsx["'][^>]*>\s*<\/script>/i;
   const APP_TAG_RE_REVERSE =
     /<script\b[^>]*\bsrc\s*=\s*["'](?:\.\/?|\/)?app\.jsx["'][^>]*\btype\s*=\s*["']text\/babel["'][^>]*>\s*<\/script>/i;
   const appMatch = html.match(APP_TAG_RE) ?? html.match(APP_TAG_RE_REVERSE);
-  if (appMatch && typeof appMatch.index === "number") {
-    return html.slice(0, appMatch.index) + block + html.slice(appMatch.index);
-  }
-  // No app.jsx script tag found — fall back to just before </body>, then
-  // last-resort append.
-  if (/<\/body\s*>/i.test(html)) {
-    return html.replace(/<\/body\s*>/i, `${block}</body>`);
-  }
-  return html + block;
+  if (!appMatch || typeof appMatch.index !== "number") return html;
+  return html.slice(0, appMatch.index) + block + html.slice(appMatch.index);
 }
 
 export function contentTypeFor(path: string): string {
