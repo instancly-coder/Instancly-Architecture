@@ -55,11 +55,17 @@ const DEFAULT_PACKAGE_JSON = {
   },
 };
 
+// Vite's default build target (chrome87/firefox78/safari14/etc) does not
+// allow top-level await, but our auto-generated `src/main.jsx` uses one
+// to load the user bundle AFTER the window.React polyfill is in place.
+// Bumping to `esnext` keeps the syntax legal — fine for an AI-generated
+// SPA that's only ever served to modern evergreen browsers.
 const DEFAULT_VITE_CONFIG = `import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
+  build: { target: "esnext" },
 });
 `;
 
