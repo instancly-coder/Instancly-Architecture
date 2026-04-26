@@ -342,10 +342,22 @@ function transformCdnReactToVite(
 // (React, ReactDOM, ReactRouterDOM, useState, BrowserRouter, …) into
 // module scope so the user's unmodified code resolves at build time
 // AND runtime.
+//
+// CRITICAL: \`ReactDOM\` MUST be the *merged* namespace of "react-dom"
+// (legacy: render, createPortal, flushSync) and "react-dom/client"
+// (React 18: createRoot, hydrateRoot). The AI's canonical app.jsx
+// ends with \`ReactDOM.createRoot(...).render(<App/>)\` — if our
+// module-scope \`ReactDOM\` binding only points at "react-dom",
+// \`ReactDOM.createRoot\` is undefined, the call throws, and the whole
+// app fails to mount → blank Vercel deployment with no error
+// surface. Aliasing the raw imports and re-binding \`ReactDOM\` to the
+// merged object below is what keeps the canonical pattern working.
 import * as React from "react";
-import * as ReactDOM from "react-dom";
-import * as ReactDOMClient from "react-dom/client";
+import * as _ReactDOMLegacy from "react-dom";
+import * as _ReactDOMClient from "react-dom/client";
 import * as ReactRouterDOM from "react-router-dom";
+
+const ReactDOM = Object.assign({}, _ReactDOMLegacy, _ReactDOMClient);
 
 const {
   Fragment,
@@ -380,11 +392,9 @@ const {
   useTransition,
 } = React;
 
-// Some AI variants call \`ReactDOM.createRoot\` (React 18) which lives on
-// react-dom/client, others call legacy \`ReactDOM.render\`. Merge both
-// surfaces so either style works without the user touching their code.
-const _ReactDOMUnified = Object.assign({}, ReactDOM, ReactDOMClient);
-const { createRoot, hydrateRoot, render, hydrate, unmountComponentAtNode, createPortal, flushSync } = _ReactDOMUnified;
+// Bare-name aliases for code that calls e.g. \`createRoot()\` directly
+// instead of going through \`ReactDOM.createRoot()\`.
+const { createRoot, hydrateRoot, render, hydrate, unmountComponentAtNode, createPortal, flushSync } = ReactDOM;
 
 // React Router 6 — destructure the surface the AI is taught to use.
 const {
