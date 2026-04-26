@@ -22,6 +22,7 @@ import {
 import { MarketingNav } from "@/components/marketing-nav";
 import { MarketingFooter } from "@/components/marketing-footer";
 import { Button } from "@/components/ui/button";
+import { useTemplates } from "@/lib/api";
 
 const MARKETING_LINKS = [
   { href: "/explore", label: "Explore", icon: Compass },
@@ -281,47 +282,77 @@ export function Changelog() {
 }
 
 export function Templates() {
-  const templates = [
-    { name: "Personal portfolio", desc: "Personal work showcase", tag: "Portfolio" },
-    { name: "Pitch deck slides", desc: "Code-powered presentations", tag: "Slides" },
-    { name: "Architect studio site", desc: "Firm website & gallery", tag: "Agency" },
-    { name: "Fashion blog", desc: "Minimal, playful design", tag: "Blog" },
-    { name: "Event platform", desc: "Find, register, host events", tag: "Marketplace" },
-    { name: "Personal blog", desc: "Muted, intimate design", tag: "Blog" },
-    { name: "Lifestyle magazine", desc: "Sophisticated long-form", tag: "Editorial" },
-    { name: "Ecommerce store", desc: "Premium product showcase", tag: "Shop" },
-    { name: "SaaS landing page", desc: "Conversion-tuned hero", tag: "Marketing" },
-    { name: "Internal admin", desc: "Tables, forms, charts", tag: "Tooling" },
-    { name: "Recipe collection", desc: "Tag, search, share", tag: "Lifestyle" },
-    { name: "Wedding website", desc: "RSVP, gallery, schedule", tag: "Personal" },
-  ];
+  const { data: templates = [], isLoading } = useTemplates();
+
   return (
     <Shell
       eyebrow="Templates"
       title="Start from a template"
-      intro="Skip the blank page. Remix one of these and make it yours in minutes."
+      intro="Hand-picked by the DeployBro team. Remix one and make it yours in minutes."
     >
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {templates.map((t) => (
-          <Link
-            key={t.name}
-            href="/login"
-            className="group rounded-xl border border-border bg-surface hover-elevate overflow-hidden flex flex-col"
-          >
-            <div className="aspect-[4/3] bg-gradient-to-br from-primary/20 via-surface-raised to-background relative">
-              <div className="absolute top-2 right-2 px-2 py-0.5 rounded bg-primary text-primary-foreground text-[10px] font-mono uppercase">
-                {t.tag}
+      {isLoading ? (
+        <div className="text-secondary text-sm">Loading templates…</div>
+      ) : templates.length === 0 ? (
+        <div className="rounded-xl border border-border bg-surface p-10 text-center">
+          <p className="text-secondary text-sm">
+            No templates featured yet — check back soon, or browse{" "}
+            <Link href="/explore" className="text-primary hover:underline">
+              every public project on Explore
+            </Link>
+            .
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {templates.map((t) => (
+            <Link
+              key={t.id}
+              href={`/${t.author}/${t.slug}`}
+              className="group rounded-xl border border-border bg-surface hover-elevate overflow-hidden flex flex-col"
+            >
+              <div className="aspect-[4/3] bg-gradient-to-br from-primary/20 via-surface-raised to-background relative overflow-hidden">
+                {t.coverImageUrl ? (
+                  <img
+                    src={t.coverImageUrl}
+                    alt={t.name}
+                    className="absolute inset-0 w-full h-full object-cover"
+                  />
+                ) : null}
+                <div className="absolute top-2 right-2 px-2 py-0.5 rounded bg-primary text-primary-foreground text-[10px] font-mono uppercase">
+                  {t.framework}
+                </div>
               </div>
-            </div>
-            <div className="p-4">
-              <h3 className="font-medium mb-1 group-hover:text-primary transition-colors">
-                {t.name}
-              </h3>
-              <p className="text-xs text-secondary">{t.desc}</p>
-            </div>
-          </Link>
-        ))}
-      </div>
+              <div className="p-4 flex-1 flex flex-col gap-2">
+                <div>
+                  <h3 className="font-medium mb-1 group-hover:text-primary transition-colors">
+                    {t.name}
+                  </h3>
+                  <p className="text-xs text-secondary line-clamp-2">
+                    {t.description || "—"}
+                  </p>
+                </div>
+                {t.features.length > 0 && (
+                  <ul className="space-y-1 mt-1">
+                    {t.features.slice(0, 3).map((f: string) => (
+                      <li
+                        key={f}
+                        className="text-[11px] text-secondary flex gap-1.5"
+                      >
+                        <CheckCircle2 className="w-3 h-3 text-primary shrink-0 mt-0.5" />
+                        <span className="line-clamp-1">{f}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <div className="mt-auto pt-2 flex items-center justify-between text-[11px] text-secondary">
+                  <span className="font-mono">@{t.author}</span>
+                  <span className="font-mono">{t.clones} clones</span>
+                </div>
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
     </Shell>
   );
 }

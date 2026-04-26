@@ -39,6 +39,7 @@ router.get("/explore", async (req, res) => {
       description: projectsTable.description,
       framework: projectsTable.framework,
       clones: projectsTable.clones,
+      coverImageUrl: projectsTable.coverImageUrl,
       lastBuiltAt: projectsTable.lastBuiltAt,
       author: usersTable.username,
       authorDisplayName: usersTable.displayName,
@@ -56,6 +57,42 @@ router.get("/explore", async (req, res) => {
         lastBuiltAt: r.lastBuiltAt.toISOString(),
       })),
     ),
+  );
+});
+
+// Public list of admin-curated templates. We don't paginate yet — until
+// curation grows past a few dozen entries the simple "show them all"
+// query keeps the page snappy and avoids needing a sort UI.
+router.get("/templates", async (_req, res) => {
+  const rows = await db
+    .select({
+      id: projectsTable.id,
+      name: projectsTable.name,
+      slug: projectsTable.slug,
+      description: projectsTable.description,
+      framework: projectsTable.framework,
+      features: projectsTable.features,
+      coverImageUrl: projectsTable.coverImageUrl,
+      clones: projectsTable.clones,
+      author: usersTable.username,
+      authorDisplayName: usersTable.displayName,
+    })
+    .from(projectsTable)
+    .innerJoin(usersTable, eq(usersTable.id, projectsTable.userId))
+    .where(
+      and(
+        eq(projectsTable.isPublic, true),
+        eq(projectsTable.isFeaturedTemplate, true),
+      ),
+    )
+    .orderBy(desc(projectsTable.clones))
+    .limit(60);
+
+  res.json(
+    rows.map((r) => ({
+      ...r,
+      features: r.features ?? [],
+    })),
   );
 });
 

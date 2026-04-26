@@ -68,6 +68,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 // Three Claude-backed tiers under DeployBro branding. `key` maps to the
 // backend model registry. Plan mode server-side auto-upgrades paid users
 // to Power Bro regardless of which tier is selected here.
@@ -106,8 +107,10 @@ import {
   useProjectDbInfo,
   useProjectDbTables,
   useProvisionProjectDb,
+  useUpdateProject,
   type ApiBuild,
   type ApiDeployment,
+  type ApiProject,
 } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -1620,7 +1623,13 @@ export default function Builder() {
                 publishBusy={publishMutation.isPending || isPublishing}
               />
             )}
-            {activeTab === "settings" && <SettingsPane />}
+            {activeTab === "settings" && (
+              <SettingsPane
+                username={username}
+                slug={slug}
+                project={project}
+              />
+            )}
           </div>
         </section>
       </div>
@@ -4539,7 +4548,68 @@ function HistoryPane({
   );
 }
 
-function SettingsPane() {
+// Owner-editable per-project public listing fields. Renaming + slug
+// changes still go through the dedicated rename mutation elsewhere; this
+// pane edits the marketing surface (description, feature bullets, cover
+// image) and the public visibility toggle.
+function SettingsPane({
+  username,
+  slug,
+  project,
+}: {
+  username: string | undefined;
+  slug: string | undefined;
+  project: ApiProject | undefined;
+}) {
+  const update = useUpdateProject(username, slug);
+
+  // Local form state, seeded from server data once loaded. Stored as raw
+  // strings (one feature per line) so the textarea behaves like a normal
+  // multi-line input — split + filter on submit.
+  const [description, setDescription] = useState("");
+  const [featuresText, setFeaturesText] = useState("");
+  const [coverImageUrl, setCoverImageUrl] = useState("");
+  const [isPublic, setIsPublic] = useState(true);
+
+  // Re-seed when the project loads or when a save completes (the success
+  // path re-fetches and we want any server-side normalisation — feature
+  // trim, length cap — to flow back into the form).
+  useEffect(() => {
+    if (!project) return;
+    setDescription(project.description ?? "");
+    setFeaturesText((project.features ?? []).join("\n"));
+    setCoverImageUrl(project.coverImageUrl ?? "");
+    setIsPublic(project.isPublic);
+  }, [project]);
+
+  const dirty =
+    !!project &&
+    (description !== (project.description ?? "") ||
+      featuresText !== (project.features ?? []).join("\n") ||
+      coverImageUrl !== (project.coverImageUrl ?? "") ||
+      isPublic !== project.isPublic);
+
+  const onSave = () => {
+    if (!project) return;
+    const features = featuresText
+      .split("\n")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    update.mutate(
+      {
+        description,
+        features,
+        coverImageUrl: coverImageUrl.trim() || null,
+        isPublic,
+      },
+      {
+        onSuccess: () => toast.success("Settings saved"),
+        onError: (err) =>
+          toast.error(err instanceof Error ? err.message : "Save failed"),
+      },
+    );
+  };
+
   return (
     <PaneShell
       title="Project settings"
@@ -4551,25 +4621,65 @@ function SettingsPane() {
             <Label htmlFor="name">Project name</Label>
             <Input
               id="name"
-              defaultValue="Todo App"
+              value={project?.name ?? ""}
+              readOnly
               className="bg-background border-border"
             />
+            <span className="text-[11px] text-secondary">
+              Renaming changes the URL slug — use the project actions menu in
+              the dashboard to rename.
+            </span>
           </div>
           <div className="grid gap-2">
             <Label htmlFor="slug">Slug</Label>
             <Input
               id="slug"
-              defaultValue="todo-app"
+              value={project?.slug ?? ""}
+              readOnly
               className="bg-background border-border font-mono"
             />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="domain">Custom domain</Label>
+            <Label htmlFor="description">Description</Label>
+            <Textarea
+              id="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="One-liner shown on Explore and your public profile."
+              rows={2}
+              maxLength={600}
+              className="bg-background border-border resize-none"
+            />
+            <span className="text-[11px] text-secondary text-right font-mono">
+              {description.length}/600
+            </span>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="features">Features</Label>
+            <Textarea
+              id="features"
+              value={featuresText}
+              onChange={(e) => setFeaturesText(e.target.value)}
+              placeholder={"One per line — these become bullets on your template card.\nLive collaboration\nDark mode\nStripe checkout"}
+              rows={5}
+              className="bg-background border-border font-mono text-sm"
+            />
+            <span className="text-[11px] text-secondary">
+              Up to 12 bullets. Empty lines are ignored.
+            </span>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="cover">Cover image URL</Label>
             <Input
-              id="domain"
-              placeholder="app.example.com"
+              id="cover"
+              value={coverImageUrl}
+              onChange={(e) => setCoverImageUrl(e.target.value)}
+              placeholder="https://…/cover.png"
               className="bg-background border-border font-mono"
             />
+            <span className="text-[11px] text-secondary">
+              Used as the thumbnail on Explore and the Templates gallery.
+            </span>
           </div>
           <div className="flex items-center justify-between pt-2">
             <Label htmlFor="public" className="flex flex-col gap-1">
@@ -4578,15 +4688,21 @@ function SettingsPane() {
                 Allow others to view and clone.
               </span>
             </Label>
-            <Switch id="public" defaultChecked />
+            <Switch
+              id="public"
+              checked={isPublic}
+              onCheckedChange={setIsPublic}
+            />
           </div>
           <div className="flex justify-end pt-2">
             <Button
               size="sm"
-              onClick={() => toast.success("Settings saved")}
+              onClick={onSave}
+              disabled={!project || !dirty || update.isPending}
               className="bg-primary text-primary-foreground hover:bg-primary/90"
             >
-              <Save className="w-4 h-4 mr-2" /> Save changes
+              <Save className="w-4 h-4 mr-2" />
+              {update.isPending ? "Saving…" : "Save changes"}
             </Button>
           </div>
         </div>
@@ -4599,41 +4715,45 @@ function SettingsPane() {
             <div className="space-y-2.5 text-sm">
               <div className="flex justify-between gap-3">
                 <span className="text-secondary">Owner</span>
-                <span className="font-mono">johndoe</span>
+                <span className="font-mono">
+                  {project?.owner?.username ?? "—"}
+                </span>
               </div>
               <div className="flex justify-between gap-3">
                 <span className="text-secondary">Created</span>
-                <span className="font-mono">3 days ago</span>
+                <span className="font-mono">
+                  {project?.createdAt
+                    ? new Date(project.createdAt).toLocaleDateString()
+                    : "—"}
+                </span>
               </div>
               <div className="flex justify-between gap-3">
-                <span className="text-secondary">Region</span>
-                <span className="font-mono">lhr1 · London</span>
+                <span className="text-secondary">Builds</span>
+                <span className="font-mono">{project?.buildsCount ?? 0}</span>
               </div>
               <div className="flex justify-between gap-3">
-                <span className="text-secondary">Plan</span>
-                <span className="font-mono">Pro · £29/mo</span>
+                <span className="text-secondary">Clones</span>
+                <span className="font-mono">{project?.clones ?? 0}</span>
+              </div>
+              <div className="flex justify-between gap-3 items-center">
+                <span className="text-secondary">Featured template</span>
+                <span
+                  className={`px-2 py-0.5 rounded text-[10px] font-mono uppercase ${
+                    project?.isFeaturedTemplate
+                      ? "bg-primary/15 text-primary"
+                      : "bg-surface-raised text-secondary"
+                  }`}
+                >
+                  {project?.isFeaturedTemplate ? "Featured" : "Not featured"}
+                </span>
               </div>
             </div>
-          </div>
-
-          <div className="rounded-xl border border-border bg-surface p-5">
-            <div className="text-[10px] uppercase tracking-wider font-mono text-secondary mb-3">
-              Members
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="flex -space-x-2">
-                {["#ccff00", "#7c3aed", "#10b981"].map((c) => (
-                  <span
-                    key={c}
-                    className="w-7 h-7 rounded-full border-2 border-surface"
-                    style={{ background: c }}
-                  />
-                ))}
-              </div>
-              <Button size="sm" variant="outline" className="border-border h-7 text-xs">
-                <Users className="w-3 h-3 mr-1.5" /> Invite
-              </Button>
-            </div>
+            {!project?.isFeaturedTemplate && (
+              <p className="text-[11px] text-secondary mt-3 leading-relaxed">
+                Curated by the DeployBro team. Make a polished public project
+                and we'll consider it.
+              </p>
+            )}
           </div>
         </div>
       </div>

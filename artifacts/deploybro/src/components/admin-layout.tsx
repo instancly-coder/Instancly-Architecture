@@ -4,7 +4,7 @@ import { BrandLogo } from "./brand-logo";
 import { useIsAdmin } from "@/lib/api";
 import { ShieldOff } from "lucide-react";
 
-export function AdminLayout({ active, children }: { active: "overview" | "users" | "models" | "revenue"; children: ReactNode }) {
+export function AdminLayout({ active, children }: { active: "overview" | "users" | "models" | "revenue" | "templates"; children: ReactNode }) {
   const { data, isLoading } = useIsAdmin();
 
   return (
@@ -17,6 +17,7 @@ export function AdminLayout({ active, children }: { active: "overview" | "users"
         <div className="flex items-center gap-6 text-sm">
           <NavLink href="/admin" label="Overview" active={active === "overview"} />
           <NavLink href="/admin/users" label="Users" active={active === "users"} />
+          <NavLink href="/admin/templates" label="Templates" active={active === "templates"} />
           <NavLink href="/admin/models" label="Models" active={active === "models"} />
           <NavLink href="/admin/revenue" label="Revenue" active={active === "revenue"} />
         </div>

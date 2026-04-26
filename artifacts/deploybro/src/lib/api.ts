@@ -9,6 +9,7 @@ import type {
   AdminMe,
   AdminRecentBuild as GeneratedAdminRecentBuild,
   AdminStats as GeneratedAdminStats,
+  AdminTemplateItem,
   AdminUser as GeneratedAdminUser,
   AppConfig,
   Build,
@@ -28,6 +29,7 @@ import type {
   PublishResponse,
   PublishStatus,
   SetPrimaryDomainResponse,
+  TemplateItem,
   Transaction,
   User,
 } from "@workspace/api-zod";
@@ -37,6 +39,7 @@ import type {
 import {
   DeleteProjectFileResponse as DeleteProjectFileResponseSchema,
   UpdateMeBody as UpdateMeBodySchema,
+  UpdateProjectBody as UpdateProjectBodySchema,
 } from "@workspace/api-zod";
 
 const BASE = "/api";
@@ -91,6 +94,9 @@ export type ApiProjectListItem = ProjectListItem;
 export type ApiProject = Project;
 export type ApiBuild = Build;
 export type ApiExploreItem = ExploreItem;
+export type ApiTemplateItem = TemplateItem;
+export type ApiAdminTemplateItem = AdminTemplateItem;
+export type ApiUpdateProjectBody = z.infer<typeof UpdateProjectBodySchema>;
 export type ApiTransaction = Transaction;
 
 export type UpdateMeBody = z.infer<typeof UpdateMeBodySchema>;
@@ -329,6 +335,38 @@ export function useProjectBuilds(username: string | undefined, slug: string | un
   });
 }
 
+export function useTemplates() {
+  return useQuery({
+    queryKey: ["templates"],
+    queryFn: () => request<ApiTemplateItem[]>("/templates"),
+  });
+}
+
+export function useUpdateProject(
+  username: string | undefined,
+  slug: string | undefined,
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ApiUpdateProjectBody) => {
+      if (!username || !slug) throw new Error("Project not loaded");
+      return request<ApiProject>(`/projects/${username}/${slug}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      });
+    },
+    onSuccess: (updated) => {
+      qc.invalidateQueries({ queryKey: ["projects", username, slug] });
+      qc.invalidateQueries({ queryKey: ["users", username, "projects"] });
+      qc.invalidateQueries({ queryKey: ["me", "projects"] });
+      qc.invalidateQueries({ queryKey: ["templates"] });
+      // Slug never changes on this PATCH (rename has its own endpoint),
+      // so this is just a faster path to the freshest data.
+      qc.setQueryData(["projects", username, updated.slug], updated);
+    },
+  });
+}
+
 export function useExplore(params: { q?: string; framework?: string; sort?: string }) {
   const search = new URLSearchParams();
   if (params.q) search.set("q", params.q);
@@ -381,6 +419,35 @@ export function useAdminUsers() {
 }
 export function useAdminCostByModel() {
   return useQuery({ queryKey: ["admin", "cost-by-model"], queryFn: () => request<AdminCostByModel[]>("/admin/cost-by-model") });
+}
+
+export function useAdminTemplates() {
+  return useQuery({
+    queryKey: ["admin", "templates"],
+    queryFn: () => request<ApiAdminTemplateItem[]>("/admin/templates"),
+  });
+}
+
+export function useSetFeaturedTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: string; isFeaturedTemplate: boolean }) =>
+      request<ApiAdminTemplateItem>(
+        `/admin/projects/${vars.id}/feature-template`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ isFeaturedTemplate: vars.isFeaturedTemplate }),
+        },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "templates"] });
+      qc.invalidateQueries({ queryKey: ["templates"] });
+      // Also refresh any open project / dashboard views so the
+      // "Featured template" badge reflects the new state immediately.
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: ["me", "projects"] });
+    },
+  });
 }
 
 export function useUpdateMe() {

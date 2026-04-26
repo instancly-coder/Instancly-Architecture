@@ -42,6 +42,7 @@ import Pricing from "@/pages/pricing";
 import Admin from "@/pages/admin";
 import AdminModels from "@/pages/admin/models";
 import AdminUsers from "@/pages/admin/users";
+import AdminTemplates from "@/pages/admin/templates";
 import AdminRevenue from "@/pages/admin/revenue";
 import {
   Docs,
@@ -88,6 +89,7 @@ function Router() {
       <Route path="/admin" component={gated(Admin)} />
       <Route path="/admin/models" component={gated(AdminModels)} />
       <Route path="/admin/users" component={gated(AdminUsers)} />
+      <Route path="/admin/templates" component={gated(AdminTemplates)} />
       <Route path="/admin/revenue" component={gated(AdminRevenue)} />
       <Route path="/docs" component={Docs} />
       <Route path="/changelog" component={Changelog} />

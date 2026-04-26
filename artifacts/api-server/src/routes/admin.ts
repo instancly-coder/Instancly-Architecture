@@ -143,6 +143,100 @@ router.get("/admin/users", requireAdmin, async (_req: Request, res: Response): P
   );
 });
 
+// Admin curation list — every public project, marked with whether it's
+// currently surfaced on /templates. We deliberately include unfeatured
+// rows so admins can promote them with a single toggle. Sorting puts
+// already-featured items first so the curation surface is obvious.
+router.get(
+  "/admin/templates",
+  requireAdmin,
+  async (_req: Request, res: Response): Promise<void> => {
+    const rows = await db
+      .select({
+        id: projectsTable.id,
+        name: projectsTable.name,
+        slug: projectsTable.slug,
+        description: projectsTable.description,
+        framework: projectsTable.framework,
+        coverImageUrl: projectsTable.coverImageUrl,
+        clones: projectsTable.clones,
+        isFeaturedTemplate: projectsTable.isFeaturedTemplate,
+        author: usersTable.username,
+        authorDisplayName: usersTable.displayName,
+        createdAt: projectsTable.createdAt,
+      })
+      .from(projectsTable)
+      .innerJoin(usersTable, eq(usersTable.id, projectsTable.userId))
+      .where(eq(projectsTable.isPublic, true))
+      .orderBy(desc(projectsTable.isFeaturedTemplate), desc(projectsTable.clones));
+    res.json(
+      rows.map((r) => ({
+        ...r,
+        createdAt: r.createdAt.toISOString(),
+      })),
+    );
+  },
+);
+
+router.patch(
+  "/admin/projects/:id/feature-template",
+  requireAdmin,
+  async (req: Request, res: Response): Promise<void> => {
+    const id = String(req.params.id);
+    const { isFeaturedTemplate } = (req.body ?? {}) as {
+      isFeaturedTemplate?: unknown;
+    };
+    if (typeof isFeaturedTemplate !== "boolean") {
+      res.status(400).json({
+        status: "error",
+        message: "isFeaturedTemplate must be a boolean",
+      });
+      return;
+    }
+    const [updated] = await db
+      .update(projectsTable)
+      .set({ isFeaturedTemplate })
+      .where(eq(projectsTable.id, id))
+      .returning({
+        id: projectsTable.id,
+        name: projectsTable.name,
+        slug: projectsTable.slug,
+        description: projectsTable.description,
+        framework: projectsTable.framework,
+        coverImageUrl: projectsTable.coverImageUrl,
+        clones: projectsTable.clones,
+        isFeaturedTemplate: projectsTable.isFeaturedTemplate,
+        userId: projectsTable.userId,
+        createdAt: projectsTable.createdAt,
+      });
+    if (!updated) {
+      res.status(404).json({ status: "error", message: "Project not found" });
+      return;
+    }
+    const [author] = await db
+      .select({
+        username: usersTable.username,
+        displayName: usersTable.displayName,
+      })
+      .from(usersTable)
+      .where(eq(usersTable.id, updated.userId))
+      .limit(1);
+    res.json({
+      id: updated.id,
+      name: updated.name,
+      slug: updated.slug,
+      description: updated.description,
+      framework: updated.framework,
+      coverImageUrl: updated.coverImageUrl,
+      clones: updated.clones,
+      isFeaturedTemplate: updated.isFeaturedTemplate,
+      author: author?.username ?? "",
+      authorDisplayName: author?.displayName ?? "",
+      createdAt: updated.createdAt.toISOString(),
+    });
+  },
+);
+
 router.get("/admin/cost-by-model", requireAdmin, async (_req: Request, res: Response): Promise<void> => {
   const rows = await db
     .select({

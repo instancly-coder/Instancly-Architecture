@@ -13,6 +13,7 @@ export type {
   AdminMe,
   AdminRecentBuild,
   AdminStats,
+  AdminTemplateItem,
   AdminUser,
   AppConfig,
   Build,
@@ -41,6 +42,7 @@ export type {
   PublishStatus,
   RenameProjectBody,
   SetPrimaryDomainResponse,
+  TemplateItem,
   Transaction,
   User,
 } from "./generated/types";

@@ -54,6 +54,9 @@ router.get("/projects/:username/:slug", async (req: Request, res: Response): Pro
       framework: project.framework,
       status: project.status,
       isPublic: project.isPublic,
+      isFeaturedTemplate: project.isFeaturedTemplate,
+      features: project.features ?? [],
+      coverImageUrl: project.coverImageUrl,
       clones: project.clones,
       createdAt: project.createdAt.toISOString(),
       lastBuiltAt: project.lastBuiltAt.toISOString(),
@@ -68,6 +71,117 @@ router.get("/projects/:username/:slug", async (req: Request, res: Response): Pro
     }),
   );
 });
+
+// Owner-gated update for the public listing fields. Only fields explicitly
+// present on the body are touched — partial updates are intentional so the
+// SettingsPane can post just `{ isPublic: false }` without nulling out the
+// description, etc. The admin-only `isFeaturedTemplate` flag is NOT
+// settable here; it lives on PATCH /admin/projects/:id/feature-template.
+router.patch(
+  "/projects/:username/:slug",
+  requireAuth,
+  async (req: Request, res: Response): Promise<void> => {
+    const auth = getAuthedUser(req);
+    if (!auth) {
+      res.status(401).json({ status: "error", message: "Unauthenticated" });
+      return;
+    }
+    const username = String(req.params.username);
+    const slug = String(req.params.slug);
+    const row = await loadProject(username, slug);
+    if (!row) {
+      res.status(404).json({ status: "error", message: "Project not found" });
+      return;
+    }
+    if (row.user.id !== auth.id) {
+      res.status(404).json({ status: "error", message: "Project not found" });
+      return;
+    }
+
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const updates: Record<string, unknown> = {};
+
+    if (typeof body.name === "string") {
+      const trimmed = body.name.trim().slice(0, 80);
+      if (trimmed.length === 0) {
+        res.status(400).json({ status: "error", message: "name cannot be empty" });
+        return;
+      }
+      updates.name = trimmed;
+    }
+    if (typeof body.description === "string") {
+      updates.description = body.description.slice(0, 600);
+    }
+    if (typeof body.framework === "string") {
+      updates.framework = body.framework.slice(0, 60);
+    }
+    if (typeof body.isPublic === "boolean") {
+      updates.isPublic = body.isPublic;
+    }
+    if (Array.isArray(body.features)) {
+      updates.features = (body.features as unknown[])
+        .filter((f): f is string => typeof f === "string")
+        .map((f) => f.trim())
+        .filter((f) => f.length > 0)
+        .slice(0, 12);
+    }
+    if (typeof body.coverImageUrl === "string" || body.coverImageUrl === null) {
+      const v =
+        typeof body.coverImageUrl === "string"
+          ? body.coverImageUrl.trim()
+          : null;
+      updates.coverImageUrl = v && v.length > 0 ? v.slice(0, 500) : null;
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await db
+        .update(projectsTable)
+        .set(updates)
+        .where(eq(projectsTable.id, row.project.id));
+    }
+
+    const refreshed = await loadProject(username, slug);
+    if (!refreshed) {
+      res.status(404).json({ status: "error", message: "Project not found" });
+      return;
+    }
+    const { project: p, user: u } = refreshed;
+
+    const [counts] = await db
+      .select({
+        builds: sql<number>`count(*)`,
+        lastBuild: max(buildsTable.createdAt),
+      })
+      .from(buildsTable)
+      .where(eq(buildsTable.projectId, p.id));
+
+    res.json(
+      GetProjectResponse.parse({
+        id: p.id,
+        name: p.name,
+        slug: p.slug,
+        description: p.description,
+        framework: p.framework,
+        status: p.status,
+        isPublic: p.isPublic,
+        isFeaturedTemplate: p.isFeaturedTemplate,
+        features: p.features ?? [],
+        coverImageUrl: p.coverImageUrl,
+        clones: p.clones,
+        createdAt: p.createdAt.toISOString(),
+        lastBuiltAt: p.lastBuiltAt.toISOString(),
+        owner: {
+          id: u.id,
+          username: u.username,
+          displayName: u.displayName,
+          avatarUrl: u.avatarUrl,
+        },
+        buildsCount: Number(counts?.builds ?? 0),
+        lastBuildAt: counts?.lastBuild ? counts.lastBuild.toISOString() : null,
+      }),
+    );
+  },
+);
 
 router.get("/projects/:username/:slug/builds", async (req: Request, res: Response): Promise<void> => {
   const row = await loadProject(String(req.params.username), String(req.params.slug));
