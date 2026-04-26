@@ -5,9 +5,13 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { ExploreSort } from "./exploreSort";
 
 export type ExploreParams = {
   q?: string;
   framework?: string;
-  sort?: string;
+  /**
+   * Ordering for the result set. `trending` (default) ranks by clones decayed by recency, `newest` orders by creation time, and `most-cloned` orders by absolute clone count.
+   */
+  sort?: ExploreSort;
 };

@@ -629,7 +629,13 @@ paths:
         - name: sort
           in: query
           required: false
-          schema: { type: string }
+          description: >-
+            Ordering for the result set. `trending` (default) ranks by
+            clones decayed by recency, `newest` orders by creation time,
+            and `most-cloned` orders by absolute clone count.
+          schema:
+            type: string
+            enum: [trending, newest, most-cloned]
       responses:
         "200":
           description: Projects
@@ -1179,6 +1185,9 @@ components:
         slug: { type: string }
         description: { type: string }
         framework: { type: string }
+        features:
+          type: array
+          items: { type: string }
         clones: { type: integer }
         coverImageUrl:
           type: string
@@ -1194,6 +1203,7 @@ components:
         - slug
         - description
         - framework
+        - features
         - clones
         - coverImageUrl
         - lastBuiltAt

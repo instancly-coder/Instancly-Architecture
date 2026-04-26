@@ -8,7 +8,7 @@ const router: IRouter = Router();
 router.get("/explore", async (req, res) => {
   const q = (req.query.q as string | undefined)?.trim();
   const framework = req.query.framework as string | undefined;
-  const sort = (req.query.sort as string | undefined) ?? "popular";
+  const sort = (req.query.sort as string | undefined) ?? "trending";
 
   const conds = [eq(projectsTable.isPublic, true)];
   if (q) {
@@ -24,12 +24,19 @@ router.get("/explore", async (req, res) => {
     conds.push(eq(projectsTable.framework, framework));
   }
 
+  // Sort options surfaced in the Explore UI:
+  //   • trending    — Hacker-News-style decay: clones boosted by recency
+  //                   of the last build, so a freshly-popular project
+  //                   outranks an old one with the same total clones.
+  //   • newest      — straight createdAt desc, for "what just shipped".
+  //   • most-cloned — absolute clones desc, the all-time leaderboard.
+  // Unknown values fall back to trending so older clients keep working.
   const order =
-    sort === "recent"
-      ? desc(projectsTable.lastBuiltAt)
-      : sort === "alpha"
-        ? sql`${projectsTable.name} asc`
-        : desc(projectsTable.clones);
+    sort === "newest"
+      ? desc(projectsTable.createdAt)
+      : sort === "most-cloned"
+        ? desc(projectsTable.clones)
+        : sql`${projectsTable.clones}::float / power(extract(epoch from (now() - ${projectsTable.lastBuiltAt})) / 86400 + 2, 1.5) desc`;
 
   const rows = await db
     .select({
@@ -38,6 +45,7 @@ router.get("/explore", async (req, res) => {
       slug: projectsTable.slug,
       description: projectsTable.description,
       framework: projectsTable.framework,
+      features: projectsTable.features,
       clones: projectsTable.clones,
       coverImageUrl: projectsTable.coverImageUrl,
       lastBuiltAt: projectsTable.lastBuiltAt,
@@ -54,6 +62,7 @@ router.get("/explore", async (req, res) => {
     ExploreResponse.parse(
       rows.map((r) => ({
         ...r,
+        features: r.features ?? [],
         lastBuiltAt: r.lastBuiltAt.toISOString(),
       })),
     ),

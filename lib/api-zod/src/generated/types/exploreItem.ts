@@ -12,6 +12,7 @@ export interface ExploreItem {
   slug: string;
   description: string;
   framework: string;
+  features: string[];
   clones: number;
   coverImageUrl: string | null;
   lastBuiltAt: string;

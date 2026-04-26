@@ -657,7 +657,12 @@ export const SetPrimaryProjectDomainResponse = zod.object({
 export const ExploreQueryParams = zod.object({
   q: zod.string().optional(),
   framework: zod.string().optional(),
-  sort: zod.string().optional(),
+  sort: zod
+    .enum(["trending", "newest", "most-cloned"])
+    .optional()
+    .describe(
+      "Ordering for the result set. `trending` (default) ranks by clones decayed by recency, `newest` orders by creation time, and `most-cloned` orders by absolute clone count.",
+    ),
 });
 
 export const ExploreResponseItem = zod.object({
@@ -666,6 +671,7 @@ export const ExploreResponseItem = zod.object({
   slug: zod.string(),
   description: zod.string(),
   framework: zod.string(),
+  features: zod.array(zod.string()),
   clones: zod.number(),
   coverImageUrl: zod.string().nullable(),
   lastBuiltAt: zod.string().datetime({}),

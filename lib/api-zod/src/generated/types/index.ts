@@ -30,6 +30,7 @@ export * from "./earning";
 export * from "./earningsSummary";
 export * from "./exploreItem";
 export * from "./exploreParams";
+export * from "./exploreSort";
 export * from "./fileEncoding";
 export * from "./finalizeUploadBody";
 export * from "./finalizeUploadBodyVisibility";

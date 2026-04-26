@@ -162,6 +162,7 @@ export interface ExploreItem {
   slug: string;
   description: string;
   framework: string;
+  features: string[];
   clones: number;
   coverImageUrl: string | null;
   lastBuiltAt: string;
@@ -451,5 +452,16 @@ export interface StorageError {
 export type ExploreParams = {
   q?: string;
   framework?: string;
-  sort?: string;
+  /**
+   * Ordering for the result set. `trending` (default) ranks by clones decayed by recency, `newest` orders by creation time, and `most-cloned` orders by absolute clone count.
+   */
+  sort?: ExploreSort;
 };
+
+export type ExploreSort = (typeof ExploreSort)[keyof typeof ExploreSort];
+
+export const ExploreSort = {
+  trending: "trending",
+  newest: "newest",
+  "most-cloned": "most-cloned",
+} as const;
