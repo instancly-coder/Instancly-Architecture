@@ -120,23 +120,28 @@ export default function Project() {
           </div>
         </div>
 
-        <div className="flex-1 bg-black flex flex-col items-center justify-center p-4 sm:p-8">
-          <div className="w-full max-w-4xl h-full max-h-[800px] bg-white rounded-lg shadow-2xl overflow-hidden border border-border flex flex-col">
-            <div className="h-10 bg-gray-100 border-b border-gray-200 flex items-center px-4 gap-2">
+        <div className="flex-1 bg-background flex flex-col items-center justify-center p-4 sm:p-8">
+          <div className="w-full max-w-4xl h-full max-h-[800px] bg-surface rounded-lg shadow-2xl overflow-hidden border border-border flex flex-col">
+            <div className="h-10 bg-surface-raised border-b border-border flex items-center px-4 gap-2 shrink-0">
               <div className="flex gap-1.5">
-                <div className="w-3 h-3 rounded-full bg-gray-300"></div>
-                <div className="w-3 h-3 rounded-full bg-gray-300"></div>
-                <div className="w-3 h-3 rounded-full bg-gray-300"></div>
+                <div className="w-3 h-3 rounded-full bg-foreground/20"></div>
+                <div className="w-3 h-3 rounded-full bg-foreground/20"></div>
+                <div className="w-3 h-3 rounded-full bg-foreground/20"></div>
               </div>
-              <div className="mx-auto text-xs font-mono text-gray-500 bg-white px-24 py-1 rounded border border-gray-200">
+              <div className="mx-auto text-xs font-mono text-secondary bg-background px-24 py-1 rounded border border-border">
                 {slug}.deploybro.app
               </div>
             </div>
-            <div className="flex-1 flex items-center justify-center bg-gray-50 text-black">
-              <div className="text-center">
-                <h2 className="text-2xl font-bold mb-2">{project.name}</h2>
-                <p className="text-gray-500">{project.description}</p>
-              </div>
+            <div className="flex-1 bg-background relative">
+              {/* Real preview of the project content. Same endpoint the
+                  builder iframe uses, so what visitors see here matches
+                  exactly what the owner sees in the dev preview. */}
+              <iframe
+                src={`/api/preview/${encodeURIComponent(String(username))}/${encodeURIComponent(String(slug))}/`}
+                title={`${project.name} preview`}
+                sandbox="allow-scripts allow-same-origin"
+                className="absolute inset-0 w-full h-full border-0 bg-background"
+              />
             </div>
           </div>
         </div>

@@ -308,17 +308,33 @@ export function Templates() {
             <Link
               key={t.id}
               href={`/${t.author}/${t.slug}`}
+              aria-label={`Open ${t.name} template`}
               className="group rounded-xl border border-border bg-surface hover-elevate overflow-hidden flex flex-col"
             >
-              <div className="aspect-[4/3] bg-gradient-to-br from-primary/20 via-surface-raised to-background relative overflow-hidden">
-                {t.coverImageUrl ? (
-                  <img
-                    src={t.coverImageUrl}
-                    alt={t.name}
-                    className="absolute inset-0 w-full h-full object-cover"
-                  />
-                ) : null}
-                <div className="absolute top-2 right-2 px-2 py-0.5 rounded bg-primary text-primary-foreground text-[10px] font-mono uppercase">
+              <div className="aspect-[4/3] bg-background relative overflow-hidden">
+                {/* Real iframe preview at half scale so a 1280×960 page
+                    renders into a 640×480 thumbnail. pointer-events:none
+                    lets the parent Link receive the click; aria-hidden +
+                    tabIndex=-1 keep the decorative iframe out of the
+                    accessibility tree and tab order. */}
+                <iframe
+                  src={`/api/preview/${encodeURIComponent(t.author)}/${encodeURIComponent(t.slug)}/`}
+                  title={`${t.name} preview`}
+                  aria-hidden="true"
+                  tabIndex={-1}
+                  loading="lazy"
+                  sandbox="allow-scripts allow-same-origin"
+                  className="absolute top-0 left-0 origin-top-left pointer-events-none border-0"
+                  style={{
+                    width: "200%",
+                    height: "200%",
+                    transform: "scale(0.5)",
+                  }}
+                />
+                {/* Subtle hover veil so the card still feels interactive
+                    over a busy preview. */}
+                <div className="absolute inset-0 bg-foreground/0 group-hover:bg-foreground/5 transition-colors" />
+                <div className="absolute top-2 right-2 px-2 py-0.5 rounded bg-primary text-primary-foreground text-[10px] font-mono uppercase shadow-lg">
                   {t.framework}
                 </div>
               </div>
