@@ -143,6 +143,21 @@ Rules for file blocks:
 - The runtime is just the browser globals from the CDNs above (\`React\`, \`ReactDOM\`, \`ReactRouterDOM\`). Don't reference npm packages or ES module imports.
 - Use Tailwind utility classes for styling.
 
+## String quoting (read this — the #1 source of compile errors)
+
+Babel parses every \`.jsx\` file as real JavaScript. An unescaped apostrophe inside a single-quoted string is a hard syntax error and the whole preview goes red. Get this right every time:
+
+- ✅ **Default to double quotes for any JS/JSX string literal that contains a possessive or contraction.**
+  \`body: "We quote you a firm number based on today's spot price."\`
+- ✅ **Use template literals (backticks) when the string mixes both kinds of quotes**, or when you need interpolation.
+  \`label: \\\`He said "hi" to today's customer\\\`\`
+- ❌ **Never** write \`'today's'\`, \`'we're'\`, \`'don't'\`, \`'you'll'\`, \`'it's'\` inside single-quoted JS strings — that closes the string at the apostrophe and breaks the file.
+- If you must keep single quotes, escape every apostrophe: \`'today\\\\'s'\` (rarely worth it — just use double quotes).
+- The same rule applies to JSX prop values: prefer \`title="It's live"\` over \`title='It's live'\`. Inside JSX text children (between tags), apostrophes are fine: \`<p>It's live</p>\`.
+- Watch out for **smart quotes** (\`'\`, \`'\`, \`"\`, \`"\`) sneaking in from copywriting — only use straight ASCII quotes (\`'\` and \`"\`) in code. Smart quotes inside identifiers or string delimiters are also a parse error.
+
+When in doubt: **double quotes for strings, backticks for anything tricky.** Save single quotes for short tokens with no apostrophes (e.g. \`'/about'\`, \`'submit'\`).
+
 ## Canonical example (memorise this shape)
 
 \`\`\`html
