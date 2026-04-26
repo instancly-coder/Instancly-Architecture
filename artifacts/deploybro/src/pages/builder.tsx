@@ -149,6 +149,22 @@ const TAB_META: Record<TabKey, { label: string; icon: any }> = {
 // model finishes the closing tag — those items are surfaced as clickable
 // chips above the prompt box once the SSE `done` event arrives.
 function stripIncompleteFileBlocks(text: string): string {
+  // Hide the internal `<deploybro:provision-db />` directive entirely —
+  // it's a control tag the AI emits to ask the server to provision a
+  // Neon DB after the response, never something the user should see in
+  // the chat bubble. Mirrors api-server/lib/file-blocks.ts
+  // PROVISION_DB_RE so server and client stay in lockstep.
+  text = text.replace(
+    /<deploybro:provision-db\s*\/?>(?:\s*<\/deploybro:provision-db>)?/gi,
+    "",
+  );
+  // Also catch a half-streamed open tag (`<deploybro:provision-db` with
+  // no closing `>` yet) so the user never sees raw XML mid-stream while
+  // the model is still typing it out.
+  {
+    const partial = /<deploybro:provision-db[^>]*$/i;
+    text = text.replace(partial, "");
+  }
   // Hide the trailing `<suggestions>…</suggestions>` block — even while
   // still in flight. We deliberately only strip if the open tag is the
   // LAST occurrence in the buffer AND nothing-but-whitespace follows the
@@ -1144,6 +1160,11 @@ export default function Builder() {
       await queryClient.invalidateQueries({ queryKey: ["projects", username, slug] });
       await queryClient.invalidateQueries({ queryKey: ["projects", username, slug, "files"] });
       await queryClient.invalidateQueries({ queryKey: ["projects", username, slug, "file"] });
+      // The AI may have provisioned a Neon database mid-stream via the
+      // `<deploybro:provision-db />` directive. Invalidate the Database
+      // tab queries so the freshly-provisioned DB shows up immediately
+      // without the user having to refresh the page.
+      await queryClient.invalidateQueries({ queryKey: ["projects", username, slug, "db"] });
       // Refresh the header balance and the billing/transactions pages so the
       // post-deduction amounts show up immediately.
       await queryClient.invalidateQueries({ queryKey: ["me"] });

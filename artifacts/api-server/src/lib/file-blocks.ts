@@ -164,6 +164,35 @@ export function stripSuggestionsBlock(text: string): string {
   return head + (head ? "\n" : "");
 }
 
+// `<deploybro:provision-db />` is a directive the AI can emit anywhere in
+// its reply when the user is building a feature that benefits from a real
+// database (auth, persisted submissions, multi-user data, anything that
+// shouldn't live in localStorage). Seeing it triggers the same Neon
+// branch+role+database provisioning the "Create database" button in the
+// Database tab uses, so the project gets a `DATABASE_URL` env var ready
+// for the next publish — no extra step from the user.
+//
+// Tolerates `<deploybro:provision-db>`, `<deploybro:provision-db/>`, and
+// `<deploybro:provision-db />` (with or without inner whitespace) so a
+// stray formatting choice from the model still fires.
+const PROVISION_DB_RE =
+  /<deploybro:provision-db\s*\/?>(?:\s*<\/deploybro:provision-db>)?/gi;
+
+export function hasProvisionDbDirective(text: string): boolean {
+  PROVISION_DB_RE.lastIndex = 0;
+  return PROVISION_DB_RE.test(text);
+}
+
+// Strip every occurrence of the directive so the visible chat doesn't
+// show raw XML. We also collapse the now-empty line where it sat so the
+// transcript doesn't grow stray blank gaps.
+export function stripProvisionDbDirective(text: string): string {
+  PROVISION_DB_RE.lastIndex = 0;
+  return text
+    .replace(PROVISION_DB_RE, "")
+    .replace(/\n[ \t]*\n[ \t]*\n/g, "\n\n");
+}
+
 // Defends the dev preview against the most common second-build regression:
 // the AI introduces a NEW `.jsx` file (a component or page) but forgets to
 // re-emit `index.html` with a matching `<script type="text/babel" src="…">`

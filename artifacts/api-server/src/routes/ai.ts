@@ -20,9 +20,14 @@ import {
   stripFileBlocks,
   parseSuggestions,
   stripSuggestionsBlock,
+  hasProvisionDbDirective,
+  stripProvisionDbDirective,
 } from "../lib/file-blocks";
 import { enhancePrompt } from "../lib/prompt-enhancer";
 import { requireAuth, getAuthedUser } from "../middlewares/auth";
+import { provisionAppDatabase, parentProjectId } from "../lib/neon";
+import { encryptSecret, decryptSecret } from "../lib/secret-cipher";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
@@ -498,10 +503,13 @@ router.post(
         .where(eq(buildsTable.projectId, project.id));
       const nextNumber = (maxNumber ?? 0) + 1;
 
-      // Store the human-readable transcript with file payloads AND the
-      // hidden suggestions block stripped so the build history stays
-      // compact and readable.
-      const visible = stripSuggestionsBlock(stripFileBlocks(fullText));
+      // Store the human-readable transcript with file payloads, the
+      // hidden suggestions block, and any `<deploybro:provision-db />`
+      // directive stripped so the build history stays compact, readable,
+      // and free of internal control tags.
+      const visible = stripProvisionDbDirective(
+        stripSuggestionsBlock(stripFileBlocks(fullText)),
+      );
       const aiMessage = errorMessage
         ? `${visible}\n\n[${status}] ${errorMessage}`.slice(0, 4000)
         : visible.slice(0, 4000);
@@ -673,6 +681,114 @@ router.post(
 
       send("status", { message: "Saving generated files…" });
       const written = await persistFiles();
+
+      // If the model emitted `<deploybro:provision-db />` we provision a
+      // Neon branch + role + database for this project right here, before
+      // the `done` event fires. Mirrors the per-project provision route in
+      // routes/projects.ts so behaviour is identical to clicking "Create
+      // database" in the Database tab. Failures are non-fatal — the build
+      // itself still succeeded and the user can retry from the UI later.
+      //
+      // We scan a directive-detection view of the response that has all
+      // `<file>` payloads stripped, so a literal `<deploybro:provision-db />`
+      // sitting inside a generated docs file or example XML can NEVER
+      // trigger a real provision. Only directives in the model's prose
+      // (the part the user actually sees) count.
+      let dbProvisioned: boolean | null = null;
+      if (hasProvisionDbDirective(stripFileBlocks(fullText))) {
+        // Re-read the project's DB fields straight from the database
+        // right before we provision. The `project` snapshot was loaded
+        // before streaming started — long builds (10–60s) plus the
+        // user clicking "Create database" in the Database tab in another
+        // tab, OR a parallel build, could mean DB state has moved on
+        // since. Re-reading keeps us idempotent under concurrency.
+        const [fresh] = await db
+          .select({
+            databaseUrl: projectsTable.databaseUrl,
+          })
+          .from(projectsTable)
+          .where(eq(projectsTable.id, project.id))
+          .limit(1);
+        const currentDatabaseUrl = fresh?.databaseUrl ?? null;
+
+        // Idempotency mirror: if a DATABASE_URL is already stored AND it
+        // decrypts cleanly, treat the request as a no-op. A corrupt blob
+        // (key rotated, etc.) gets re-provisioned — same recovery path
+        // the dedicated provision route uses. We remember the corrupt
+        // blob so the conditional update below can specifically overwrite
+        // it (and ONLY it) without trampling a parallel writer that may
+        // have replaced it with a fresh good blob in the meantime.
+        let alreadyProvisioned = false;
+        let corruptBlobToReplace: string | null = null;
+        if (currentDatabaseUrl) {
+          try {
+            decryptSecret(currentDatabaseUrl);
+            alreadyProvisioned = true;
+          } catch (err) {
+            logger.warn(
+              { err, projectId: project.id },
+              "Stored DATABASE_URL is corrupt — re-provisioning a fresh branch (AI-triggered)",
+            );
+            corruptBlobToReplace = currentDatabaseUrl;
+          }
+        }
+        if (alreadyProvisioned) {
+          dbProvisioned = false;
+        } else {
+          send("status", { message: "Provisioning database…" });
+          try {
+            const provisioned = await provisionAppDatabase(
+              `${String(req.params.slug)}-${String(req.params.username)}`,
+            );
+            // Conditional update guard: only write the new DB fields if
+            // the row's `databaseUrl` is either still NULL (fresh case)
+            // OR exactly the corrupt blob we just observed (recovery
+            // case). If a parallel writer (Database tab click, second
+            // concurrent build) won the race in either scenario, the
+            // predicate fails, our update is a no-op, and we leave the
+            // orphan Neon branch we just created for operator sweep —
+            // same recovery story the dedicated /db/provision route
+            // accepts when reconciling stale state. Crucially this
+            // means corrupt-blob recovery still WORKS (we'd otherwise
+            // be unable to overwrite a non-null corrupt value).
+            const writeGuard = corruptBlobToReplace
+              ? sql`(${projectsTable.databaseUrl} IS NULL OR ${projectsTable.databaseUrl} = ${corruptBlobToReplace})`
+              : sql`${projectsTable.databaseUrl} IS NULL`;
+            const updated = await db
+              .update(projectsTable)
+              .set({
+                databaseUrl: encryptSecret(provisioned.connectionUri),
+                neonBranchId: provisioned.branchId,
+                neonRoleName: provisioned.roleName,
+                neonProjectId: parentProjectId(),
+              })
+              .where(and(eq(projectsTable.id, project.id), writeGuard))
+              .returning({ id: projectsTable.id });
+            if (updated.length === 0) {
+              logger.warn(
+                { projectId: project.id, branchId: provisioned.branchId },
+                "AI-triggered DB provision raced with another writer; orphan branch left for operator sweep",
+              );
+              dbProvisioned = false;
+              send("status", { message: "Database already set up" });
+            } else {
+              dbProvisioned = true;
+              send("status", { message: "Database ready" });
+            }
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            logger.error(
+              { err, projectId: project.id },
+              "AI-triggered DB provision failed",
+            );
+            dbProvisioned = false;
+            send("status", {
+              message: `Database provisioning failed: ${message.slice(0, 160)}`,
+            });
+          }
+        }
+      }
+
       send("status", { message: "Recording build…" });
       const { build: created, postBalance } = await persistBuild(
         "success",
@@ -702,6 +818,12 @@ router.post(
           files: written,
         },
         suggestions,
+        // null when the AI didn't request a DB; true when we just
+        // provisioned one; false when the request was a no-op (already
+        // provisioned) or failed. The client uses any non-null value as
+        // a hint to refetch the Database tab so a freshly-provisioned
+        // DB shows up without a manual page refresh.
+        databaseProvisioned: dbProvisioned,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : "AI request failed";
