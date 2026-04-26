@@ -2341,83 +2341,28 @@ function PreviewEmptyState() {
 function PreviewBuildingState() {
   return (
     <div
-      className="flex-1 flex flex-col p-6 md:p-10 gap-6"
+      className="flex-1 flex flex-col items-center justify-center p-6 md:p-10 gap-6 text-center"
       role="status"
       aria-live="polite"
       aria-busy="true"
       aria-label="Building your preview"
     >
-      {/* Top headline: branded shimmer text + live status */}
-      <div className="flex items-center gap-3">
-        <div className="relative">
-          <div
-            aria-hidden
-            className="absolute inset-0 -m-2 rounded-full blur-xl opacity-50"
-            style={{
-              background:
-                "radial-gradient(circle, rgba(59,130,246,0.7) 0%, rgba(59,130,246,0) 70%)",
-            }}
-          />
-          <BrandLogo className="relative h-7 w-auto text-foreground" />
-        </div>
-        <div className="flex flex-col">
-          <div className="shimmer-text text-base font-semibold leading-tight">
-            Building your preview…
-          </div>
-          <div className="text-xs text-tertiary mt-0.5">
-            Your live app will appear here in a moment
-          </div>
-        </div>
+      <div className="relative">
+        <div
+          aria-hidden
+          className="absolute inset-0 -m-4 rounded-full blur-2xl opacity-50"
+          style={{
+            background:
+              "radial-gradient(circle, rgba(59,130,246,0.7) 0%, rgba(59,130,246,0) 70%)",
+          }}
+        />
+        <BrandLogo className="relative h-10 w-auto" />
       </div>
-
-      {/* Skeleton mock of a page being painted in: nav row, hero block,
-          three feature tiles. Uses Tailwind's `animate-pulse` plus a
-          gradient base so the blocks feel like content shimmering in.
-          Marked aria-hidden because the wrapping `role="status"` already
-          announces the live build to assistive tech — these decorative
-          rectangles would just add noise. */}
-      <div className="flex-1 flex flex-col gap-4 min-h-0" aria-hidden="true">
-        <div className="flex items-center justify-between">
-          <ShimmerBlock className="h-5 w-24 rounded" />
-          <div className="flex items-center gap-2">
-            <ShimmerBlock className="h-5 w-12 rounded" />
-            <ShimmerBlock className="h-5 w-12 rounded" />
-            <ShimmerBlock className="h-5 w-12 rounded" />
-            <ShimmerBlock className="h-7 w-20 rounded-md" />
-          </div>
-        </div>
-        <ShimmerBlock className="h-32 md:h-40 w-full rounded-lg" />
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
-          <ShimmerBlock className="h-24 md:h-28 w-full rounded-lg" />
-          <ShimmerBlock className="h-24 md:h-28 w-full rounded-lg" />
-          <ShimmerBlock className="h-24 md:h-28 w-full rounded-lg" />
-        </div>
-        <div className="flex flex-col gap-2">
-          <ShimmerBlock className="h-3 w-3/4 rounded" />
-          <ShimmerBlock className="h-3 w-2/3 rounded" />
-          <ShimmerBlock className="h-3 w-1/2 rounded" />
-        </div>
+      <div className="flex items-center gap-2 text-sm text-secondary">
+        <Loader2 className="w-4 h-4 animate-spin text-primary" aria-hidden />
+        <span>Building your preview…</span>
       </div>
     </div>
-  );
-}
-
-// Single shimmer-block primitive used by the building state. Tailwind's
-// `animate-pulse` handles the breathing effect; the gradient gives the
-// blocks a subtle highlight so they look more like real surfaces than
-// flat grey rectangles.
-function ShimmerBlock({ className = "" }: { className?: string }) {
-  // `motion-safe:animate-pulse` disables the breathing animation for
-  // users who set `prefers-reduced-motion: reduce`, but the gradient
-  // surface stays so the layout still reads as a skeleton.
-  return (
-    <div
-      className={`motion-safe:animate-pulse ${className}`}
-      style={{
-        background:
-          "linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.10) 50%, rgba(255,255,255,0.04) 100%)",
-      }}
-    />
   );
 }
 
