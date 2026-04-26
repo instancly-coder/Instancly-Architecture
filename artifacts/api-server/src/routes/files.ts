@@ -619,6 +619,37 @@ const ERROR_OVERLAY_SCRIPT = `<script data-deploybro-error-overlay>
       });
     return { filename: filename, presets: presets, src: src, promise: p };
   }
+  // The dev-preview iframe loads at \`/api/preview/USER/SLUG/\` which
+  // means \`window.location.pathname\` carries that prefix. AI-generated
+  // apps use \`<BrowserRouter>\` with routes like \`<Route path="/">\` —
+  // those never match the prefixed pathname, so the app silently
+  // renders nothing (blank screen, no error). We monkey-patch
+  // \`ReactRouterDOM.BrowserRouter\` to point at \`HashRouter\` before
+  // user scripts execute. HashRouter ignores the path and reads from
+  // the URL fragment, so client-side routing works regardless of where
+  // the iframe is mounted. The patch is dev-preview-only — the
+  // published Vercel build sits at the project root and BrowserRouter
+  // works as the AI wrote it.
+  function patchReactRouterForPreview() {
+    var rrd = window.ReactRouterDOM;
+    if (!rrd || !rrd.HashRouter || rrd.BrowserRouter === rrd.HashRouter) return;
+    // Try in-place reassignment first — preserves any non-enumerable
+    // properties / getters the UMD bundle may expose. Falls back to a
+    // shallow-cloned namespace if the property is read-only.
+    try {
+      rrd.BrowserRouter = rrd.HashRouter;
+      if (rrd.BrowserRouter === rrd.HashRouter) return;
+    } catch (_) { /* fall through to clone */ }
+    try {
+      var descriptors = Object.getOwnPropertyDescriptors(rrd);
+      var patched = Object.create(Object.getPrototypeOf(rrd) || Object.prototype, descriptors);
+      patched.BrowserRouter = rrd.HashRouter;
+      window.ReactRouterDOM = patched;
+    } catch (_) {
+      // Namespace frozen and global non-writable — nothing more we can
+      // do. The error overlay will surface any subsequent render error.
+    }
+  }
   function processDeferred() {
     if (!window.Babel || !window.Babel.transform) {
       // Babel hasn't finished loading yet — try again shortly. Keep the
@@ -627,6 +658,7 @@ const ERROR_OVERLAY_SCRIPT = `<script data-deploybro-error-overlay>
       // before Babel's own DOMContentLoaded handler can grab them.
       return setTimeout(processDeferred, 30);
     }
+    patchReactRouterForPreview();
     if (mo) { try { mo.disconnect(); } catch (_) {} mo = null; }
     var nodes = document.querySelectorAll('script[type="' + DEFERRED_TYPE + '"]');
     // Kick off every fetch immediately (parallel) but execute strictly

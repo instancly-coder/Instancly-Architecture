@@ -183,6 +183,17 @@ Babel parses every \`.jsx\` file as real JavaScript. **Mismatched or unescaped q
 - \`<button title='It"s live'>\` ❌ (same trap, different syntax)
 - Inside JSX **text children** (between tags), apostrophes are always fine: \`<p>It's live</p>\`
 
+### The \`style\` prop is an OBJECT, not a string
+
+In React/JSX, \`style\` takes a JS object with camelCased keys, never a CSS string. Writing it as a string crashes the render with "The \`style\` prop expects a mapping from style properties to values…".
+
+- \`<h1 style={{ fontFamily: "'Cormorant Garamond', serif" }}>Aurum</h1>\` ✅
+- \`<h1 style="fontFamily: 'Cormorant Garamond', serif;">Aurum</h1>\` ❌ (string — crashes)
+- \`<div style={{ marginTop: 12, color: "#fff" }} />\` ✅
+- \`<div style="margin-top: 12px; color: #fff" />\` ❌ (string + kebab-case — crashes)
+
+For one-off custom fonts, prefer Tailwind's arbitrary-value utility instead: \`className="font-['Cormorant_Garamond']"\` (underscore = space).
+
 ### Smart quotes are not quotes
 
 Curly/typographic quotes copied from designs or copy docs (\`'\`, \`'\`, \`"\`, \`"\`) are different Unicode characters than ASCII \`'\` and \`"\`. JavaScript will not accept them as string delimiters and will throw "Unexpected character". Always type straight ASCII quotes when writing code.
