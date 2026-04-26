@@ -140,6 +140,7 @@ Rules for file blocks:
 - Allowed file extensions: .html, .jsx, .js, .css, .json, .svg, .md
 - File paths use forward slashes, no leading slash, no "..", e.g. "index.html" or "components/Nav.jsx".
 - Any file you DON'T emit is left untouched. Re-emit a file ONLY when you want to change it. For tiny tweaks, only re-emit the affected file.
+- Whenever you create a NEW \`.jsx\` file (a component, page, or hook that didn't exist in the project before), you MUST also re-emit \`index.html\` with the matching \`<script type="text/babel" data-presets="react" src="…"></script>\` tag inserted in the canonical load order (hooks → components → pages → app.jsx LAST). Skipping this leaves the new file unreferenced and the preview crashes inside the AI-generated \`App\` with "Element type is invalid".
 - The runtime is just the browser globals from the CDNs above (\`React\`, \`ReactDOM\`, \`ReactRouterDOM\`). Don't reference npm packages or ES module imports.
 - Use Tailwind utility classes for styling.
 

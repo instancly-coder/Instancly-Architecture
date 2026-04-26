@@ -6,7 +6,7 @@ import {
   projectFilesTable,
 } from "@workspace/db";
 import { and, asc, eq, sql } from "drizzle-orm";
-import { contentTypeFor, sanitizePath } from "../lib/file-blocks";
+import { contentTypeFor, injectOrphanScripts, sanitizePath } from "../lib/file-blocks";
 import { requireAuth, getAuthedUser } from "../middlewares/auth";
 import {
   ListProjectFilesResponse,
@@ -367,7 +367,24 @@ router.get(
     // blank page with no clue what went wrong. The overlay is
     // dev-preview-only — it's not in the published Vercel build.
     if (ct.startsWith("text/html")) {
-      res.send(injectErrorOverlay(row.content));
+      // Auto-wire any `.jsx` files the AI created without re-emitting
+      // index.html. Defends against the second-build "Element type is
+      // invalid" crash where a new component file exists in the project
+      // but has no `<script type="text/babel" src="…">` tag pointing at
+      // it. We only fetch paths (not content) so this stays cheap even
+      // for large projects.
+      const jsxRows = await db
+        .select({ path: projectFilesTable.path })
+        .from(projectFilesTable)
+        .where(
+          and(
+            eq(projectFilesTable.projectId, project.id),
+            sql`${projectFilesTable.path} like '%.jsx'`,
+          ),
+        );
+      const jsxPaths = jsxRows.map((r) => r.path);
+      const withScripts = injectOrphanScripts(row.content, jsxPaths);
+      res.send(injectErrorOverlay(withScripts));
       return;
     }
     res.send(row.content);

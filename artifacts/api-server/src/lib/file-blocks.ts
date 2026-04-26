@@ -164,6 +164,112 @@ export function stripSuggestionsBlock(text: string): string {
   return head + (head ? "\n" : "");
 }
 
+// Defends the dev preview against the most common second-build regression:
+// the AI introduces a NEW `.jsx` file (a component or page) but forgets to
+// re-emit `index.html` with a matching `<script type="text/babel" src="…">`
+// tag. The previously-stored index.html then loads, the new file is never
+// fetched, references like `<NewThing />` resolve to `undefined`, and React
+// throws "Element type is invalid" from inside the AI-generated `App`
+// component — leaving the user with a blank red overlay on a flow that
+// worked fine on the first build.
+//
+// We scan the served HTML for existing `<script type="text/babel" src="…">`
+// tags, then for any `.jsx` files in the project that aren't already
+// referenced we inject auto-discovered tags in canonical load order
+// (`hooks/*` first, then `components/*`, then `pages/*`, with anything
+// uncategorised in the middle), placed immediately BEFORE the existing
+// `app.jsx` script tag (or before `</body>` if no app.jsx tag exists).
+//
+// Three things this deliberately does NOT do:
+//   1. Touch projects that don't already use `<script type="text/babel">`
+//      anywhere — those are static HTML / vanilla JS sites and injecting
+//      babel script tags would break them.
+//   2. Auto-inject `app.jsx` itself. If app.jsx is missing, the AI broke
+//      something more fundamental and the error overlay should surface it.
+//   3. Affect the published Vercel build — this is purely a dev-preview
+//      mutation. The publish payload builder reads source files unchanged.
+export function injectOrphanScripts(
+  html: string,
+  allJsxPaths: string[],
+): string {
+  // Find every `<script type="text/babel" src="…">` tag currently in the
+  // HTML. Both `type` and `src` may appear in either order; the regex
+  // tolerates that plus single/double quotes and stray whitespace.
+  const SCRIPT_RE =
+    /<script\b[^>]*\btype\s*=\s*["']text\/babel["'][^>]*\bsrc\s*=\s*["']([^"']+)["'][^>]*>\s*<\/script>/gi;
+  const SCRIPT_RE_REVERSE =
+    /<script\b[^>]*\bsrc\s*=\s*["']([^"']+)["'][^>]*\btype\s*=\s*["']text\/babel["'][^>]*>\s*<\/script>/gi;
+  const referenced = new Set<string>();
+  const collect = (re: RegExp): void => {
+    re.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(html)) !== null) {
+      // Strip leading "./" or "/" so the comparison matches the canonical
+      // stored path (the parser sanitises these on the way in).
+      referenced.add(m[1].trim().replace(/^\.?\/+/, ""));
+    }
+  };
+  collect(SCRIPT_RE);
+  collect(SCRIPT_RE_REVERSE);
+
+  // No babel script tags at all → static HTML / non-React project. Bail.
+  if (referenced.size === 0) return html;
+
+  // Bucket orphans by canonical load order. `app.jsx` (or any nested
+  // `*/app.jsx`) is intentionally excluded — if it's missing, the AI
+  // failed in a different way and we want the error overlay to fire.
+  const isAppEntry = (p: string): boolean =>
+    p === "app.jsx" || /(^|\/)app\.jsx$/i.test(p);
+  const orphans = allJsxPaths.filter(
+    (p) => !referenced.has(p) && !isAppEntry(p),
+  );
+  if (orphans.length === 0) return html;
+
+  const bucketOf = (p: string): number => {
+    if (p.startsWith("hooks/")) return 1;
+    if (p.startsWith("components/")) return 2;
+    if (p.startsWith("pages/")) return 3;
+    return 2; // unknown-folder files behave most like components
+  };
+  orphans.sort((a, b) => {
+    const ba = bucketOf(a);
+    const bb = bucketOf(b);
+    if (ba !== bb) return ba - bb;
+    return a.localeCompare(b);
+  });
+
+  // Build the injection block. The `data-deploybro-auto` attribute makes
+  // it obvious in the rendered DOM that we filled in a missing tag, which
+  // is useful when debugging "wait, where did THIS script come from?".
+  const tags = orphans
+    .map(
+      (p) =>
+        `<script type="text/babel" data-presets="react" data-deploybro-auto src="${p}"></script>`,
+    )
+    .join("\n  ");
+  const block =
+    `\n  <!-- deploybro: auto-loaded ${orphans.length} script tag${
+      orphans.length === 1 ? "" : "s"
+    } the AI forgot to re-emit in index.html -->\n  ${tags}\n  `;
+
+  // Prefer to inject right BEFORE the app.jsx tag so the canonical load
+  // order is preserved (hooks → components → pages → app.jsx LAST).
+  const APP_TAG_RE =
+    /<script\b[^>]*\btype\s*=\s*["']text\/babel["'][^>]*\bsrc\s*=\s*["'](?:\.\/?|\/)?app\.jsx["'][^>]*>\s*<\/script>/i;
+  const APP_TAG_RE_REVERSE =
+    /<script\b[^>]*\bsrc\s*=\s*["'](?:\.\/?|\/)?app\.jsx["'][^>]*\btype\s*=\s*["']text\/babel["'][^>]*>\s*<\/script>/i;
+  const appMatch = html.match(APP_TAG_RE) ?? html.match(APP_TAG_RE_REVERSE);
+  if (appMatch && typeof appMatch.index === "number") {
+    return html.slice(0, appMatch.index) + block + html.slice(appMatch.index);
+  }
+  // No app.jsx script tag found — fall back to just before </body>, then
+  // last-resort append.
+  if (/<\/body\s*>/i.test(html)) {
+    return html.replace(/<\/body\s*>/i, `${block}</body>`);
+  }
+  return html + block;
+}
+
 export function contentTypeFor(path: string): string {
   const ext = path.split(".").pop()?.toLowerCase() ?? "";
   switch (ext) {
