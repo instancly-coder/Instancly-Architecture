@@ -47,6 +47,7 @@ const DEFAULT_PACKAGE_JSON = {
   dependencies: {
     react: "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0",
   },
   devDependencies: {
     "@vitejs/plugin-react": "^4.3.4",
@@ -168,6 +169,13 @@ function transformIndexHtmlForVite(html: string): string {
     /<script\b[^>]*\bsrc=["'][^"']*\b(?:unpkg\.com|esm\.sh|cdn\.jsdelivr\.net\/npm)\/react(?:-dom)?@?\d?[^"']*["'][^>]*>\s*<\/script>\s*/gi;
   out = out.replace(REACT_CDN_RE, "");
 
+  // React Router UMD CDN — same reasoning. The bundle imports
+  // `react-router-dom` from npm so we don't want the UMD copy fighting
+  // for the `ReactRouterDOM` global.
+  const RRD_CDN_RE =
+    /<script\b[^>]*\bsrc=["'][^"']*\b(?:unpkg\.com|esm\.sh|cdn\.jsdelivr\.net\/npm)\/react-router(?:-dom)?@?\d?[^"']*["'][^>]*>\s*<\/script>\s*/gi;
+  out = out.replace(RRD_CDN_RE, "");
+
   // Babel-standalone — only needed in the dev preview's no-build setup.
   // Bundled JSX is transformed at build time so this script just adds
   // ~500KB of dead weight in production.
@@ -246,13 +254,14 @@ function sanitizeForPreamble(code: string): string {
   const STRIP_PATTERNS: RegExp[] = [
     // `import * as X from "react"`, `import X from "react"`,
     // `import { useState } from "react"`, with or without trailing `;`.
-    // Covers react, react-dom, and react-dom/client.
-    /^[ \t]*import\s+[^;\n]*?\s+from\s+["'](?:react|react-dom|react-dom\/client)["'];?[ \t]*$/gm,
+    // Covers react, react-dom, react-dom/client, and react-router-dom.
+    /^[ \t]*import\s+[^;\n]*?\s+from\s+["'](?:react|react-dom|react-dom\/client|react-router-dom|react-router)["'];?[ \t]*$/gm,
     // Bare side-effect import: `import "react";` (rare but legal).
-    /^[ \t]*import\s+["'](?:react|react-dom|react-dom\/client)["'];?[ \t]*$/gm,
+    /^[ \t]*import\s+["'](?:react|react-dom|react-dom\/client|react-router-dom|react-router)["'];?[ \t]*$/gm,
     // `const|let|var { useState, useEffect, … } = React;`
-    // (also matches `window.React`, `ReactDOM`, `window.ReactDOM`).
-    /^[ \t]*(?:const|let|var)\s*\{[^}]*\}\s*=\s*(?:window\.)?(?:React|ReactDOM)\s*;?[ \t]*$/gm,
+    // (also matches `window.React`, `ReactDOM`, `ReactRouterDOM`,
+    // and the corresponding `window.X` forms).
+    /^[ \t]*(?:const|let|var)\s*\{[^}]*\}\s*=\s*(?:window\.)?(?:React|ReactDOM|ReactRouterDOM)\s*;?[ \t]*$/gm,
   ];
   let out = code;
   for (const re of STRIP_PATTERNS) {
@@ -319,11 +328,13 @@ function transformCdnReactToVite(
   // the user code completely unchanged while making it resolvable at
   // build time *and* runtime.
   const USER_BUNDLE_PREAMBLE = `// Auto-injected at publish time. Brings the CDN-style globals
-// (React, ReactDOM, useState, …) into module scope so the user's
-// unmodified code resolves at build time AND runtime.
+// (React, ReactDOM, ReactRouterDOM, useState, BrowserRouter, …) into
+// module scope so the user's unmodified code resolves at build time
+// AND runtime.
 import * as React from "react";
 import * as ReactDOM from "react-dom";
 import * as ReactDOMClient from "react-dom/client";
+import * as ReactRouterDOM from "react-router-dom";
 
 const {
   Fragment,
@@ -363,6 +374,35 @@ const {
 // surfaces so either style works without the user touching their code.
 const _ReactDOMUnified = Object.assign({}, ReactDOM, ReactDOMClient);
 const { createRoot, hydrateRoot, render, hydrate, unmountComponentAtNode, createPortal, flushSync } = _ReactDOMUnified;
+
+// React Router 6 — destructure the surface the AI is taught to use.
+const {
+  BrowserRouter,
+  HashRouter,
+  MemoryRouter,
+  Routes,
+  Route,
+  Link,
+  NavLink,
+  Navigate,
+  Outlet,
+  useNavigate,
+  useParams,
+  useLocation,
+  useSearchParams,
+  useMatch,
+  useRoutes,
+  useOutlet,
+  useOutletContext,
+  useResolvedPath,
+  useHref,
+  useInRouterContext,
+  useNavigationType,
+  createBrowserRouter,
+  createHashRouter,
+  createMemoryRouter,
+  RouterProvider,
+} = ReactRouterDOM;
 
 `;
   const ordered = orderJsxFilesForConcat(jsxBodies.map((b) => b.path));
