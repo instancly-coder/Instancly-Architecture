@@ -1,6 +1,6 @@
 import { Link } from "wouter";
 import { useState } from "react";
-import { Plus, MoreVertical, AlertTriangle, Loader2 } from "lucide-react";
+import { Plus, MoreVertical, AlertTriangle, Loader2, Globe, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -17,9 +17,11 @@ import {
   useCreateProject,
   useRenameProject,
   useDeleteProject,
+  useUpdateProject,
   type ApiProjectListItem,
 } from "@/lib/api";
 import { useLocation } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { randomProjectName } from "@/lib/random-name";
@@ -168,6 +170,9 @@ export default function Dashboard() {
 function ProjectCard({ project, ownerUsername }: { project: ApiProjectListItem; ownerUsername: string }) {
   const rename = useRenameProject();
   const remove = useDeleteProject();
+  // Visibility toggle uses the same PATCH endpoint as the builder Settings
+  // pane — sending only `{ isPublic }` leaves every other field untouched.
+  const update = useUpdateProject(ownerUsername, project.slug);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const handleRename = async () => {
@@ -188,6 +193,30 @@ function ProjectCard({ project, ownerUsername }: { project: ApiProjectListItem; 
       setDeleteOpen(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to delete");
+    }
+  };
+
+  const qc = useQueryClient();
+  const handleToggleVisibility = async () => {
+    if (!ownerUsername) return;
+    const next = !project.isPublic;
+    // Optimistic patch: flip the badge instantly in the dashboard list
+    // cache so the user sees feedback immediately, then roll back if the
+    // server rejects.
+    const listKey = ["me", "projects"] as const;
+    const prev = qc.getQueryData<ApiProjectListItem[]>(listKey);
+    if (prev) {
+      qc.setQueryData<ApiProjectListItem[]>(
+        listKey,
+        prev.map((p) => (p.id === project.id ? { ...p, isPublic: next } : p)),
+      );
+    }
+    try {
+      await update.mutateAsync({ isPublic: next });
+      toast.success(next ? "Project is now public" : "Project is now private");
+    } catch (err) {
+      if (prev) qc.setQueryData(listKey, prev);
+      toast.error(err instanceof Error ? err.message : "Failed to update visibility");
     }
   };
 
@@ -240,6 +269,29 @@ function ProjectCard({ project, ownerUsername }: { project: ApiProjectListItem; 
                 >
                   Rename
                 </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="cursor-pointer"
+                  disabled={update.isPending || !ownerUsername}
+                  onSelect={() => {
+                    // Let the menu close naturally — the toggle is fast
+                    // and any feedback comes via toast + the optimistic
+                    // badge update below.
+                    handleToggleVisibility();
+                  }}
+                  data-testid={`toggle-visibility-${project.slug}`}
+                >
+                  {project.isPublic ? (
+                    <>
+                      <Lock className="w-3.5 h-3.5 mr-2" />
+                      Make private
+                    </>
+                  ) : (
+                    <>
+                      <Globe className="w-3.5 h-3.5 mr-2" />
+                      Make public
+                    </>
+                  )}
+                </DropdownMenuItem>
                 <DropdownMenuSeparator className="bg-border" />
                 <DropdownMenuItem
                   className="text-error focus:text-error cursor-pointer"
@@ -265,6 +317,23 @@ function ProjectCard({ project, ownerUsername }: { project: ApiProjectListItem; 
             <span>{project.framework}</span>
             <span>•</span>
             <span>{project.buildsCount} builds</span>
+            <span>•</span>
+            <span
+              className={`inline-flex items-center gap-1 font-mono uppercase tracking-wider text-[10px] ${
+                project.isPublic ? "text-primary" : "text-secondary"
+              }`}
+              data-testid={`visibility-badge-${project.slug}`}
+            >
+              {project.isPublic ? (
+                <>
+                  <Globe className="w-3 h-3" /> Public
+                </>
+              ) : (
+                <>
+                  <Lock className="w-3 h-3" /> Private
+                </>
+              )}
+            </span>
           </div>
           <span>{timeAgo(project.lastBuiltAt)}</span>
         </div>
