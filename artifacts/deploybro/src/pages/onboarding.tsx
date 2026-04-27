@@ -256,8 +256,16 @@ export default function Onboarding() {
               // at `-top-3` on each card stay visible — `overflow-x-auto`
               // forces vertical overflow to clip too, so anything above
               // the card's top edge gets cut off without the padding.
-              <div className="-mx-4 sm:mx-0 px-4 sm:px-0">
-                <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory pt-5 pb-3 sm:grid sm:grid-cols-3 sm:gap-5 sm:overflow-visible sm:pt-3 sm:pb-0">
+              <div className="-mx-4 sm:mx-0 sm:px-0">
+                {/* Mobile carousel: cards are 80vw wide with snap-center,
+                    so the scroll track needs `px-[10vw]` of internal
+                    padding for the FIRST and LAST cards to land in the
+                    middle of the viewport at rest — without it the first
+                    card sits flush-left at scroll-x=0 and reads as
+                    "broken alignment". The padding is collapsed back to
+                    zero at sm+ where the layout switches to a 3-col grid
+                    that doesn't need horizontal scrolling. */}
+                <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory pt-5 pb-3 px-[10vw] sm:px-0 sm:grid sm:grid-cols-3 sm:gap-5 sm:overflow-visible sm:pt-3 sm:pb-0">
                   {TIERS.map((tier) => (
                     <div
                       key={tier.id}

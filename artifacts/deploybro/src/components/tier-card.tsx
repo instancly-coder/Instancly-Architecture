@@ -113,14 +113,21 @@ export function TierCard({ tier, cadence, selectable, selected, onSelect }: Tier
 
   // Compose the wrapper className. `selected` overrides the highlight
   // styling so the user's pick reads as "this one" regardless of which
-  // tier is the marketing default.
+  // tier is the marketing default. Selection is rendered as a soft
+  // primary-tinted radial fade from the top-right corner plus a subtle
+  // primary glow shadow — the harsh `ring + border-primary` combo read
+  // as a hard outline that fought with the rest of the design system,
+  // this gives the card a quieter "lit up" feel while keeping the badge
+  // at the top as the unambiguous "this is the picked one" cue.
   const wrapperClass = [
     "relative flex flex-col rounded-2xl border p-5 sm:p-7 text-left transition-all",
-    tier.highlight
-      ? "border-primary/40 bg-surface shadow-2xl shadow-primary/10"
-      : "border-border bg-surface/60",
-    selectable ? "cursor-pointer hover:border-primary/60 hover:bg-surface" : "",
-    selected ? "border-primary bg-surface ring-2 ring-primary/40" : "",
+    selected
+      ? "border-border/60 bg-surface bg-[radial-gradient(140%_70%_at_100%_0%,hsl(var(--primary)/0.22)_0%,transparent_55%)] shadow-lg shadow-primary/15"
+      : tier.highlight
+        ? "border-primary/40 bg-surface shadow-2xl shadow-primary/10"
+        : "border-border bg-surface/60",
+    selectable && !selected ? "cursor-pointer hover:border-primary/60 hover:bg-surface" : "",
+    selectable && selected ? "cursor-pointer" : "",
   ]
     .filter(Boolean)
     .join(" ");
