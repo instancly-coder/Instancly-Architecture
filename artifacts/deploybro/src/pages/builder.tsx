@@ -582,7 +582,6 @@ export default function Builder() {
   const { data: apiBuilds = [] } = useProjectBuilds(username, slug);
   const queryClient = useQueryClient();
   const pastBuilds = apiBuilds.map(toPastBuild);
-  const balance = me?.balance ?? 0;
 
   const [openTabs, setOpenTabs] = useState<TabKey[]>(["preview"]);
   const [activeTab, setActiveTab] = useState<TabKey>("preview");
@@ -1537,28 +1536,6 @@ export default function Builder() {
             </DropdownMenu>
           )}
 
-          <Popover>
-            <PopoverTrigger asChild>
-              <button className="hidden sm:inline-flex px-3 py-1.5 rounded-full bg-background border border-border text-xs font-mono font-medium hover:bg-surface-raised transition-colors">
-                ${balance.toFixed(2)}
-              </button>
-            </PopoverTrigger>
-            <PopoverContent
-              align="end"
-              className="w-64 border-border p-4"
-            >
-              <h4 className="font-medium mb-2">Current Balance</h4>
-              <div className="text-2xl font-mono mb-4">
-                ${balance.toFixed(2)}
-              </div>
-              <Link href="/dashboard/billing">
-                <Button className="w-full text-xs" variant="outline">
-                  Manage Billing
-                </Button>
-              </Link>
-            </PopoverContent>
-          </Popover>
-
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="md:hidden w-8 h-8 rounded-md flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors">
@@ -1569,10 +1546,6 @@ export default function Builder() {
               <DropdownMenuItem>Rules Book</DropdownMenuItem>
               <DropdownMenuItem>Integrations</DropdownMenuItem>
               <DropdownMenuItem>Share link</DropdownMenuItem>
-              <DropdownMenuSeparator className="bg-border" />
-              <DropdownMenuItem>
-                <span className="font-mono text-xs">${balance.toFixed(2)} balance</span>
-              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
