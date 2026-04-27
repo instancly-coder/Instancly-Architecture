@@ -72,7 +72,7 @@ const STEPS = [
     step: "03",
     title: "Refine and ship",
     body: "Tweak it with simple feedback — \"make the hero bigger\", \"add login\". When it's right, hit Publish. You get a real URL in seconds.",
-    url: "recipes.deploybro.app",
+    url: "recipes.deploybro.com",
   },
 ];
 
@@ -245,7 +245,7 @@ export default function Landing() {
           {/* iOS-style glass announcement pill */}
           <div className="relative z-10 flex justify-center pt-10 pb-4">
             <Link
-              href="/explore"
+              href="https://deploybro.com/explore"
               className="glass-pill group inline-flex items-center gap-2 px-5 py-2 rounded-full text-xs font-medium text-foreground/90 transition-transform hover:-translate-y-px"
             >
               Introducing DeployBro v2
@@ -769,7 +769,7 @@ export default function Landing() {
             <p className="text-lg text-secondary mb-10 max-w-xl mx-auto">
               Free to start. No credit card. No "schedule a demo" nonsense.
             </p>
-            <Link href="/login">
+            <Link href="https://deploybro.com/login">
               <Button
                 size="lg"
                 className="bg-primary text-primary-foreground hover:bg-primary/90 h-14 px-10 text-lg font-semibold"
