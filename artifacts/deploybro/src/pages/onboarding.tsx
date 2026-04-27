@@ -23,7 +23,6 @@ import { toast } from "sonner";
 import { useMe, useCompleteOnboarding, type CompleteOnboardingBody } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { BrandLogo } from "@/components/brand-logo";
 import { TIERS, TierCard } from "@/components/tier-card";
 
 // Slug unions are sourced from the generated zod schema so the option
@@ -162,20 +161,16 @@ export default function Onboarding() {
         }}
       />
 
-      <header className="px-6 pt-8 flex justify-center">
-        <BrandLogo className="h-7 w-auto text-foreground" />
-      </header>
-
-      <main className="flex-1 flex items-start sm:items-center justify-center px-4 sm:px-6 py-10">
+      <main className="flex-1 flex items-center justify-center px-4 sm:px-6 py-6 sm:py-10">
         <div className="w-full max-w-3xl">
-          <p className="text-xs font-mono uppercase tracking-[0.2em] text-secondary text-center mb-3">
+          <p className="text-[10px] sm:text-xs font-mono uppercase tracking-[0.2em] text-secondary text-center mb-2 sm:mb-3">
             Welcome to DeployBro
           </p>
-          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-center mb-8">
+          <h1 className="text-2xl sm:text-4xl font-bold tracking-tight text-center mb-6 sm:mb-8 px-2">
             {titles[step]}
           </h1>
 
-          <div className="min-h-[300px]">
+          <div className="sm:min-h-[300px]">
             {step === 0 && (
               <div className="max-w-md mx-auto">
                 <Input
