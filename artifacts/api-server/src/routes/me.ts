@@ -1,4 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
+import { randomSlug } from "../lib/slug-words.js";
 import { and, desc, eq, ne, sql, inArray } from "drizzle-orm";
 import {
   db,
@@ -943,24 +944,22 @@ router.post("/me/projects", async (req: Request, res: Response): Promise<void> =
     return;
   }
 
-  const baseSlug = String(name)
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 60) || "project";
-
-  let slug = baseSlug;
-  let n = 2;
-  while (
-    (
+  // Always generate a compact 2-word slug (e.g. "swift-otter") regardless
+  // of what name the caller sends. On the rare collision we just draw
+  // another random pair — never fall back to a numeric suffix so every
+  // project always has exactly two words in its slug.
+  let slug = randomSlug();
+  const MAX_TRIES = 20;
+  for (let i = 0; i < MAX_TRIES; i++) {
+    const taken = (
       await db
         .select({ id: projectsTable.id })
         .from(projectsTable)
         .where(sql`${projectsTable.userId} = ${user.id} and ${projectsTable.slug} = ${slug}`)
         .limit(1)
-    ).length > 0
-  ) {
-    slug = `${baseSlug}-${n++}`;
+    ).length > 0;
+    if (!taken) break;
+    slug = randomSlug();
   }
 
   const [created] = await db

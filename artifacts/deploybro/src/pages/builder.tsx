@@ -120,9 +120,11 @@ import {
   useUpdateProject,
   useRetriggerScreenshot,
   useDeleteProject,
+  useMyProjects,
   type ApiBuild,
   type ApiDeployment,
   type ApiProject,
+  type ApiProjectListItem,
 } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -579,6 +581,7 @@ export default function Builder() {
 
   const { data: me } = useMe();
   const { data: project } = useProject(username, slug);
+  const { data: myProjects = [] } = useMyProjects();
   const { data: apiBuilds = [] } = useProjectBuilds(username, slug);
   const queryClient = useQueryClient();
   const pastBuilds = apiBuilds.map(toPastBuild);
@@ -1397,10 +1400,47 @@ export default function Builder() {
             <BrandLogo className="h-5 w-auto text-foreground" />
           </Link>
           <div className="w-px h-4 bg-border hidden sm:block"></div>
-          <div className="flex items-center text-sm font-mono text-secondary min-w-0">
-            <span className="text-foreground truncate">{slug}</span>
-          </div>
-          <div className="w-2 h-2 rounded-full bg-success ml-1 shrink-0" title="Live" />
+          {/* Project switcher — shows current slug; opens a dropdown of
+              all the user's projects so they can jump between them
+              without going back to the dashboard. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center gap-1 min-w-0 rounded-md px-1.5 py-1 hover:bg-surface-raised transition-colors group">
+                <span className="text-sm font-mono text-foreground truncate max-w-[10rem] sm:max-w-[14rem]">
+                  {project?.name ?? slug}
+                </span>
+                <ChevronDown className="w-3.5 h-3.5 text-secondary shrink-0 group-hover:text-foreground transition-colors" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-56 border-border max-h-72 overflow-y-auto">
+              {myProjects.length === 0 ? (
+                <DropdownMenuItem disabled className="text-secondary text-xs">
+                  No projects yet
+                </DropdownMenuItem>
+              ) : (
+                myProjects.map((p: ApiProjectListItem) => (
+                  <DropdownMenuItem
+                    key={p.slug}
+                    asChild
+                    className="flex items-center gap-2"
+                  >
+                    <Link href={`/${p.ownerUsername}/${p.slug}/build`}>
+                      <span className="font-mono text-sm truncate flex-1">{p.name ?? p.slug}</span>
+                      {p.slug === slug && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
+                      )}
+                    </Link>
+                  </DropdownMenuItem>
+                ))
+              )}
+              <DropdownMenuSeparator className="bg-border" />
+              <DropdownMenuItem asChild>
+                <Link href="/dashboard" className="text-secondary text-xs">
+                  ← All projects
+                </Link>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         {/* Drag handle aligned with the body's chat-resize handle so the
