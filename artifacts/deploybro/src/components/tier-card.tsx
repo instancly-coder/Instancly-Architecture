@@ -63,13 +63,10 @@ export const TIERS: Tier[] = [
     highlight: true,
     features: [
       { label: "$20 of usage each month", sub: "Unused balance rolls over up to $10", icon: Coins },
-      { label: "Unlimited projects", icon: Layers },
       { label: "Claude Sonnet 4.5 + Opus", sub: "Smartest models for complex tasks", icon: Sparkles },
       { label: "One-click Vercel deployment", icon: Zap },
       { label: "Neon Postgres integration", icon: Globe },
-      { label: "GitHub sync", icon: Globe },
       { label: "Custom domain", icon: Globe },
-      { label: "Priority support", icon: Shield },
     ],
   },
   {
