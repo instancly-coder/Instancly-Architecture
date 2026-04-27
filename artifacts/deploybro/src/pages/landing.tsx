@@ -210,7 +210,7 @@ export default function Landing() {
               </span>
               <span>in an afternoon.</span>
             </h1>
-            <p className="text-base sm:text-lg text-secondary max-w-xl mx-auto mb-10">
+            <p className="text-base sm:text-lg text-foreground font-semibold max-w-xl mx-auto mb-10">
               Describe it. Watch DeployBro build it live. Publish to a real URL.
             </p>
             <div className="w-full max-w-2xl mx-auto">
