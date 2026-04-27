@@ -1,5 +1,5 @@
 import { Link, useParams } from "wouter";
-import { Copy, ExternalLink, FolderTree, FileCode2 } from "lucide-react";
+import { Copy, ExternalLink, FolderTree, FileCode2, LayoutTemplate } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useProject } from "@/lib/api";
 import { toast } from "sonner";
@@ -48,16 +48,24 @@ export default function Project() {
     <div className="min-h-screen bg-background text-foreground flex flex-col">
       <MarketingNav />
 
-      <div className="border-b border-border bg-surface/50 px-4 sm:px-6 py-2 flex items-center justify-end gap-2 flex-wrap">
-        <Button variant="ghost" size="sm" className="hidden sm:flex hover:bg-surface-raised">
-          <ExternalLink className="w-4 h-4 mr-2" /> Open live app
-        </Button>
-        <Link href={`/${username}/${slug}/build`}>
-          <Button variant="outline" size="sm">Open builder</Button>
+      <div className="border-b border-border bg-surface/50 px-4 sm:px-6 py-2 flex items-center justify-between gap-2 flex-wrap">
+        <Link
+          href="/templates"
+          className="inline-flex items-center gap-1.5 text-sm text-secondary hover:text-foreground transition-colors"
+        >
+          <LayoutTemplate className="w-4 h-4" /> Templates
         </Link>
-        <Button size="sm" onClick={clone} className="bg-primary text-primary-foreground hover:bg-primary/90 font-medium">
-          <Copy className="w-4 h-4 mr-2" /> Clone
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button variant="ghost" size="sm" className="hidden sm:flex hover:bg-surface-raised">
+            <ExternalLink className="w-4 h-4 mr-2" /> Open live app
+          </Button>
+          <Link href={`/${username}/${slug}/build`}>
+            <Button variant="outline" size="sm">Open builder</Button>
+          </Link>
+          <Button size="sm" onClick={clone} className="bg-primary text-primary-foreground hover:bg-primary/90 font-medium">
+            <Copy className="w-4 h-4 mr-2" /> Clone
+          </Button>
+        </div>
       </div>
 
       <main className="flex-1 flex flex-col lg:flex-row min-h-0">
@@ -110,10 +118,15 @@ export default function Project() {
           </div>
         </div>
 
-        {/* Preview mockup: full width of the remaining column on desktop,
-            sane fixed height on mobile so the iframe always has room. */}
-        <div className="flex-1 bg-background p-3 sm:p-4 lg:p-6 flex flex-col min-h-0">
-          <div className="w-full flex-1 min-h-[420px] sm:min-h-[520px] bg-surface rounded-lg shadow-2xl overflow-hidden border border-border flex flex-col">
+        {/* Preview mockup: the inner browser frame uses `aspect-[16/10]` to
+            match the 1280×800 capture viewport exactly — that way the
+            screenshot fills the frame edge-to-edge with no cropping and no
+            empty letterboxing. The wrapper is centered top so the frame
+            sits nicely within the remaining column without stretching to
+            an arbitrary flex height. `max-w-6xl` keeps it from blowing up
+            on ultra-wide screens. */}
+        <div className="flex-1 bg-background p-3 sm:p-4 lg:p-6 flex flex-col min-h-0 overflow-y-auto">
+          <div className="w-full max-w-6xl mx-auto bg-surface rounded-lg shadow-2xl overflow-hidden border border-border flex flex-col">
             <div className="h-10 bg-surface-raised border-b border-border flex items-center px-3 sm:px-4 gap-2 shrink-0">
               <div className="flex gap-1.5 shrink-0">
                 <div className="w-3 h-3 rounded-full bg-foreground/20"></div>
@@ -124,15 +137,16 @@ export default function Project() {
                 {slug}.deploybro.app
               </div>
             </div>
-            <div className="flex-1 bg-background relative min-h-0">
+            <div className="aspect-[16/10] bg-background relative">
               {/* Prefer the static publish screenshot over a live iframe:
                   it loads instantly, costs nothing to serve, and never
                   flashes the JSX-via-Babel compile step that the in-builder
                   preview goes through. Falls back to the live iframe (same
                   endpoint the builder uses) when no screenshot exists yet
                   — typically projects that haven't been published or
-                  captured. `object-cover object-top` paints from the page
-                  header, matching the card thumbnails. */}
+                  captured. With the container at the same 16:10 ratio as
+                  the capture viewport, `object-cover object-top` paints
+                  the screenshot edge-to-edge with no crop. */}
               {project.screenshotUrl || project.coverImageUrl ? (
                 <img
                   src={(project.screenshotUrl ?? project.coverImageUrl)!}
