@@ -29,17 +29,6 @@ const HOME_MODELS: { name: string; key: "haiku" | "sonnet" | "opus"; note: strin
   { name: "Power Bro",   key: "opus",   note: "Most capable"   },
 ];
 
-const PROMPT_SUGGESTIONS = [
-  "Ecommerce",
-  "SaaS",
-  "Marketplace",
-  "Dashboard",
-  "Landing page",
-  "Internal tool",
-  "Mobile app",
-  "Blog",
-];
-
 const ROTATING_NOUNS = [
   "side project",
   "online shop",
@@ -313,19 +302,6 @@ export default function Landing() {
                       <ArrowUp className="w-4 h-4" />
                     </button>
                   </div>
-                </div>
-              </div>
-            </div>
-            <div className="relative mt-5 -mx-4 sm:-mx-8">
-              <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-background to-transparent z-10" />
-              <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-background to-transparent z-10" />
-              <div className="overflow-x-auto no-scrollbar px-4 sm:px-8">
-                <div className="flex flex-nowrap items-center justify-start sm:justify-center gap-2 w-max mx-auto">
-                  {PROMPT_SUGGESTIONS.map((s) => (
-                    <button key={s} type="button" onClick={() => setPrompt(s)} className="shrink-0 px-3 py-1.5 rounded-full text-xs text-secondary border border-border bg-surface/60 hover:text-foreground hover:border-primary transition-colors whitespace-nowrap">
-                      {s}
-                    </button>
-                  ))}
                 </div>
               </div>
             </div>
