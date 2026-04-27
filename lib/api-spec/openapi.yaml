@@ -835,6 +835,26 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MyReferrals"
+  /me/payouts:
+    get:
+      operationId: listMyPayouts
+      tags: [me]
+      summary: Past and pending payouts to the current user
+      description: |
+        Returns every payout row tied to this creator (queued, paid, and
+        failed) so they can reconcile against their bank statements and
+        spot any failures on their own account. `failureReason` is
+        surfaced so creators know to fix their Connect account when a
+        transfer bounces.
+      responses:
+        "200":
+          description: Payouts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MyPayout"
   /me/payouts/account:
     get:
       operationId: getMyPayoutAccount
@@ -2044,6 +2064,43 @@ components:
         - failedAt
         - referrerUserId
         - referrerUsername
+    MyPayout:
+      type: object
+      description: |
+        One row from the current creator's payout history. Mirrors the
+        admin-facing AdminPayout shape but without the
+        `referrerUserId`/`referrerUsername` fields (the creator already
+        knows who they are) and without the raw Stripe transfer id.
+        `failureReason` is surfaced inline so creators see why a payout
+        bounced and can go fix their Connect account.
+      properties:
+        id: { type: string }
+        amount: { type: number }
+        status:
+          type: string
+          enum: [queued, paid, failed]
+        failureReason:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        paidAt:
+          type: string
+          format: date-time
+          nullable: true
+        failedAt:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - amount
+        - status
+        - failureReason
+        - createdAt
+        - paidAt
+        - failedAt
     PayoutCycleResult:
       type: object
       properties:

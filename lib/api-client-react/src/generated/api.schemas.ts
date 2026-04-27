@@ -586,6 +586,34 @@ export interface AdminPayout {
   referrerUsername: string | null;
 }
 
+export type MyPayoutStatus =
+  (typeof MyPayoutStatus)[keyof typeof MyPayoutStatus];
+
+export const MyPayoutStatus = {
+  queued: "queued",
+  paid: "paid",
+  failed: "failed",
+} as const;
+
+/**
+ * One row from the current creator's payout history. Mirrors the
+admin-facing AdminPayout shape but without the
+`referrerUserId`/`referrerUsername` fields (the creator already
+knows who they are) and without the raw Stripe transfer id.
+`failureReason` is surfaced inline so creators see why a payout
+bounced and can go fix their Connect account.
+
+ */
+export interface MyPayout {
+  id: string;
+  amount: number;
+  status: MyPayoutStatus;
+  failureReason: string | null;
+  createdAt: string;
+  paidAt: string | null;
+  failedAt: string | null;
+}
+
 export interface PayoutCycleResult {
   considered: number;
   paidOut: number;

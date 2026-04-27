@@ -22,6 +22,7 @@ import type {
   AdminPayout as GeneratedAdminPayout,
   Earning as GeneratedEarning,
   EarningsSummary as GeneratedEarningsSummary,
+  MyPayout as GeneratedMyPayout,
   MyPayoutAccount as GeneratedMyPayoutAccount,
   MyReferrals as GeneratedMyReferrals,
   PayoutCycleResult as GeneratedPayoutCycleResult,
@@ -980,6 +981,7 @@ export function useRevealProjectEnvVar(
 // ────────────────────────────────────────────────────────────────────
 
 export type ApiMyPayoutAccount = GeneratedMyPayoutAccount;
+export type ApiMyPayout = GeneratedMyPayout;
 export type ApiPayoutOnboardingLink = GeneratedPayoutOnboardingLink;
 export type ApiAdminPayout = GeneratedAdminPayout;
 export type ApiPayoutCycleResult = GeneratedPayoutCycleResult;
@@ -988,6 +990,13 @@ export function useMyPayoutAccount() {
   return useQuery({
     queryKey: ["me", "payouts", "account"],
     queryFn: () => request<ApiMyPayoutAccount>("/me/payouts/account"),
+  });
+}
+
+export function useMyPayouts() {
+  return useQuery({
+    queryKey: ["me", "payouts"],
+    queryFn: () => request<ApiMyPayout[]>("/me/payouts"),
   });
 }
 

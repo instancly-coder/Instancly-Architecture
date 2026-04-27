@@ -42,6 +42,7 @@ import type {
   FinalizeUploadResponse,
   HealthStatus,
   Me,
+  MyPayout,
   MyPayoutAccount,
   MyReferrals,
   PayoutCycleResult,
@@ -3574,6 +3575,87 @@ export function useGetMyReferrals<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetMyReferralsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns every payout row tied to this creator (queued, paid, and
+failed) so they can reconcile against their bank statements and
+spot any failures on their own account. `failureReason` is
+surfaced so creators know to fix their Connect account when a
+transfer bounces.
+
+ * @summary Past and pending payouts to the current user
+ */
+export const getListMyPayoutsUrl = () => {
+  return `/api/me/payouts`;
+};
+
+export const listMyPayouts = async (
+  options?: RequestInit,
+): Promise<MyPayout[]> => {
+  return customFetch<MyPayout[]>(getListMyPayoutsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListMyPayoutsQueryKey = () => {
+  return [`/api/me/payouts`] as const;
+};
+
+export const getListMyPayoutsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listMyPayouts>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listMyPayouts>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListMyPayoutsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listMyPayouts>>> = ({
+    signal,
+  }) => listMyPayouts({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listMyPayouts>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListMyPayoutsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listMyPayouts>>
+>;
+export type ListMyPayoutsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Past and pending payouts to the current user
+ */
+
+export function useListMyPayouts<
+  TData = Awaited<ReturnType<typeof listMyPayouts>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listMyPayouts>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListMyPayoutsQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

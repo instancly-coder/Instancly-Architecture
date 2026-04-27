@@ -7,6 +7,7 @@ import {
   projectDomainsTable,
   referralEarningsTable,
   transactionsTable,
+  payoutsTable,
 } from "@workspace/db";
 import {
   GetMeResponse,
@@ -17,6 +18,7 @@ import {
   CreateMyProjectResponse,
   GetMyEarningsSummaryResponse,
   ListMyEarningsResponse,
+  ListMyPayoutsResponse,
   GetMyReferralsResponse,
   GetMyPayoutAccountResponse,
   CreateMyPayoutOnboardingLinkBody,
@@ -409,6 +411,51 @@ router.get(
           hasPaid: Boolean(r.hasPaid),
         })),
       }),
+    );
+  },
+);
+
+router.get(
+  "/me/payouts",
+  async (req: Request, res: Response): Promise<void> => {
+    const user = await getMe(req);
+    if (!user) {
+      res.status(401).json({ status: "error", message: "Unauthenticated" });
+      return;
+    }
+
+    // Newest first so the freshest payouts (and any failures the
+    // creator needs to act on) sit at the top of the table. We surface
+    // every status — queued, paid, and failed — because the failed
+    // rows are the whole point of letting creators see this on their
+    // own (the admin payouts table is staff-only).
+    const rows = await db
+      .select({
+        id: payoutsTable.id,
+        amount: payoutsTable.amount,
+        status: payoutsTable.status,
+        failureReason: payoutsTable.failureReason,
+        createdAt: payoutsTable.createdAt,
+        paidAt: payoutsTable.paidAt,
+        failedAt: payoutsTable.failedAt,
+      })
+      .from(payoutsTable)
+      .where(eq(payoutsTable.referrerUserId, user.id))
+      .orderBy(desc(payoutsTable.createdAt))
+      .limit(200);
+
+    res.json(
+      ListMyPayoutsResponse.parse(
+        rows.map((r) => ({
+          id: r.id,
+          amount: Number(r.amount),
+          status: r.status,
+          failureReason: r.failureReason,
+          createdAt: r.createdAt.toISOString(),
+          paidAt: r.paidAt ? r.paidAt.toISOString() : null,
+          failedAt: r.failedAt ? r.failedAt.toISOString() : null,
+        })),
+      ),
     );
   },
 );

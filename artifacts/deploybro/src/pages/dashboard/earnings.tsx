@@ -17,8 +17,10 @@ import {
   useMyEarnings,
   useMyEarningsSummary,
   useMyPayoutAccount,
+  useMyPayouts,
   useMyReferrals,
   useStartPayoutOnboarding,
+  type ApiMyPayout,
   type ApiMyPayoutAccount,
 } from "@/lib/api";
 
@@ -26,6 +28,7 @@ export default function Earnings() {
   const { data: me } = useMe();
   const { data: summary, isLoading: summaryLoading } = useMyEarningsSummary();
   const { data: earnings = [], isLoading: earningsLoading } = useMyEarnings();
+  const { data: payouts = [], isLoading: payoutsLoading } = useMyPayouts();
   const { data: referrals, isLoading: referralsLoading } = useMyReferrals();
   const { data: payoutAccount, isLoading: payoutAccountLoading } =
     useMyPayoutAccount();
@@ -359,8 +362,118 @@ export default function Earnings() {
             </tbody>
           </table>
         </div>
+
+        <h2 className="text-lg font-bold mt-8 mb-1">Payout history</h2>
+        <p className="text-xs text-secondary mb-4">
+          Each transfer we&apos;ve sent to your connected account. Use this
+          to reconcile against your bank statements. Failed payouts show
+          why they bounced so you can fix your account and we&apos;ll
+          retry on the next cycle.
+        </p>
+        <div className="border border-border rounded-xl bg-surface overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
+            <thead>
+              <tr className="border-b border-border bg-surface-raised/50">
+                <th className="text-left font-medium p-3 md:p-4 text-secondary">
+                  Date
+                </th>
+                <th className="text-right font-medium p-3 md:p-4 text-secondary">
+                  Amount
+                </th>
+                <th className="text-right font-medium p-3 md:p-4 text-secondary">
+                  Status
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {payoutsLoading ? (
+                <tr>
+                  <td colSpan={3} className="p-6 text-center text-secondary">
+                    <Loader2 className="w-4 h-4 animate-spin inline" />
+                  </td>
+                </tr>
+              ) : payouts.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={3}
+                    className="p-6 text-center text-secondary text-sm"
+                  >
+                    No payouts yet. We&apos;ll send one as soon as your
+                    pending balance reaches the minimum.
+                  </td>
+                </tr>
+              ) : (
+                payouts.map((p) => <PayoutRow key={p.id} payout={p} />)
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </DashboardLayout>
+  );
+}
+
+// One row in the payout history table. Failed payouts get a second
+// row underneath surfacing the failureReason inline so creators see
+// (without clicking into anything) why the transfer bounced — the
+// fix is almost always "go finish your Stripe Connect onboarding".
+function PayoutRow({ payout }: { payout: ApiMyPayout }) {
+  // Prefer the most informative timestamp for the visible "date"
+  // column: when the payout actually settled (paid), when it failed,
+  // or when we queued it (still in flight).
+  const dateIso =
+    payout.paidAt ?? payout.failedAt ?? payout.createdAt;
+  return (
+    <>
+      <tr
+        className={`border-b border-border last:border-0 hover:bg-surface-raised/50 transition-colors ${
+          payout.status === "failed" && payout.failureReason
+            ? "border-b-0"
+            : ""
+        }`}
+      >
+        <td className="p-3 md:p-4">
+          {new Date(dateIso).toISOString().slice(0, 10)}
+        </td>
+        <td className="p-3 md:p-4 font-mono text-right">
+          {formatGbp(payout.amount)}
+        </td>
+        <td className="p-3 md:p-4 text-right">
+          <PayoutStatusPill status={payout.status} />
+        </td>
+      </tr>
+      {payout.status === "failed" && payout.failureReason && (
+        <tr className="border-b border-border last:border-0 bg-error/5">
+          <td colSpan={3} className="px-3 md:px-4 pb-3 md:pb-4 pt-0">
+            <div className="flex items-start gap-2 text-xs text-error">
+              <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+              <span className="break-words">{payout.failureReason}</span>
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+function PayoutStatusPill({ status }: { status: ApiMyPayout["status"] }) {
+  const palette: Record<ApiMyPayout["status"], string> = {
+    queued: "text-secondary bg-surface-raised",
+    paid: "text-success bg-success/10",
+    failed: "text-error bg-error/10",
+  };
+  const dotPalette: Record<ApiMyPayout["status"], string> = {
+    queued: "bg-secondary",
+    paid: "bg-success",
+    failed: "bg-error",
+  };
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium ${palette[status]}`}
+    >
+      <div className={`w-1.5 h-1.5 rounded-full ${dotPalette[status]}`} />
+      {status}
+    </span>
   );
 }
 

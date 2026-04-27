@@ -1000,6 +1000,30 @@ export const GetMyReferralsResponse = zod.object({
 });
 
 /**
+ * Returns every payout row tied to this creator (queued, paid, and
+failed) so they can reconcile against their bank statements and
+spot any failures on their own account. `failureReason` is
+surfaced so creators know to fix their Connect account when a
+transfer bounces.
+
+ * @summary Past and pending payouts to the current user
+ */
+export const ListMyPayoutsResponseItem = zod
+  .object({
+    id: zod.string(),
+    amount: zod.number(),
+    status: zod.enum(["queued", "paid", "failed"]),
+    failureReason: zod.string().nullable(),
+    createdAt: zod.string().datetime({}),
+    paidAt: zod.string().datetime({}).nullable(),
+    failedAt: zod.string().datetime({}).nullable(),
+  })
+  .describe(
+    "One row from the current creator's payout history. Mirrors the\nadmin-facing AdminPayout shape but without the\n`referrerUserId`\/`referrerUsername` fields (the creator already\nknows who they are) and without the raw Stripe transfer id.\n`failureReason` is surfaced inline so creators see why a payout\nbounced and can go fix their Connect account.\n",
+  );
+export const ListMyPayoutsResponse = zod.array(ListMyPayoutsResponseItem);
+
+/**
  * @summary Current user's Stripe Connect payout account status
  */
 export const GetMyPayoutAccountResponse = zod

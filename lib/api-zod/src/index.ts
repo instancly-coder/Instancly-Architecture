@@ -30,6 +30,8 @@ export type {
   CreateOnboardingLinkBody,
   Earning,
   EarningsSummary,
+  MyPayout,
+  MyPayoutStatus,
   MyPayoutAccount,
   MyPayoutAccountStatus,
   PayoutCycleResult,
