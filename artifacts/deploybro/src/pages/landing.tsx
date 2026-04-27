@@ -7,6 +7,7 @@ import {
   BarChart3,
   CreditCard,
   Cpu,
+  Sparkles,
   Quote,
   Check,
   Plus,
@@ -17,7 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
-import React, { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { MarketingNav } from "@/components/marketing-nav";
 import { MarketingFooter } from "@/components/marketing-footer";
@@ -71,7 +72,6 @@ const STEPS = [
     step: "02",
     title: "Watch it come to life",
     body: "Real components, a real database, a real preview — all wired up live while the AI works. No mocks, no toy apps.",
-    files: ["app.tsx", "recipes.tsx", "schema.sql", "api/save.ts"],
   },
   {
     step: "03",
@@ -81,91 +81,13 @@ const STEPS = [
   },
 ];
 
-// Brand-themed integration marks. Inline SVGs so we don't depend on an
-// external icon set; each picks up `currentColor` from its themed wrapper.
-const INTEGRATIONS: Array<{
-  name: string;
-  tag: string;
-  desc: string;
-  color: string;
-  Logo: () => React.ReactElement;
-}> = [
-  {
-    name: "Neon",
-    tag: "Database",
-    desc: "Serverless Postgres. A fresh branch for every project, instantly.",
-    color: "#00E599",
-    Logo: () => (
-      <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-        <path d="M0 4.8C0 2.149 2.149 0 4.8 0h14.4C21.851 0 24 2.149 24 4.8v10.62c0 2.985-3.81 4.227-5.567 1.815L13.6 10.5v8.7A4.8 4.8 0 0 1 8.8 24H4.8A4.8 4.8 0 0 1 0 19.2V4.8Zm4.8-1.2A1.2 1.2 0 0 0 3.6 4.8v14.4a1.2 1.2 0 0 0 1.2 1.2h4a1.2 1.2 0 0 0 1.2-1.2V8.4a1.2 1.2 0 0 1 2.16-.72l6.96 9.28c.293.4.88.176.88-.32V4.8a1.2 1.2 0 0 0-1.2-1.2H4.8Z" />
-      </svg>
-    ),
-  },
-  {
-    name: "Stripe",
-    tag: "Payments",
-    desc: "Take payments in any currency, day one. Subscriptions, one-offs, marketplaces.",
-    color: "#635BFF",
-    Logo: () => (
-      <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-        <path d="M13.479 9.883c-1.626-.604-2.512-1.067-2.512-1.803 0-.622.511-.977 1.42-.977 1.661 0 3.385.708 4.567 1.302l.671-4.119C16.687 3.83 15.064 3.4 12.972 3.4c-1.738 0-3.184.45-4.215 1.297-1.073.886-1.629 2.165-1.629 3.703 0 2.789 1.706 3.978 4.485 4.989 1.79.636 2.39 1.087 2.39 1.793 0 .682-.586 1.067-1.652 1.067-1.355 0-3.585-.659-5.043-1.51l-.692 4.182c1.246.71 3.557 1.421 5.957 1.421 1.834 0 3.366-.435 4.398-1.252 1.155-.911 1.749-2.252 1.749-3.948 0-2.86-1.749-4.05-4.241-4.959z" />
-      </svg>
-    ),
-  },
-  {
-    name: "Vercel",
-    tag: "Hosting",
-    desc: "Edge-deployed, every push. Custom domains and TLS in two clicks.",
-    color: "#FFFFFF",
-    Logo: () => (
-      <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-        <path d="M12 2 24 22H0L12 2Z" />
-      </svg>
-    ),
-  },
-  {
-    name: "Anthropic",
-    tag: "AI · Claude",
-    desc: "Claude Haiku, Sonnet & Opus — pick your tier per build.",
-    color: "#D97757",
-    Logo: () => (
-      <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-        <path d="M14.5 3h3.8L24 21h-3.8l-1.2-3.4h-6.5L11.3 21H7.5L14.5 3Zm-1.4 11.4h4.5L15.3 7.6l-2.2 6.8ZM0 21l7-18h3.6L3.7 21H0Z" />
-      </svg>
-    ),
-  },
-  {
-    name: "Postgres",
-    tag: "SQL",
-    desc: "Battle-tested SQL with full-text search, JSONB, and pgvector built in.",
-    color: "#4169E1",
-    Logo: () => (
-      <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-        <path d="M16.808 0c-1.371 0-2.69.279-3.857.732l.027.018c.86.331 1.53.79 2.044 1.343 1.027-.371 2.181-.59 3.413-.59C23.146 1.503 24 5.06 24 8.07c0 4.014-1.78 8.106-3.42 8.106-.522 0-.99-.302-1.376-.842l.244-.072c.328-.097.687-.39.687-1.296 0-.737-.13-1.927-.13-3.05 0-2.61.45-3.704.45-5.18 0-1.43-.598-2.63-1.832-3.16C17.93.255 17.346.165 16.808.165 14.27.165 12.41 1.94 12 4.4c-.41-2.46-2.27-4.235-4.808-4.235-.538 0-1.122.09-1.815.412C4.143 1.107 3.545 2.307 3.545 3.737c0 1.476.45 2.57.45 5.18 0 1.123-.13 2.313-.13 3.05 0 .906.36 1.2.687 1.296l.244.072c-.386.54-.854.842-1.376.842C1.78 14.176 0 10.084 0 6.07 0 3.06.854-.497 5.565.503c1.232 0 2.386.219 3.413.59C9.493.539 10.163.08 11.022-.25l.027-.018C9.882-.721 8.563-1 7.192-1z" />
-      </svg>
-    ),
-  },
-  {
-    name: "shadcn/ui",
-    tag: "Components",
-    desc: "54 polished, accessible primitives — the same set the AI builds with.",
-    color: "#A1A1AA",
-    Logo: () => (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
-        <path d="M22 12 12 22" />
-        <path d="M19 4 4 19" />
-      </svg>
-    ),
-  },
-];
-
 const FEATURES = [
-  { icon: Database, title: "Real Postgres", body: "Every project gets a serverless database. Branch, restore, query." },
-  { icon: Shield, title: "Auth, built in", body: "Email, Google, Apple — toggle on. No SDK juggling." },
-  { icon: Globe, title: "One-click publish", body: "Live on the web in seconds. Custom domain when you're ready." },
-  { icon: BarChart3, title: "Live analytics", body: "Page views, signups, revenue — without dropping a script." },
-  { icon: CreditCard, title: "Payments-ready", body: "Stripe wired up so you can charge for what you ship." },
-  { icon: Cpu, title: "Pick your model", body: "Economy Bro for speed, Power Bro for the hard stuff. Cost shown live." },
+  { icon: Globe, title: "Live in seconds", body: "Hit publish and your app is on the internet — at a real, shareable URL. Add your own domain whenever you're ready." },
+  { icon: Shield, title: "Logins built in", body: "Sign-in with Google, email, or magic link. Toggle on, you're done. No SDKs to wire up." },
+  { icon: Database, title: "Saves everything", body: "Users, posts, photos, orders — your app remembers it all. No databases to set up, no servers to babysit." },
+  { icon: CreditCard, title: "Charge for it", body: "Take payments from day one. Subscriptions or one-offs, in any currency. Powered by Stripe." },
+  { icon: BarChart3, title: "See what's working", body: "Page views, signups, sales — visible from the dashboard. No tracking script to install." },
+  { icon: Sparkles, title: "Smart by default", body: "DeployBro picks the right AI for the job, so you focus on the idea — not which model to use." },
 ];
 
 const TESTIMONIALS = [
@@ -201,8 +123,6 @@ export default function Landing() {
   const [, navigate] = useLocation();
   const [prompt, setPrompt] = useState("");
   const [nounIndex, setNounIndex] = useState(0);
-  const [integrationsExpanded, setIntegrationsExpanded] = useState(false);
-
   // Prompt-box composer state — mirrors the builder so the experience is
   // continuous when the user lands in the editor.
   const [selectedModel, setSelectedModel] = useState<string>("Economy Bro");
@@ -669,102 +589,6 @@ export default function Landing() {
           </div>
         </section>
 
-        {/* Integrations — every project gets these wired in */}
-        <section id="integrations" className="py-20 md:py-28 px-4 sm:px-6 border-t border-border">
-          <div className="max-w-7xl mx-auto">
-            <div className="text-center max-w-2xl mx-auto mb-12 md:mb-16">
-              <p className="text-xs font-mono uppercase tracking-[0.2em] text-secondary mb-3">
-                The stack, included
-              </p>
-              <h2 className="text-3xl md:text-5xl font-bold tracking-tight mb-4 text-balance">
-                <span className="block sm:inline">Best-in-class tools,</span>{" "}
-                <span className="block sm:inline">
-                  <span className="text-primary">already wired up.</span>
-                </span>
-              </h2>
-              <p className="text-base text-secondary leading-relaxed">
-                No SDK juggling. No env-var scavenger hunts. Every DeployBro app
-                ships with the tools the pros use — pre-configured, on day one.
-              </p>
-            </div>
-
-            <div className="relative">
-              <div
-                className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 ${
-                  integrationsExpanded
-                    ? ""
-                    : "[&>*:nth-child(n+4)]:hidden sm:[&>*:nth-child(n+4)]:grid"
-                }`}
-              >
-                {INTEGRATIONS.map((it) => (
-                  <div
-                    key={it.name}
-                    className="group relative rounded-xl border bg-surface/40 p-5 overflow-hidden transition-all hover:-translate-y-0.5"
-                    style={{
-                      borderColor: `${it.color}40`,
-                      boxShadow: `inset 0 1px 0 0 ${it.color}18, 0 0 0 1px ${it.color}10`,
-                    }}
-                  >
-                    {/* Themed glow */}
-                    <div
-                      className="absolute -top-12 -right-12 w-32 h-32 rounded-full blur-3xl opacity-30 group-hover:opacity-60 transition-opacity pointer-events-none"
-                      style={{ background: it.color }}
-                    />
-                    <div className="relative flex items-start gap-3 mb-2">
-                      <div
-                        className="w-10 h-10 rounded-lg flex items-center justify-center border shrink-0"
-                        style={{
-                          background: `${it.color}18`,
-                          borderColor: `${it.color}40`,
-                          color: it.color,
-                        }}
-                      >
-                        <it.Logo />
-                      </div>
-                      <div className="flex items-center justify-between gap-2 min-w-0 flex-1 pt-1.5">
-                        <h3 className="font-bold tracking-tight text-foreground leading-none truncate">
-                          {it.name}
-                        </h3>
-                        <span
-                          className="text-[10px] font-mono uppercase tracking-wider leading-none shrink-0"
-                          style={{ color: it.color }}
-                        >
-                          {it.tag}
-                        </span>
-                      </div>
-                    </div>
-                    <p className="relative text-xs text-secondary leading-relaxed">
-                      {it.desc}
-                    </p>
-                  </div>
-                ))}
-              </div>
-
-              {/* Mobile-only fade + reveal control. Hidden once expanded
-                  and on sm+ where we already show the full grid. */}
-              {!integrationsExpanded && (
-                <div
-                  aria-hidden="true"
-                  className="sm:hidden pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-background via-background/80 to-transparent"
-                />
-              )}
-            </div>
-
-            {!integrationsExpanded && (
-              <div className="sm:hidden mt-6 flex justify-center">
-                <button
-                  type="button"
-                  onClick={() => setIntegrationsExpanded(true)}
-                  className="glass-pill inline-flex items-center gap-2 px-5 py-2 rounded-full text-xs font-medium text-foreground/90 transition-transform active:translate-y-px"
-                >
-                  Show all {INTEGRATIONS.length}
-                  <ArrowRight className="w-3.5 h-3.5 opacity-60 rotate-90" />
-                </button>
-              </div>
-            )}
-          </div>
-        </section>
-
         {/* How it works — visual zig-zag */}
         <section id="how" className="py-20 md:py-32 px-4 sm:px-6">
           <div className="max-w-7xl mx-auto">
@@ -832,41 +656,46 @@ export default function Landing() {
 
                       {i === 1 && (
                         <div className="rounded-xl border border-border bg-surface shadow-2xl shadow-black/10 dark:shadow-black/40 overflow-hidden">
+                          {/* Friendly browser-style preview of the app
+                              as it's coming together — no code in sight,
+                              so non-technical visitors see the outcome,
+                              not the plumbing. */}
                           <div className="flex items-center gap-1.5 px-3 py-2 border-b border-border bg-surface-raised">
                             <span className="w-2.5 h-2.5 rounded-full bg-red-400/70" />
                             <span className="w-2.5 h-2.5 rounded-full bg-yellow-400/70" />
                             <span className="w-2.5 h-2.5 rounded-full bg-green-400/70" />
-                            <span className="ml-3 text-xs font-mono text-secondary">
-                              recipes.app — building
+                            <span className="ml-3 text-xs font-mono text-secondary truncate">
+                              recipes.app — preview
                             </span>
                           </div>
-                          <div className="grid grid-cols-[140px_1fr] text-xs font-mono">
-                            <div className="border-r border-border p-3 space-y-1.5 bg-surface-raised/40">
-                              {s.files?.map((f, j) => (
+                          <div className="p-5 bg-surface-raised/30 space-y-4">
+                            <div className="space-y-2">
+                              <div className="h-3 w-1/3 rounded bg-foreground/15" />
+                              <div className="h-2 w-2/3 rounded bg-foreground/10" />
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              {[1, 2, 3, 4].map((n) => (
                                 <div
-                                  key={f}
-                                  className={`flex items-center gap-1.5 px-1.5 py-1 rounded ${
-                                    j === 1
-                                      ? "bg-primary/15 text-primary"
-                                      : "text-secondary"
-                                  }`}
+                                  key={n}
+                                  className="rounded-lg border border-border bg-background p-2.5"
                                 >
-                                  <span className="w-1 h-1 rounded-full bg-current opacity-60" />
-                                  <span className="truncate">{f}</span>
+                                  <div className="aspect-[4/3] rounded bg-gradient-to-br from-primary/30 to-foreground/5 mb-2" />
+                                  <div className="h-1.5 w-3/4 rounded bg-foreground/15 mb-1" />
+                                  <div className="flex gap-0.5">
+                                    {[1, 2, 3, 4, 5].map((s) => (
+                                      <span
+                                        key={s}
+                                        className={`w-1 h-1 rounded-full ${s <= (n % 4) + 2 ? "bg-primary" : "bg-foreground/20"}`}
+                                      />
+                                    ))}
+                                  </div>
                                 </div>
                               ))}
                             </div>
-                            <div className="p-3 space-y-1.5 leading-relaxed">
-                              <div><span className="text-primary">export</span> <span className="text-foreground">function</span> <span className="text-foreground/80">Recipes()</span> {"{"}</div>
-                              <div className="pl-3 text-secondary">const recipes = useRecipes();</div>
-                              <div className="pl-3"><span className="text-foreground/80">return</span> <span className="text-secondary">(</span></div>
-                              <div className="pl-6 text-foreground/80">&lt;Grid items={"{recipes}"} /&gt;</div>
-                              <div className="pl-3 text-secondary">);</div>
-                              <div>{"}"}</div>
-                              <div className="pt-2 text-primary flex items-center gap-1">
-                                <Check className="w-3 h-3" /> 4 files written
-                              </div>
-                            </div>
+                          </div>
+                          <div className="px-4 py-2 border-t border-border flex items-center gap-2 text-xs">
+                            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                            <span className="text-secondary">Adding "Save recipe" button…</span>
                           </div>
                         </div>
                       )}
@@ -941,16 +770,6 @@ export default function Landing() {
                       {f.title}
                     </h3>
                     <p className="text-sm text-secondary leading-relaxed">{f.body}</p>
-                    {big && (
-                      <div className="mt-6 rounded-lg border border-border bg-surface p-4 font-mono text-xs">
-                        <div className="text-secondary mb-2">// schema.sql</div>
-                        <div><span className="text-primary">create table</span> <span className="text-foreground">recipes</span> (</div>
-                        <div className="pl-3 text-secondary">id <span className="text-primary">uuid</span> primary key,</div>
-                        <div className="pl-3 text-secondary">title <span className="text-primary">text</span> not null,</div>
-                        <div className="pl-3 text-secondary">rating <span className="text-primary">int</span></div>
-                        <div>);</div>
-                      </div>
-                    )}
                   </div>
                 );
               })}
