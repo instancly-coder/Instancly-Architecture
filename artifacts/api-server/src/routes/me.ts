@@ -189,6 +189,7 @@ router.get("/me/projects", async (req: Request, res: Response): Promise<void> =>
       isFeaturedTemplate: projectsTable.isFeaturedTemplate,
       clones: projectsTable.clones,
       coverImageUrl: projectsTable.coverImageUrl,
+      screenshotUrl: projectsTable.screenshotUrl,
       lastBuiltAt: projectsTable.lastBuiltAt,
       buildsCount: sql<number>`(select count(*) from builds where builds.project_id = ${projectsTable.id})`,
     })
@@ -815,6 +816,7 @@ router.patch("/me/projects/:slug", async (req: Request, res: Response): Promise<
       isFeaturedTemplate: projectsTable.isFeaturedTemplate,
       clones: projectsTable.clones,
       coverImageUrl: projectsTable.coverImageUrl,
+      screenshotUrl: projectsTable.screenshotUrl,
       lastBuiltAt: projectsTable.lastBuiltAt,
     });
 

@@ -146,7 +146,10 @@ function ExploreBody({
                 aria-label={`Open ${project.name} by ${project.author}`}
                 className="group rounded-xl border border-border bg-surface hover-elevate overflow-hidden flex flex-col"
               >
-                <div className="aspect-[4/3] bg-background relative overflow-hidden">
+                {/* aspect-[16/10] matches the 1280×800 capture viewport so
+                    `object-cover object-top` paints the page header
+                    full-width with no side cropping. */}
+                <div className="aspect-[16/10] bg-background relative overflow-hidden">
                   {(project.screenshotUrl ?? project.coverImageUrl) ? (
                     <img
                       src={(project.screenshotUrl ?? project.coverImageUrl)!}

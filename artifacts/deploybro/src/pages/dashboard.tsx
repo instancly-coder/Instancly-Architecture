@@ -227,13 +227,27 @@ function ProjectCard({ project, ownerUsername }: { project: ApiProjectListItem; 
         className="absolute inset-0 z-10"
       />
 
-      <div className="h-32 bg-gradient-to-br from-surface-raised to-background border-b border-border flex items-center justify-center p-4">
-        <div className="w-full h-full rounded border border-border/50 bg-background/50 flex flex-col px-4 py-3">
-          <div className="w-1/2 h-2 bg-border/50 rounded mb-2"></div>
-          <div className="w-3/4 h-2 bg-border/50 rounded mb-1"></div>
-          <div className="w-2/3 h-2 bg-border/50 rounded mb-4"></div>
-          <div className="mt-auto self-end w-8 h-8 rounded bg-border/50"></div>
-        </div>
+      {/* Card thumbnail: prefer the auto-captured publish screenshot, then
+          a manually-set cover image, then a letter placeholder. The
+          aspect-[16/10] container matches the 1280×800 viewport that
+          `seed-template-screenshots.mjs` and `runPublishPipeline` use, so
+          `object-cover object-top` paints the page header full-width
+          without side-cropping. */}
+      <div className="aspect-[16/10] bg-surface-raised border-b border-border relative overflow-hidden">
+        {(project.screenshotUrl ?? project.coverImageUrl) ? (
+          <img
+            src={(project.screenshotUrl ?? project.coverImageUrl)!}
+            alt=""
+            loading="lazy"
+            className="absolute inset-0 w-full h-full object-cover object-top"
+          />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-surface-raised to-background">
+            <div className="w-14 h-14 rounded-2xl bg-border/60 flex items-center justify-center text-secondary font-mono text-2xl">
+              {project.name.charAt(0).toUpperCase()}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="p-4">

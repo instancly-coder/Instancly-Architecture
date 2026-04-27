@@ -18,6 +18,7 @@ export interface Project {
   isFeaturedTemplate: boolean;
   features: string[];
   coverImageUrl: string | null;
+  screenshotUrl: string | null;
   clones: number;
   createdAt: string;
   lastBuiltAt: string;

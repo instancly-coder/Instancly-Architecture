@@ -464,7 +464,10 @@ export default function Landing() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {templates.slice(0, 4).map((t) => (
                   <Link key={t.id} href={`/${t.author}/${t.slug}`} className="group rounded-xl border border-border bg-surface hover-elevate overflow-hidden flex flex-col">
-                    <div className="aspect-[4/3] bg-gradient-to-br from-primary/20 via-surface-raised to-background relative overflow-hidden">
+                    {/* aspect-[16/10] matches the 1280×800 capture viewport
+                        so `object-cover object-top` paints the page header
+                        full-width with no side cropping. */}
+                    <div className="aspect-[16/10] bg-gradient-to-br from-primary/20 via-surface-raised to-background relative overflow-hidden">
                       <div className="absolute top-2 right-2 px-2 py-0.5 rounded bg-primary text-primary-foreground text-[10px] font-mono uppercase z-10">{t.framework}</div>
                       {(t.screenshotUrl ?? t.coverImageUrl) ? (
                         <img

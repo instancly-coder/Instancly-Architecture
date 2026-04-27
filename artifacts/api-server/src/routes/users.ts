@@ -69,6 +69,7 @@ router.get("/users/:username/projects", async (req: Request, res: Response): Pro
       isFeaturedTemplate: projectsTable.isFeaturedTemplate,
       clones: projectsTable.clones,
       coverImageUrl: projectsTable.coverImageUrl,
+      screenshotUrl: projectsTable.screenshotUrl,
       lastBuiltAt: projectsTable.lastBuiltAt,
       createdAt: projectsTable.createdAt,
       buildsCount: sql<number>`(select count(*) from builds where builds.project_id = ${projectsTable.id})`,

@@ -17,6 +17,7 @@ export interface ProjectListItem {
   isFeaturedTemplate: boolean;
   clones: number;
   coverImageUrl: string | null;
+  screenshotUrl: string | null;
   lastBuiltAt: string;
   createdAt?: string;
   buildsCount: number;

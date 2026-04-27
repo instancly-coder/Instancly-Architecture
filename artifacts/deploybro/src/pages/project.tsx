@@ -125,15 +125,28 @@ export default function Project() {
               </div>
             </div>
             <div className="flex-1 bg-background relative min-h-0">
-              {/* Real preview of the project content. Same endpoint the
-                  builder iframe uses, so what visitors see here matches
-                  exactly what the owner sees in the dev preview. */}
-              <iframe
-                src={`/api/preview/${encodeURIComponent(String(username))}/${encodeURIComponent(String(slug))}/`}
-                title={`${project.name} preview`}
-                sandbox="allow-scripts allow-same-origin"
-                className="absolute inset-0 w-full h-full border-0 bg-background"
-              />
+              {/* Prefer the static publish screenshot over a live iframe:
+                  it loads instantly, costs nothing to serve, and never
+                  flashes the JSX-via-Babel compile step that the in-builder
+                  preview goes through. Falls back to the live iframe (same
+                  endpoint the builder uses) when no screenshot exists yet
+                  — typically projects that haven't been published or
+                  captured. `object-cover object-top` paints from the page
+                  header, matching the card thumbnails. */}
+              {project.screenshotUrl || project.coverImageUrl ? (
+                <img
+                  src={(project.screenshotUrl ?? project.coverImageUrl)!}
+                  alt={`${project.name} preview`}
+                  className="absolute inset-0 w-full h-full object-cover object-top bg-background"
+                />
+              ) : (
+                <iframe
+                  src={`/api/preview/${encodeURIComponent(String(username))}/${encodeURIComponent(String(slug))}/`}
+                  title={`${project.name} preview`}
+                  sandbox="allow-scripts allow-same-origin"
+                  className="absolute inset-0 w-full h-full border-0 bg-background"
+                />
+              )}
             </div>
           </div>
         </div>
