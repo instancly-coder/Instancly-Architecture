@@ -1,5 +1,5 @@
 import { Link, useParams } from "wouter";
-import { Copy, ExternalLink, ChevronRight, FolderTree, FileCode2 } from "lucide-react";
+import { Copy, ExternalLink, FolderTree, FileCode2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useProject } from "@/lib/api";
 import { toast } from "sonner";
@@ -48,30 +48,20 @@ export default function Project() {
     <div className="min-h-screen bg-background text-foreground flex flex-col">
       <MarketingNav />
 
-      <div className="border-b border-border bg-surface/50 px-4 sm:px-6 py-2 flex items-center gap-3 flex-wrap">
-        <div className="flex items-center text-sm font-mono text-secondary min-w-0">
-          <Link href={`/${username}`} className="hover:text-foreground transition-colors truncate">
-            {username}
-          </Link>
-          <ChevronRight className="w-4 h-4 mx-1 shrink-0" />
-          <span className="text-foreground truncate">{slug}</span>
-        </div>
-
-        <div className="ml-auto flex items-center gap-2">
-          <Button variant="ghost" size="sm" className="hidden sm:flex hover:bg-surface-raised">
-            <ExternalLink className="w-4 h-4 mr-2" /> Open live app
-          </Button>
-          <Link href={`/${username}/${slug}/build`}>
-            <Button variant="outline" size="sm">Open builder</Button>
-          </Link>
-          <Button size="sm" onClick={clone} className="bg-primary text-primary-foreground hover:bg-primary/90 font-medium">
-            <Copy className="w-4 h-4 mr-2" /> Clone
-          </Button>
-        </div>
+      <div className="border-b border-border bg-surface/50 px-4 sm:px-6 py-2 flex items-center justify-end gap-2 flex-wrap">
+        <Button variant="ghost" size="sm" className="hidden sm:flex hover:bg-surface-raised">
+          <ExternalLink className="w-4 h-4 mr-2" /> Open live app
+        </Button>
+        <Link href={`/${username}/${slug}/build`}>
+          <Button variant="outline" size="sm">Open builder</Button>
+        </Link>
+        <Button size="sm" onClick={clone} className="bg-primary text-primary-foreground hover:bg-primary/90 font-medium">
+          <Copy className="w-4 h-4 mr-2" /> Clone
+        </Button>
       </div>
 
-      <main className="flex-1 flex flex-col md:flex-row">
-        <div className="w-full md:w-80 border-r border-border bg-surface p-6 flex flex-col shrink-0 overflow-y-auto">
+      <main className="flex-1 flex flex-col lg:flex-row min-h-0">
+        <div className="w-full lg:w-80 lg:shrink-0 border-b lg:border-b-0 lg:border-r border-border bg-surface p-4 sm:p-6 flex flex-col overflow-y-auto">
           <h1 className="text-2xl font-bold tracking-tight mb-2">{project.name}</h1>
           <p className="text-sm text-secondary mb-6">{project.description}</p>
 
@@ -102,7 +92,7 @@ export default function Project() {
             </div>
           </div>
 
-          <div className="mt-auto">
+          <div className="mt-auto hidden lg:block">
             <h3 className="text-sm font-bold mb-3 flex items-center gap-2">
               <FolderTree className="w-4 h-4 text-secondary" /> Files
             </h3>
@@ -120,19 +110,21 @@ export default function Project() {
           </div>
         </div>
 
-        <div className="flex-1 bg-background flex flex-col items-center justify-center p-4 sm:p-8">
-          <div className="w-full max-w-4xl h-full max-h-[800px] bg-surface rounded-lg shadow-2xl overflow-hidden border border-border flex flex-col">
-            <div className="h-10 bg-surface-raised border-b border-border flex items-center px-4 gap-2 shrink-0">
-              <div className="flex gap-1.5">
+        {/* Preview mockup: full width of the remaining column on desktop,
+            sane fixed height on mobile so the iframe always has room. */}
+        <div className="flex-1 bg-background p-3 sm:p-4 lg:p-6 flex flex-col min-h-0">
+          <div className="w-full flex-1 min-h-[420px] sm:min-h-[520px] bg-surface rounded-lg shadow-2xl overflow-hidden border border-border flex flex-col">
+            <div className="h-10 bg-surface-raised border-b border-border flex items-center px-3 sm:px-4 gap-2 shrink-0">
+              <div className="flex gap-1.5 shrink-0">
                 <div className="w-3 h-3 rounded-full bg-foreground/20"></div>
                 <div className="w-3 h-3 rounded-full bg-foreground/20"></div>
                 <div className="w-3 h-3 rounded-full bg-foreground/20"></div>
               </div>
-              <div className="mx-auto text-xs font-mono text-secondary bg-background px-24 py-1 rounded border border-border">
+              <div className="mx-auto text-[10px] sm:text-xs font-mono text-secondary bg-background px-3 sm:px-12 lg:px-24 py-1 rounded border border-border truncate max-w-[70%] sm:max-w-[60%] lg:max-w-none">
                 {slug}.deploybro.app
               </div>
             </div>
-            <div className="flex-1 bg-background relative">
+            <div className="flex-1 bg-background relative min-h-0">
               {/* Real preview of the project content. Same endpoint the
                   builder iframe uses, so what visitors see here matches
                   exactly what the owner sees in the dev preview. */}

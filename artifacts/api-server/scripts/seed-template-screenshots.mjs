@@ -1,7 +1,14 @@
 // One-shot backfill: captures an above-the-fold screenshot for every
-// featured starter template that already has a `live_url` but no
-// `screenshot_url` yet, and persists the resulting hosted image URL to
-// the `projects.screenshot_url` column.
+// featured starter template that has no `screenshot_url` yet, and
+// persists the resulting hosted image URL to the `projects.screenshot_url`
+// column.
+//
+// Templates with a `live_url` (real Vercel deployment) get screenshotted
+// from that URL. Templates without one (the seeded starter templates)
+// fall back to the public preview endpoint
+// `${SITE_URL}/api/preview/{author}/{slug}/`, which renders the
+// template's actual files in the sandboxed iframe. SITE_URL defaults to
+// https://deploybro.app and can be overridden for staging.
 //
 // Why this exists:
 //   The three seeded starter templates (`bro-cloud-saas`,
@@ -95,16 +102,17 @@ async function captureScreenshot(liveUrl) {
 }
 
 async function main() {
+  const SITE_URL = (process.env.SITE_URL ?? "https://deploybro.app").replace(/\/+$/, "");
   const pool = new Pool({ connectionString: DATABASE_URL });
   const client = await pool.connect();
   try {
     const { rows } = await client.query(
-      `SELECT id, slug, name, live_url
-         FROM projects
-        WHERE is_featured_template = TRUE
-          AND live_url IS NOT NULL
-          AND screenshot_url IS NULL
-        ORDER BY slug`,
+      `SELECT p.id, p.slug, p.name, p.live_url, u.username
+         FROM projects p
+         JOIN users u ON p.user_id = u.id
+        WHERE p.is_featured_template = TRUE
+          AND p.screenshot_url IS NULL
+        ORDER BY p.slug`,
     );
 
     if (rows.length === 0) {
@@ -117,8 +125,11 @@ async function main() {
     let captured = 0;
     let skipped = 0;
     for (const row of rows) {
-      console.log(`- ${row.slug} → ${row.live_url}`);
-      const screenshotUrl = await captureScreenshot(row.live_url);
+      const targetUrl =
+        row.live_url ??
+        `${SITE_URL}/api/preview/${encodeURIComponent(row.username)}/${encodeURIComponent(row.slug)}/`;
+      console.log(`- ${row.slug} → ${targetUrl}`);
+      const screenshotUrl = await captureScreenshot(targetUrl);
       if (!screenshotUrl) {
         console.log("  (no screenshot returned, leaving column NULL)");
         skipped++;

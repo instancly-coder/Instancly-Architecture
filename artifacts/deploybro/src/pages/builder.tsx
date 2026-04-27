@@ -1915,6 +1915,12 @@ function ChatPanel({
   const [urlDraft, setUrlDraft] = useState("");
   const [urlError, setUrlError] = useState("");
 
+  // Pro-plan gate for the model picker. ChatPanel is its own component so
+  // we re-derive these here instead of plumbing them through props.
+  const { data: chatMe } = useMe();
+  const isFreePlan = (chatMe?.plan ?? "Free").toLowerCase() === "free";
+  const [, setLocation] = useLocation();
+
   const handleFiles = (files: FileList | null) => {
     if (!files) return;
     setAttachments((prev) => [...prev, ...Array.from(files)].slice(0, 6));
@@ -2381,22 +2387,52 @@ function ChatPanel({
                   </div>
                   {AVAILABLE_MODELS.map((m) => {
                     const active = m.name === selectedModel;
+                    // Smart Bro and Power Bro are Pro-tier only. Free
+                    // users can still see them in the menu so they know
+                    // what they're missing, but selecting one bounces to
+                    // billing instead of switching the model.
+                    const isProOnly = m.key !== "haiku";
+                    const locked = isFreePlan && isProOnly;
                     return (
                       <button
                         key={m.name}
                         onClick={() => {
+                          if (locked) {
+                            setModelOpen(false);
+                            toast.message("Pro plan required", {
+                              description:
+                                "Smart Bro and Power Bro are available on the Pro plan.",
+                              action: {
+                                label: "Upgrade",
+                                onClick: () =>
+                                  setLocation("/dashboard/billing"),
+                              },
+                            });
+                            return;
+                          }
                           setSelectedModel(m.name);
                           setModelOpen(false);
                         }}
-                        className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-xs text-foreground hover:bg-surface-raised transition-colors"
+                        className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-xs transition-colors ${
+                          locked
+                            ? "text-secondary hover:bg-surface-raised"
+                            : "text-foreground hover:bg-surface-raised"
+                        }`}
                       >
                         <div className="flex-1 min-w-0">
-                          <div className="font-medium truncate">{m.name}</div>
+                          <div className="font-medium truncate flex items-center gap-1.5">
+                            <span className="truncate">{m.name}</span>
+                            {isProOnly && (
+                              <span className="text-[9px] leading-none px-1.5 py-0.5 rounded bg-primary/15 text-primary border border-primary/25 font-mono uppercase tracking-wider shrink-0">
+                                Pro
+                              </span>
+                            )}
+                          </div>
                           <div className="text-[10px] text-secondary font-mono">
                             {m.costRange}
                           </div>
                         </div>
-                        {active && (
+                        {active && !locked && (
                           <Check className="w-3.5 h-3.5 text-primary shrink-0" />
                         )}
                       </button>
