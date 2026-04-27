@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { MarketingNav } from "@/components/marketing-nav";
 import { MarketingFooter } from "@/components/marketing-footer";
 import { useTemplates, useMe } from "@/lib/api";
+import { toast } from "sonner";
 import {
   Popover,
   PopoverContent,
@@ -78,6 +79,11 @@ export default function Landing() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { data: templates = [], isLoading } = useTemplates();
   const { data: me } = useMe();
+  // Match the in-builder gate (`builder.tsx`): plan defaults to "Free"
+  // for logged-out visitors so the marketing surface mirrors the locked
+  // experience they'll see after signing up. Anyone on a plan other
+  // than Free unlocks the Pro-only models.
+  const isFreePlan = (me?.plan ?? "Free").toLowerCase() === "free";
 
   useEffect(() => {
     const id = window.setInterval(() => {
@@ -285,20 +291,52 @@ export default function Landing() {
                         <div className="px-2 pt-1.5 pb-1 text-[10px] uppercase tracking-wider font-mono text-secondary">Model</div>
                         {HOME_MODELS.map((m) => {
                           const active = m.name === selectedModel;
+                          // Mirrors the in-builder model menu: Pro-only
+                          // entries stay visible so free users know what
+                          // they're missing, but clicking one bounces to
+                          // billing instead of switching the model. The
+                          // Pro pill sits on the right of the row, paired
+                          // with the active-check, so the model name
+                          // column stays clean and aligned.
+                          const locked = isFreePlan && !!m.isPro;
                           return (
-                            <button key={m.name} type="button" onClick={() => { setSelectedModel(m.name); setModelOpen(false); }} className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-xs text-foreground hover:bg-surface-raised transition-colors">
+                            <button
+                              key={m.name}
+                              type="button"
+                              onClick={() => {
+                                if (locked) {
+                                  setModelOpen(false);
+                                  toast.message("Pro plan required", {
+                                    description:
+                                      "Smart Bro and Power Bro are available on the Pro plan.",
+                                    action: {
+                                      label: "Upgrade",
+                                      onClick: () => navigate("/dashboard/billing"),
+                                    },
+                                  });
+                                  return;
+                                }
+                                setSelectedModel(m.name);
+                                setModelOpen(false);
+                              }}
+                              className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-xs transition-colors ${
+                                locked
+                                  ? "text-secondary hover:bg-surface-raised"
+                                  : "text-foreground hover:bg-surface-raised"
+                              }`}
+                            >
                               <div className="flex-1 min-w-0">
-                                <div className="font-medium truncate flex items-center gap-1.5">
-                                  <span className="truncate">{m.name}</span>
-                                  {m.isPro && (
-                                    <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-mono uppercase tracking-wider bg-primary/15 text-primary border border-primary/30">
-                                      Pro
-                                    </span>
-                                  )}
-                                </div>
+                                <div className="font-medium truncate">{m.name}</div>
                                 <div className="text-[10px] text-secondary font-mono">{m.note}</div>
                               </div>
-                              {active && <Check className="w-3.5 h-3.5 text-primary shrink-0" />}
+                              {m.isPro && (
+                                <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-mono uppercase tracking-wider bg-primary/15 text-primary border border-primary/30">
+                                  Pro
+                                </span>
+                              )}
+                              {active && !locked && (
+                                <Check className="w-3.5 h-3.5 text-primary shrink-0" />
+                              )}
                             </button>
                           );
                         })}
