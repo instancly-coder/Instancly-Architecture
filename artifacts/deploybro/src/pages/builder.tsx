@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useParams } from "wouter";
+import { Link, useParams, useLocation } from "wouter";
 import {
   FolderTree,
   History,
@@ -60,6 +60,7 @@ import {
   Camera,
 } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
+import { DeleteProjectDialog } from "@/components/delete-project-dialog";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -118,6 +119,7 @@ import {
   useRevealProjectEnvVar,
   useUpdateProject,
   useRetriggerScreenshot,
+  useDeleteProject,
   type ApiBuild,
   type ApiDeployment,
   type ApiProject,
@@ -5129,6 +5131,22 @@ function SettingsPane({
   const update = useUpdateProject(username, slug);
   const { data: publishStatus } = usePublishStatus(username, slug);
   const retriggerScreenshot = useRetriggerScreenshot(username, slug);
+  const removeProject = useDeleteProject();
+  const [, navigate] = useLocation();
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
+  const handleDeleteProject = async () => {
+    if (!slug) return;
+    try {
+      await removeProject.mutateAsync(slug);
+      toast.success("Project deleted");
+      // Project no longer exists — bounce out of the builder before any
+      // child queries can refire and 404.
+      navigate("/dashboard");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete project");
+    }
+  };
 
   // Local form state, seeded from server data once loaded. Stored as raw
   // strings (one feature per line) so the textarea behaves like a normal
@@ -5576,10 +5594,32 @@ function SettingsPane({
             This will permanently delete the project, its database, and all build history. There is no undo.
           </p>
         </div>
-        <Button variant="destructive" size="sm" className="shrink-0">
+        <Button
+          variant="destructive"
+          size="sm"
+          className="shrink-0"
+          onClick={() => setDeleteOpen(true)}
+          disabled={!slug || !project}
+          data-testid="open-delete-project"
+        >
           <Trash2 className="w-4 h-4 mr-2" /> Delete project
         </Button>
       </div>
+
+      {project && slug && (
+        <DeleteProjectDialog
+          open={deleteOpen}
+          onOpenChange={(o) => {
+            if (!removeProject.isPending) setDeleteOpen(o);
+          }}
+          projectName={project.name}
+          slug={slug}
+          hasHosting
+          hasDatabase
+          isPending={removeProject.isPending}
+          onConfirm={handleDeleteProject}
+        />
+      )}
     </PaneShell>
   );
 }

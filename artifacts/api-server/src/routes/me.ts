@@ -27,7 +27,11 @@ import {
 } from "@workspace/api-zod";
 import { DEFAULT_REFERRAL_COMMISSION_PCT } from "../lib/referral-commission";
 import { authConfigured, getAuthedUser } from "../middlewares/auth";
-import { removeProjectDomain } from "../lib/vercel";
+import {
+  removeProjectDomain,
+  deleteProject as vercelDeleteProject,
+} from "../lib/vercel";
+import { deleteBranch as neonDeleteBranch } from "../lib/neon";
 import {
   createAccountLink,
   createConnectExpressAccount,
@@ -834,12 +838,18 @@ router.delete("/me/projects/:slug", async (req: Request, res: Response): Promise
   }
   const slug = String(req.params.slug);
 
-  // Look up the project first so we can detach its custom domains from
-  // Vercel BEFORE the FK cascade wipes the project_domains rows. If the
-  // project doesn't exist we 404 without touching anything.
+  // Look up the project first so we can (a) detach its custom domains
+  // from Vercel BEFORE the FK cascade wipes the project_domains rows, and
+  // (b) capture the cloud resource IDs we'll need to clean up in Vercel
+  // and Neon after the row is gone. If the project doesn't exist we 404
+  // without touching anything.
   const target = (
     await db
-      .select({ id: projectsTable.id })
+      .select({
+        id: projectsTable.id,
+        vercelProjectId: projectsTable.vercelProjectId,
+        neonBranchId: projectsTable.neonBranchId,
+      })
       .from(projectsTable)
       .where(and(eq(projectsTable.userId, user.id), eq(projectsTable.slug, slug)))
       .limit(1)
@@ -861,6 +871,36 @@ router.delete("/me/projects/:slug", async (req: Request, res: Response): Promise
     res.status(404).json({ status: "error", message: "Project not found" });
     return;
   }
+
+  // Best-effort cleanup of cloud resources. The DB row is already gone, so
+  // failures here are logged but do not affect the client response — we'd
+  // rather leave a stray Vercel project than have the user see "Delete
+  // failed" for a project that's already removed from the dashboard. The
+  // user can always retry by re-creating + re-publishing under the same
+  // slug, which reuses the same name.
+  if (target.vercelProjectId) {
+    // Use the stored Vercel project ID (canonical, immutable) rather than
+    // re-deriving the name — sanitization rules in projectNameFor could
+    // diverge from what was actually used at create time, and an ID lookup
+    // is unambiguous.
+    const vercelId = target.vercelProjectId;
+    vercelDeleteProject(vercelId).catch((err) => {
+      logger.warn(
+        { err, projectId: target.id, vercelProjectId: vercelId },
+        "Failed to delete Vercel project on project deletion (non-fatal)",
+      );
+    });
+  }
+  if (target.neonBranchId) {
+    const branchId = target.neonBranchId;
+    neonDeleteBranch(branchId).catch((err) => {
+      logger.warn(
+        { err, projectId: target.id, branchId },
+        "Failed to delete Neon branch on project deletion (non-fatal)",
+      );
+    });
+  }
+
   res.status(204).send();
 });
 

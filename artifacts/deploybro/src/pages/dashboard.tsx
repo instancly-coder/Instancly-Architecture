@@ -1,4 +1,5 @@
 import { Link } from "wouter";
+import { useState } from "react";
 import { Plus, MoreVertical, AlertTriangle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -9,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { DashboardLayout } from "@/components/dashboard-layout";
+import { DeleteProjectDialog } from "@/components/delete-project-dialog";
 import {
   useMe,
   useMyProjects,
@@ -166,6 +168,7 @@ export default function Dashboard() {
 function ProjectCard({ project, ownerUsername }: { project: ApiProjectListItem; ownerUsername: string }) {
   const rename = useRenameProject();
   const remove = useDeleteProject();
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const handleRename = async () => {
     const next = window.prompt("New name?", project.name);
@@ -178,11 +181,11 @@ function ProjectCard({ project, ownerUsername }: { project: ApiProjectListItem; 
     }
   };
 
-  const handleDelete = async () => {
-    if (!window.confirm(`Delete "${project.name}"? This cannot be undone.`)) return;
+  const handleDeleteConfirmed = async () => {
     try {
       await remove.mutateAsync(project.slug);
-      toast.success("Deleted");
+      toast.success("Project deleted");
+      setDeleteOpen(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to delete");
     }
@@ -242,8 +245,9 @@ function ProjectCard({ project, ownerUsername }: { project: ApiProjectListItem; 
                   className="text-error focus:text-error cursor-pointer"
                   onSelect={(e) => {
                     e.preventDefault();
-                    handleDelete();
+                    setDeleteOpen(true);
                   }}
+                  data-testid={`delete-project-${project.slug}`}
                 >
                   Delete
                 </DropdownMenuItem>
@@ -265,6 +269,19 @@ function ProjectCard({ project, ownerUsername }: { project: ApiProjectListItem; 
           <span>{timeAgo(project.lastBuiltAt)}</span>
         </div>
       </div>
+
+      <DeleteProjectDialog
+        open={deleteOpen}
+        onOpenChange={(o) => {
+          if (!remove.isPending) setDeleteOpen(o);
+        }}
+        projectName={project.name}
+        slug={project.slug}
+        hasHosting
+        hasDatabase
+        isPending={remove.isPending}
+        onConfirm={handleDeleteConfirmed}
+      />
     </div>
   );
 }
