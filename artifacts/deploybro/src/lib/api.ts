@@ -49,6 +49,7 @@ import {
   DeleteProjectFileResponse as DeleteProjectFileResponseSchema,
   UpdateMeBody as UpdateMeBodySchema,
   UpdateProjectBody as UpdateProjectBodySchema,
+  CompleteOnboardingBody as CompleteOnboardingBodySchema,
 } from "@workspace/api-zod";
 
 const BASE = "/api";
@@ -109,6 +110,7 @@ export type ApiUpdateProjectBody = z.infer<typeof UpdateProjectBodySchema>;
 export type ApiTransaction = Transaction;
 
 export type UpdateMeBody = z.infer<typeof UpdateMeBodySchema>;
+export type CompleteOnboardingBody = z.infer<typeof CompleteOnboardingBodySchema>;
 
 // ---- Hooks ----
 export function useMe() {
@@ -509,6 +511,29 @@ export function useUpdateMe() {
     mutationFn: (body: UpdateMeBody) =>
       request<ApiMe>(`/me`, { method: "PATCH", body: JSON.stringify(body) }),
     onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["me"] });
+    },
+  });
+}
+
+// Submit the post-signup onboarding answers. The server stamps
+// `onboardedAt` on success, which is what the AuthGate reads to decide
+// whether to keep bouncing the user back into the flow on subsequent
+// gated route mounts.
+export function useCompleteOnboarding() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CompleteOnboardingBody) =>
+      request<ApiMe>(`/me/onboarding`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: (data) => {
+      // Seed the cache with the just-returned Me row so the AuthGate
+      // (and any other useMe() readers) see the onboardedAt update
+      // immediately — without this we'd race the next refetch and
+      // potentially redirect the user back to /onboarding for a frame.
+      qc.setQueryData(["me"], data);
       qc.invalidateQueries({ queryKey: ["me"] });
     },
   });

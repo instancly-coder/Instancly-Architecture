@@ -35,6 +35,17 @@ export const usersTable = pgTable("users", {
   //                 `payouts_enabled` is still false
   //   "verified"  — `payouts_enabled === true`; eligible for payouts
   stripeConnectStatus: text("stripe_connect_status"),
+  // Onboarding answers collected after first signup. All three fields
+  // start NULL and are populated when the user submits the multi-step
+  // onboarding flow (see /me/onboarding endpoint). `onboardedAt` is the
+  // gate the AuthGate checks to decide whether to redirect a freshly
+  // signed-in user into the flow vs let them through to the dashboard.
+  //   role         — self-described persona (developer, entrepreneur, …)
+  //   signupSource — how they heard about us (google, twitter, friend, …)
+  //   onboardedAt  — timestamp the flow was completed; NULL = pending
+  role: text("role"),
+  signupSource: text("signup_source"),
+  onboardedAt: timestamp("onboarded_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 

@@ -17,11 +17,14 @@ export default function SignupUsername() {
   const [status, setStatus] = useState<"idle" | "valid" | "invalid">("idle");
   const [message, setMessage] = useState("");
 
-  // If the user already has a real (non-default) username, skip this step
+  // If the user already has a real (non-default) username, skip this step.
+  // We send them to /onboarding when they haven't completed the welcome
+  // flow yet, otherwise straight to the dashboard. The AuthGate would
+  // also catch the onboarding case on the next mount, but doing the
+  // redirect here avoids a flash of the username form.
   useEffect(() => {
     if (me?.username && !/^[a-z0-9]{6,}$/.test(me.username) === false && me.username !== "" && !me.username.startsWith("user")) {
-      // already has a custom-looking username; jump to dashboard
-      setLocation("/dashboard");
+      setLocation(me.onboardedAt ? "/dashboard" : "/onboarding");
     }
   }, [me, setLocation]);
 
@@ -51,7 +54,10 @@ export default function SignupUsername() {
     if (status !== "valid") return;
     try {
       await update.mutateAsync({ username });
-      setLocation("/dashboard");
+      // First-time signup → drop them straight into the welcome flow.
+      // The onboarding page itself short-circuits to /dashboard if the
+      // user is already onboarded, so this is safe even on retries.
+      setLocation("/onboarding");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to claim username.";
       toast.error(msg);

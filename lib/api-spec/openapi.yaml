@@ -91,6 +91,24 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Me"
+  /me/onboarding:
+    post:
+      operationId: completeOnboarding
+      tags: [me]
+      summary: Submit the post-signup onboarding answers and stamp the user as onboarded
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompleteOnboardingBody"
+      responses:
+        "200":
+          description: The updated user with onboardedAt set
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Me"
   /me/projects:
     get:
       operationId: listMyProjects
@@ -1061,6 +1079,19 @@ components:
         signupDate:
           type: string
           description: YYYY-MM-DD signup date.
+        role:
+          type: string
+          nullable: true
+          description: Self-described persona collected during onboarding.
+        signupSource:
+          type: string
+          nullable: true
+          description: Where the user heard about us (collected during onboarding).
+        onboardedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the user completed the onboarding flow. NULL while still pending.
       required:
         - id
         - username
@@ -1071,6 +1102,9 @@ components:
         - balance
         - status
         - signupDate
+        - role
+        - signupSource
+        - onboardedAt
     User:
       type: object
       properties:
@@ -1107,6 +1141,48 @@ components:
         username: { type: string }
         displayName: { type: string }
         bio: { type: string }
+    CompleteOnboardingBody:
+      type: object
+      properties:
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 60
+          description: Optional name override. If omitted, the existing displayName is kept.
+        role:
+          type: string
+          enum:
+            - developer
+            - entrepreneur
+            - designer
+            - product_manager
+            - student
+            - hobbyist
+            - other
+          description: Self-described persona collected during onboarding.
+        signupSource:
+          type: string
+          enum:
+            - google
+            - twitter
+            - youtube
+            - reddit
+            - producthunt
+            - friend
+            - word_of_mouth
+            - other
+          description: Where the user heard about us.
+        plan:
+          type: string
+          enum:
+            - free
+            - pro
+            - teams
+          description: Selected plan tier. The actual paid subscription is still owned by Stripe.
+      required:
+        - role
+        - signupSource
+        - plan
     Transaction:
       type: object
       properties:

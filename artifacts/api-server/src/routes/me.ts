@@ -21,6 +21,7 @@ import {
   GetMyPayoutAccountResponse,
   CreateMyPayoutOnboardingLinkBody,
   CreateMyPayoutOnboardingLinkResponse,
+  CompleteOnboardingBody,
 } from "@workspace/api-zod";
 import { DEFAULT_REFERRAL_COMMISSION_PCT } from "../lib/referral-commission";
 import { authConfigured, getAuthedUser } from "../middlewares/auth";
@@ -123,8 +124,37 @@ function toMe(user: typeof usersTable.$inferSelect): typeof GetMeResponse._type 
     balance: Number(user.balance),
     status: user.status,
     signupDate: user.createdAt.toISOString().slice(0, 10),
+    role: user.role ?? null,
+    signupSource: user.signupSource ?? null,
+    onboardedAt: user.onboardedAt ? user.onboardedAt.toISOString() : null,
   });
 }
+
+// Allowlists for the onboarding payload. Keep these in lock-step with the
+// option lists rendered on the onboarding page in the frontend. Using
+// Sets rather than enums keeps the API permissive enough that we can add
+// a new option client-side without an API redeploy, but still rejects
+// junk payloads from a hostile client.
+const ALLOWED_ONBOARDING_ROLES = new Set([
+  "developer",
+  "entrepreneur",
+  "designer",
+  "product_manager",
+  "student",
+  "hobbyist",
+  "other",
+]);
+const ALLOWED_ONBOARDING_SOURCES = new Set([
+  "google",
+  "twitter",
+  "youtube",
+  "reddit",
+  "producthunt",
+  "friend",
+  "word_of_mouth",
+  "other",
+]);
+const ALLOWED_ONBOARDING_PLANS = new Set(["free", "pro", "teams"]);
 
 router.get("/me", async (req: Request, res: Response): Promise<void> => {
   const user = await getMe(req);
@@ -612,6 +642,65 @@ router.patch("/me", async (req: Request, res: Response): Promise<void> => {
     .returning();
 
   res.json(UpdateMeResponse.parse(toMe(updated)));
+});
+
+// POST /me/onboarding — record the answers from the multi-step welcome
+// flow and stamp `onboardedAt` so the AuthGate stops bouncing the user
+// back here on subsequent navigations. We DO NOT change `users.plan`
+// from the picked tier — that field tracks the actual paid subscription
+// and is owned by the Stripe webhook. The picked plan is preserved as
+// the user's stated preference (so the frontend can route them to the
+// billing page after Pro selection) but the source of truth for whether
+// they've actually paid stays with Stripe.
+router.post("/me/onboarding", async (req: Request, res: Response): Promise<void> => {
+  const user = await getMe(req);
+  if (!user) {
+    res.status(401).json({ status: "error", message: "Unauthenticated" });
+    return;
+  }
+
+  const parsed = CompleteOnboardingBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ status: "error", message: "Invalid onboarding payload." });
+    return;
+  }
+  const { displayName, role, signupSource, plan } = parsed.data;
+
+  if (!ALLOWED_ONBOARDING_ROLES.has(role)) {
+    res.status(400).json({ status: "error", message: "Unknown role option." });
+    return;
+  }
+  if (!ALLOWED_ONBOARDING_SOURCES.has(signupSource)) {
+    res.status(400).json({ status: "error", message: "Unknown signup source option." });
+    return;
+  }
+  if (!ALLOWED_ONBOARDING_PLANS.has(plan)) {
+    res.status(400).json({ status: "error", message: "Unknown plan option." });
+    return;
+  }
+
+  const updates: Record<string, unknown> = {
+    role,
+    signupSource,
+    onboardedAt: new Date(),
+  };
+
+  if (typeof displayName === "string") {
+    const trimmed = displayName.trim();
+    if (trimmed.length < 1 || trimmed.length > 60) {
+      res.status(400).json({ status: "error", message: "Display name must be 1-60 chars." });
+      return;
+    }
+    updates.displayName = trimmed;
+  }
+
+  const [updated] = await db
+    .update(usersTable)
+    .set(updates)
+    .where(eq(usersTable.id, user.id))
+    .returning();
+
+  res.json(toMe(updated));
 });
 
 router.patch("/me/projects/:slug", async (req: Request, res: Response): Promise<void> => {

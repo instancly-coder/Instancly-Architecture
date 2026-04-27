@@ -28,6 +28,7 @@ initThemeOnce();
 import Landing from "@/pages/landing";
 import Login from "@/pages/login";
 import SignupUsername from "@/pages/signup-username";
+import Onboarding from "@/pages/onboarding";
 import Handler from "@/pages/handler";
 import Dashboard from "@/pages/dashboard";
 import Billing from "@/pages/dashboard/billing";
@@ -80,6 +81,7 @@ function Router() {
       <Route path="/" component={Landing} />
       <Route path="/login" component={Login} />
       <Route path="/signup/username" component={gated(SignupUsername)} />
+      <Route path="/onboarding" component={gated(Onboarding)} />
       <Route path="/handler" component={Handler} />
       <Route path="/handler/:rest*" component={Handler} />
       <Route path="/dashboard" component={gated(Dashboard)} />

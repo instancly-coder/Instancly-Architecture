@@ -33,6 +33,12 @@ export interface Me {
   status: string;
   /** YYYY-MM-DD signup date. */
   signupDate: string;
+  /** Self-described persona collected during onboarding. */
+  role: string | null;
+  /** Where the user heard about us (collected during onboarding). */
+  signupSource: string | null;
+  /** When the user completed the onboarding flow. NULL while still pending. */
+  onboardedAt: string | null;
 }
 
 export interface User {
@@ -54,6 +60,66 @@ export interface UpdateMeBody {
   username?: string;
   displayName?: string;
   bio?: string;
+}
+
+/**
+ * Self-described persona collected during onboarding.
+ */
+export type CompleteOnboardingBodyRole =
+  (typeof CompleteOnboardingBodyRole)[keyof typeof CompleteOnboardingBodyRole];
+
+export const CompleteOnboardingBodyRole = {
+  developer: "developer",
+  entrepreneur: "entrepreneur",
+  designer: "designer",
+  product_manager: "product_manager",
+  student: "student",
+  hobbyist: "hobbyist",
+  other: "other",
+} as const;
+
+/**
+ * Where the user heard about us.
+ */
+export type CompleteOnboardingBodySignupSource =
+  (typeof CompleteOnboardingBodySignupSource)[keyof typeof CompleteOnboardingBodySignupSource];
+
+export const CompleteOnboardingBodySignupSource = {
+  google: "google",
+  twitter: "twitter",
+  youtube: "youtube",
+  reddit: "reddit",
+  producthunt: "producthunt",
+  friend: "friend",
+  word_of_mouth: "word_of_mouth",
+  other: "other",
+} as const;
+
+/**
+ * Selected plan tier. The actual paid subscription is still owned by Stripe.
+ */
+export type CompleteOnboardingBodyPlan =
+  (typeof CompleteOnboardingBodyPlan)[keyof typeof CompleteOnboardingBodyPlan];
+
+export const CompleteOnboardingBodyPlan = {
+  free: "free",
+  pro: "pro",
+  teams: "teams",
+} as const;
+
+export interface CompleteOnboardingBody {
+  /**
+   * Optional name override. If omitted, the existing displayName is kept.
+   * @minLength 1
+   * @maxLength 60
+   */
+  displayName?: string;
+  /** Self-described persona collected during onboarding. */
+  role: CompleteOnboardingBodyRole;
+  /** Where the user heard about us. */
+  signupSource: CompleteOnboardingBodySignupSource;
+  /** Selected plan tier. The actual paid subscription is still owned by Stripe. */
+  plan: CompleteOnboardingBodyPlan;
 }
 
 export interface Transaction {

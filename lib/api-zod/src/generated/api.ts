@@ -50,6 +50,21 @@ export const GetMeResponse = zod.object({
   balance: zod.number(),
   status: zod.string(),
   signupDate: zod.string().describe("YYYY-MM-DD signup date."),
+  role: zod
+    .string()
+    .nullable()
+    .describe("Self-described persona collected during onboarding."),
+  signupSource: zod
+    .string()
+    .nullable()
+    .describe("Where the user heard about us (collected during onboarding)."),
+  onboardedAt: zod
+    .string()
+    .datetime({})
+    .nullable()
+    .describe(
+      "When the user completed the onboarding flow. NULL while still pending.",
+    ),
 });
 
 /**
@@ -71,6 +86,92 @@ export const UpdateMeResponse = zod.object({
   balance: zod.number(),
   status: zod.string(),
   signupDate: zod.string().describe("YYYY-MM-DD signup date."),
+  role: zod
+    .string()
+    .nullable()
+    .describe("Self-described persona collected during onboarding."),
+  signupSource: zod
+    .string()
+    .nullable()
+    .describe("Where the user heard about us (collected during onboarding)."),
+  onboardedAt: zod
+    .string()
+    .datetime({})
+    .nullable()
+    .describe(
+      "When the user completed the onboarding flow. NULL while still pending.",
+    ),
+});
+
+/**
+ * @summary Submit the post-signup onboarding answers and stamp the user as onboarded
+ */
+export const completeOnboardingBodyDisplayNameMax = 60;
+
+export const CompleteOnboardingBody = zod.object({
+  displayName: zod
+    .string()
+    .min(1)
+    .max(completeOnboardingBodyDisplayNameMax)
+    .optional()
+    .describe(
+      "Optional name override. If omitted, the existing displayName is kept.",
+    ),
+  role: zod
+    .enum([
+      "developer",
+      "entrepreneur",
+      "designer",
+      "product_manager",
+      "student",
+      "hobbyist",
+      "other",
+    ])
+    .describe("Self-described persona collected during onboarding."),
+  signupSource: zod
+    .enum([
+      "google",
+      "twitter",
+      "youtube",
+      "reddit",
+      "producthunt",
+      "friend",
+      "word_of_mouth",
+      "other",
+    ])
+    .describe("Where the user heard about us."),
+  plan: zod
+    .enum(["free", "pro", "teams"])
+    .describe(
+      "Selected plan tier. The actual paid subscription is still owned by Stripe.",
+    ),
+});
+
+export const CompleteOnboardingResponse = zod.object({
+  id: zod.string(),
+  username: zod.string(),
+  displayName: zod.string(),
+  email: zod.string(),
+  bio: zod.string(),
+  plan: zod.string(),
+  balance: zod.number(),
+  status: zod.string(),
+  signupDate: zod.string().describe("YYYY-MM-DD signup date."),
+  role: zod
+    .string()
+    .nullable()
+    .describe("Self-described persona collected during onboarding."),
+  signupSource: zod
+    .string()
+    .nullable()
+    .describe("Where the user heard about us (collected during onboarding)."),
+  onboardedAt: zod
+    .string()
+    .datetime({})
+    .nullable()
+    .describe(
+      "When the user completed the onboarding flow. NULL while still pending.",
+    ),
 });
 
 /**

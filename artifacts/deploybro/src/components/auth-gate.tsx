@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { authClient, authConfigured } from "@/auth";
+import type { ApiMe } from "@/lib/api";
+
+// Routes that ARE part of the post-signup flow. The onboarding-redirect
+// effect below skips these so we don't create a redirect loop on the
+// pages whose whole purpose is to finish onboarding.
+const PRE_ONBOARDING_PATHS = new Set(["/onboarding", "/signup/username"]);
 
 /**
  * Wrap any page that requires the user to be signed in.
@@ -79,6 +86,43 @@ function AuthGateInner({ children }: { children: React.ReactNode }) {
     } catch {}
   }, [pending, user, refreshed, navigate]);
 
+  // ---- Onboarding gate ----
+  // Once auth is confirmed, fetch the Me row to check whether the user
+  // has completed the post-signup onboarding flow. The query is keyed
+  // identically to the rest of the app's `useMe` so both share a single
+  // react-query cache entry — no double-fetching. We deliberately do
+  // not gate-block on this query loading (we only redirect on a
+  // confirmed null `onboardedAt`) so a slow /me response doesn't add a
+  // perceptible loading screen on top of every gated page mount.
+  const meQuery = useQuery<ApiMe>({
+    queryKey: ["me"],
+    queryFn: async () => {
+      const res = await fetch("/api/me", { credentials: "same-origin" });
+      if (!res.ok) throw new Error(`me ${res.status}`);
+      return (await res.json()) as ApiMe;
+    },
+    enabled: !!user,
+    retry: 1,
+  });
+
+  useEffect(() => {
+    if (!user) return;
+    const me = meQuery.data;
+    if (!me) return;
+    if (me.onboardedAt) return;
+    // /signup/username and /onboarding are themselves part of the
+    // post-signup flow — staying out of their way here is what
+    // prevents the redirect loop. We deliberately do NOT additionally
+    // gate on the username being "real" because there is no clean
+    // server-side signal for that (auth derives a username from the
+    // OAuth claim on first login, so something is always set), and
+    // simple `startsWith("user")` heuristics would skip onboarding for
+    // legitimate users like `userland` / `user42`.
+    const path = window.location.pathname;
+    if (PRE_ONBOARDING_PATHS.has(path)) return;
+    navigate("/onboarding");
+  }, [user, meQuery.data, navigate]);
+
   if (pending || (!user && !refreshed)) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center text-secondary text-sm">
@@ -87,5 +131,50 @@ function AuthGateInner({ children }: { children: React.ReactNode }) {
     );
   }
   if (!user) return null;
+
+  // ---- Fail-closed onboarding gate ----
+  // Pages in PRE_ONBOARDING_PATHS render their own me-loading UX, so we
+  // let them through unconditionally. For every OTHER gated page we
+  // refuse to render children until /me resolves and confirms the user
+  // has onboarded — otherwise a transient /me failure would silently
+  // bypass onboarding (the redirect effect can only run once it has
+  // data). On error we surface a retry instead of either spinning
+  // forever or quietly rendering the protected page.
+  const path = window.location.pathname;
+  const isPreOnboarding = PRE_ONBOARDING_PATHS.has(path);
+  if (!isPreOnboarding) {
+    if (meQuery.isLoading) {
+      return (
+        <div className="min-h-screen bg-background flex items-center justify-center text-secondary text-sm">
+          Loading your account…
+        </div>
+      );
+    }
+    if (meQuery.isError) {
+      return (
+        <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-3 text-secondary text-sm">
+          <span>Couldn't load your account.</span>
+          <button
+            type="button"
+            onClick={() => meQuery.refetch()}
+            className="h-8 px-3 rounded-md border border-border text-foreground text-xs hover:bg-muted/40"
+          >
+            Try again
+          </button>
+        </div>
+      );
+    }
+    // Hold the page until the redirect effect has had a chance to fire
+    // for un-onboarded users — prevents a one-frame flash of the gated
+    // page before navigation.
+    if (!meQuery.data?.onboardedAt) {
+      return (
+        <div className="min-h-screen bg-background flex items-center justify-center text-secondary text-sm">
+          Loading…
+        </div>
+      );
+    }
+  }
+
   return <>{children}</>;
 }

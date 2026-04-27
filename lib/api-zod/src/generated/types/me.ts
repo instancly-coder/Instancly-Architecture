@@ -17,4 +17,10 @@ export interface Me {
   status: string;
   /** YYYY-MM-DD signup date. */
   signupDate: string;
+  /** Self-described persona collected during onboarding. */
+  role: string | null;
+  /** Where the user heard about us (collected during onboarding). */
+  signupSource: string | null;
+  /** When the user completed the onboarding flow. NULL while still pending. */
+  onboardedAt: string | null;
 }
