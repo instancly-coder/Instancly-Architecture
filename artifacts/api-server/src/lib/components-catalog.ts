@@ -416,17 +416,198 @@ Tailwind ships with \`transition\`, \`duration-*\`, \`ease-*\`, \`hover:*\`, \`g
 
 # Style guidance for the generated app
 
-The fastest way to make work look generic is to default to the same AI-builder template every time: indigo-on-slate, rounded-2xl cards, pill buttons, lucide icons, gradient blobs, "We deliver excellence" copy. Don't do that. Make confident, opinionated design decisions tailored to the brief.
+**The bar is high.** Every site you generate should look like it was crafted by a specialist Framer or Webflow designer — bold, editorial, specific to the brief. The default AI output is a white page, Inter font, indigo accent, two sections, vague copy. That's the floor, not the bar. Aim visibly higher every time.
 
-Concretely:
+## Visual level you're aiming for
 
-- **Layout & rhythm.** Pages should fill the viewport top-to-bottom with 5–8 substantial sections, not 2. Vary section backgrounds — alternate light / dark / tinted bands — so the page feels composed instead of flat. Use real visual hierarchy: oversized display type for headlines, small uppercase labels, generous whitespace.
-- **Colour.** Pick ONE coherent palette appropriate to the audience. Lean bold when the brief calls for it (trades, fitness, events, agencies). Lean refined for medical, real estate, restaurant. Avoid pastel-everywhere unless the brief is a kids brand or wellness.
-- **Typography.** Pair ONE distinctive headline face with ONE clean body face. Use Google Fonts via a \`<link>\` in the head. Examples that aren't boring: Inter Display + Inter, Fraunces + Inter, Playfair + Source Sans, Bebas Neue + Inter, Cormorant + Lora, Anton + Archivo. Don't ship the system font stack as the only choice.
-- **Imagery.** Reach for the building blocks documented above (picsum.photos with descriptive seeds, dicebear for avatars, lucide icons everywhere, recharts for any data view, inline SVG for decorative shapes). \`source.unsplash.com\` is dead — do not use it.
-- **Copy.** Write specific, plausible content — invented names, prices, locations, hours, testimonials with personas. Never lorem ipsum, never "Your tagline here", never "Innovative solutions / Cutting-edge / We deliver excellence".
-- **Accessibility.** Real labels on inputs, button semantics, visible focus states, sufficient colour contrast, alt text on images.
-- **Mobile.** Design mobile-first. Sticky CTAs (call / book / buy) on mobile when the page is conversion-focused. Test mentally at 375px wide.
+Think of top-tier SaaS landing pages — Framer sites, Linear, Vercel's own homepage, Clerk, Lemon Squeezy. They share a handful of patterns:
+
+- Oversized display type that dominates the viewport (56px–96px hero headline on desktop, 40px–56px on mobile).
+- A clear tonal choice: either a **deep dark** (slate-950 / zinc-950 / neutral-950) or a **warm off-white** (stone-50 / zinc-50). NOT pure \`#ffffff\` + blue, which reads as a Bootstrap template.
+- **One bold accent** — a vivid colour used sparingly for CTAs and highlights. Everything else is neutrals.
+- **Section variation**: alternating bands (dark hero → light feature → dark CTA → light testimonials) so the page has rhythm instead of being a flat scroll.
+- **Specific, witty copy** — real product names, real numbers, real personas. "Fuel your growth with next-gen AI" is still better than "Innovative solutions", but go further: tailor the headline to the vertical the user actually asked for.
+
+## 1. Hero section — non-negotiable rules
+
+The hero is where you win or lose. Get these right:
+
+**Dark hero with gradient texture (best default):**
+\`\`\`jsx
+<section className="relative min-h-[92vh] flex flex-col justify-center overflow-hidden bg-zinc-950">
+  {/* subtle radial glow — inline SVG, no external dep */}
+  <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+    <div className="h-[600px] w-[600px] rounded-full bg-violet-600/20 blur-[120px]" />
+  </div>
+  <div className="relative mx-auto max-w-5xl px-6 text-center py-28">
+    {/* social proof pill above the headline */}
+    <div className="inline-flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-900 px-4 py-1.5 text-xs text-zinc-400 mb-8">
+      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+      Trusted by 2,400+ teams worldwide
+    </div>
+    <h1 className="text-5xl sm:text-7xl font-bold tracking-tight text-white leading-[1.05] mb-6">
+      The smarter way to<br />
+      <span className="bg-gradient-to-r from-violet-400 to-cyan-400 bg-clip-text text-transparent">ship faster</span>
+    </h1>
+    <p className="mx-auto max-w-xl text-lg text-zinc-400 mb-10">
+      One platform for your entire team. Automate the boring parts, focus on what ships.
+    </p>
+    <div className="flex flex-col sm:flex-row gap-3 justify-center">
+      <button className="inline-flex items-center gap-2 rounded-full bg-white px-7 py-3.5 text-sm font-semibold text-zinc-900 hover:bg-zinc-100 transition-colors">
+        Get started free <LucideReact.ArrowRight size={16} />
+      </button>
+      <button className="inline-flex items-center gap-2 rounded-full border border-zinc-700 px-7 py-3.5 text-sm font-semibold text-zinc-300 hover:border-zinc-500 transition-colors">
+        See how it works
+      </button>
+    </div>
+  </div>
+</section>
+\`\`\`
+
+**Light/warm hero (when the brief is softer — SaaS, productivity, consumer):**
+\`\`\`jsx
+<section className="bg-stone-50 min-h-[88vh] flex flex-col justify-center">
+  <div className="mx-auto max-w-5xl px-6 py-24 text-center">
+    <p className="text-xs font-semibold uppercase tracking-widest text-stone-400 mb-5">Now in public beta</p>
+    <h1 className="text-5xl sm:text-[5.5rem] font-extrabold leading-[1] tracking-tight text-stone-900 mb-6">
+      Get every task done<br />from your single app.
+    </h1>
+    <p className="mx-auto max-w-lg text-lg text-stone-500 mb-10">
+      Unlock the potential of your business with our powerful customer acquisition software.
+    </p>
+    <div className="flex flex-col sm:flex-row gap-3 justify-center">
+      <button className="inline-flex items-center gap-2 rounded-full bg-stone-900 px-8 py-4 text-sm font-semibold text-white hover:bg-stone-700 transition-colors">
+        Create Free Account <LucideReact.ArrowRight size={16} />
+      </button>
+      <button className="text-sm font-semibold text-stone-500 hover:text-stone-700 px-8 py-4 transition-colors">
+        Book a Demo
+      </button>
+    </div>
+  </div>
+</section>
+\`\`\`
+
+## 2. Social proof elements — always include at least one
+
+Never skip social proof. Every commercial site needs it. Pick at least one:
+
+**Avatar stack + testimonial count:**
+\`\`\`jsx
+<div className="flex items-center gap-3 mt-8">
+  <div className="flex -space-x-2">
+    {["alice","ben","clara","dan"].map(n => (
+      <img key={n} src={\`https://api.dicebear.com/7.x/notionists/svg?seed=\${n}\`}
+           className="w-8 h-8 rounded-full ring-2 ring-white" alt={n} />
+    ))}
+    <div className="w-8 h-8 rounded-full ring-2 ring-white bg-violet-600 flex items-center justify-center text-[10px] font-bold text-white">+</div>
+  </div>
+  <span className="text-sm text-zinc-400">Joined by <strong className="text-white">2,400+</strong> builders</span>
+</div>
+\`\`\`
+
+**Logo strip (trusted-by row):**
+\`\`\`jsx
+<div className="mx-auto max-w-4xl px-6 py-12 text-center">
+  <p className="text-xs uppercase tracking-widest text-zinc-500 mb-8">Trusted by teams at</p>
+  <div className="flex flex-wrap justify-center gap-x-12 gap-y-6 opacity-50 grayscale">
+    {["Stripe","Linear","Vercel","Notion","Figma"].map(name => (
+      <span key={name} className="text-lg font-bold text-white tracking-tight">{name}</span>
+    ))}
+  </div>
+</div>
+\`\`\`
+
+**Star rating + quote:**
+\`\`\`jsx
+<div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6 max-w-sm">
+  <div className="flex gap-0.5 mb-3">
+    {[...Array(5)].map((_,i) => <LucideReact.Star key={i} size={14} className="fill-amber-400 text-amber-400" />)}
+  </div>
+  <p className="text-zinc-300 text-sm leading-relaxed mb-4">"This is the best tool I've used this year. The onboarding alone is worth it."</p>
+  <div className="flex items-center gap-2">
+    <img src="https://api.dicebear.com/7.x/notionists/svg?seed=sarah" className="w-7 h-7 rounded-full" alt="Sarah" />
+    <div><p className="text-xs font-semibold text-white">Sarah K.</p><p className="text-[10px] text-zinc-500">Head of Growth, Acme</p></div>
+  </div>
+</div>
+\`\`\`
+
+## 3. Product mockup / screenshot block
+
+If the product is software or a SaaS, show a fake UI screenshot in the hero or below it. Render it as a styled div (not an \`<img>\`) so it never 404s:
+
+\`\`\`jsx
+<div className="mx-auto max-w-4xl px-6 mt-16">
+  <div className="rounded-2xl border border-zinc-800 bg-zinc-900 shadow-2xl overflow-hidden">
+    {/* fake browser chrome */}
+    <div className="flex items-center gap-2 border-b border-zinc-800 px-4 py-3 bg-zinc-950">
+      <div className="w-3 h-3 rounded-full bg-zinc-700" />
+      <div className="w-3 h-3 rounded-full bg-zinc-700" />
+      <div className="w-3 h-3 rounded-full bg-zinc-700" />
+      <div className="flex-1 mx-4 rounded bg-zinc-800 h-5 max-w-xs" />
+    </div>
+    {/* fake dashboard body — fill with realistic-looking UI */}
+    <div className="grid grid-cols-4 divide-x divide-zinc-800 h-64">
+      <div className="col-span-1 p-4 space-y-3">
+        <p className="text-[10px] uppercase text-zinc-600 font-semibold tracking-wide">Main menu</p>
+        {["Dashboard","Contacts","Deals","Tasks"].map(item => (
+          <div key={item} className="flex items-center gap-2 text-xs text-zinc-400 py-1">
+            <div className="w-3 h-3 rounded bg-zinc-700" />{item}
+          </div>
+        ))}
+      </div>
+      <div className="col-span-3 p-6 space-y-4">
+        <p className="text-xs text-zinc-500">Total sales</p>
+        <p className="text-2xl font-bold text-white">$38,500</p>
+        <div className="flex gap-1 items-end h-20">
+          {[40,65,45,80,60,90,55,75,85,70,95,88].map((h,i) => (
+            <div key={i} className="flex-1 rounded-sm bg-violet-600/70" style={{height: \`\${h}%\`}} />
+          ))}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+\`\`\`
+
+## 4. Typography — be specific
+
+Always load a Google Font. Default to **Inter** for clean/modern, or pick from:
+- **Sora** — friendly, rounded tech
+- **Manrope** — geometric, editorial
+- **Plus Jakarta Sans** — refined, versatile
+- **Fraunces** — editorial serif for lifestyle / food / luxury
+- **Bebas Neue** — condensed heavy for sports / streetwear / fitness
+
+Hero headline minimum: \`text-5xl\` on mobile, \`text-7xl\` on desktop. \`font-bold\` or \`font-extrabold\`. \`leading-[1]\` or \`leading-[1.05]\` for tight stacking. Tracking: \`tracking-tight\` for display sizes.
+
+Body text: \`text-base\` or \`text-lg\`, \`leading-relaxed\`, always muted (\`text-zinc-400\` on dark, \`text-stone-500\` on light).
+
+## 5. Colour — concrete palettes
+
+**Dark tech / SaaS:** bg-zinc-950, text-white, accent violet-500 or cyan-400.
+**Dark agency / bold:** bg-neutral-950, text-white, accent amber-400 or rose-500.
+**Light SaaS / productivity:** bg-stone-50, text-stone-900, accent stone-900 (monochrome).
+**Light professional / B2B:** bg-white, text-gray-900, accent blue-600 (classic, but add a decorative element to lift it).
+
+Gradient text on key words: \`bg-gradient-to-r from-{a} to-{b} bg-clip-text text-transparent\`.
+
+## 6. Layout rules — never violate these
+
+- **5–8 substantial sections** per page minimum. Not 2.
+- Section alternation: don't have 5 consecutive white sections. Alternate or use a tinted band.
+- **Max content width \`max-w-6xl mx-auto\`** with \`px-6\` padding. Don't let text go full-width.
+- Feature grids: 3-column on desktop (\`grid-cols-1 sm:grid-cols-3\`), centred text, icon + headline + body per card.
+- **CTA section** near the bottom — dark band, large headline, single clear button.
+- **Footer** — always include one with the brand name, nav links, and a copyright line.
+
+## 7. What "boring" looks like — avoid these
+
+- White background, blue accent, no texture, no depth.
+- \`rounded-2xl\` on every element with a \`border border-gray-200\` — this is the Tailwind starter template.
+- Generic copy: "We deliver excellence", "Your success is our priority", "Transform your business", "Innovative solutions".
+- A single-section page with a button.
+- Centred text on every section (vary alignment — left-align feature sections).
+- Missing mobile responsiveness (no \`sm:\` / \`md:\` breakpoints).
 
 When in doubt, ask yourself: would this look in place on the homepage of a real, launched product in this category? If the answer is "it looks AI-generated", redesign with bolder, more specific choices.
 
