@@ -5,10 +5,9 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 
 const NAV_LINKS = [
-  { label: "How it works", href: "/#how" },
+  { label: "How it works", href: "/how-it-works" },
   { label: "Templates", href: "/templates" },
   { label: "Pricing", href: "/pricing" },
-  { label: "Docs", href: "/docs" },
 ];
 
 export function MarketingNav() {
@@ -16,7 +15,6 @@ export function MarketingNav() {
   const [open, setOpen] = useState(false);
 
   const isActive = (href: string) => {
-    if (href.startsWith("/#")) return false;
     if (href === "/") return location === "/";
     return location.startsWith(href);
   };
@@ -28,27 +26,17 @@ export function MarketingNav() {
       </Link>
 
       <div className="hidden md:flex items-center gap-6 text-sm text-secondary">
-        {NAV_LINKS.map((l) =>
-          l.href.startsWith("/#") || l.href === "#" ? (
-            <a
-              key={l.label}
-              href={l.href}
-              className="hover:text-foreground transition-colors"
-            >
-              {l.label}
-            </a>
-          ) : (
-            <Link
-              key={l.label}
-              href={l.href}
-              className={`transition-colors ${
-                isActive(l.href) ? "text-foreground font-medium" : "hover:text-foreground"
-              }`}
-            >
-              {l.label}
-            </Link>
-          )
-        )}
+        {NAV_LINKS.map((l) => (
+          <Link
+            key={l.label}
+            href={l.href}
+            className={`transition-colors ${
+              isActive(l.href) ? "text-foreground font-medium" : "hover:text-foreground"
+            }`}
+          >
+            {l.label}
+          </Link>
+        ))}
       </div>
 
       <div className="flex items-center gap-2 sm:gap-3">
@@ -76,27 +64,16 @@ export function MarketingNav() {
 
       {open && (
         <div className="md:hidden absolute top-14 left-0 right-0 bg-surface border-b border-border shadow-lg p-4 flex flex-col gap-1">
-          {NAV_LINKS.map((l) =>
-            l.href.startsWith("/#") || l.href === "#" ? (
-              <a
-                key={l.label}
-                href={l.href}
-                onClick={() => setOpen(false)}
-                className="px-3 py-2 rounded-md text-sm text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
-              >
-                {l.label}
-              </a>
-            ) : (
-              <Link
-                key={l.label}
-                href={l.href}
-                onClick={() => setOpen(false)}
-                className="px-3 py-2 rounded-md text-sm text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
-              >
-                {l.label}
-              </Link>
-            )
-          )}
+          {NAV_LINKS.map((l) => (
+            <Link
+              key={l.label}
+              href={l.href}
+              onClick={() => setOpen(false)}
+              className="px-3 py-2 rounded-md text-sm text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
+            >
+              {l.label}
+            </Link>
+          ))}
           <Link
             href="/login"
             onClick={() => setOpen(false)}

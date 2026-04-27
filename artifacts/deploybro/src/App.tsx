@@ -22,9 +22,6 @@ import { AuthGate } from "@/components/auth-gate";
 import { SessionSync } from "@/components/session-sync";
 import { ConfigPrewarm } from "@/components/config-prewarm";
 import { authClient } from "@/auth";
-
-initThemeOnce();
-
 import Landing from "@/pages/landing";
 import Login from "@/pages/login";
 import SignupUsername from "@/pages/signup-username";
@@ -61,7 +58,10 @@ import {
   AcceptableUse,
   CookiePolicy,
   DPA,
+  HowItWorks,
 } from "@/pages/info";
+
+initThemeOnce();
 
 const queryClient = new QueryClient();
 
@@ -98,6 +98,7 @@ function Router() {
       <Route path="/admin/revenue" component={gated(AdminRevenue)} />
       <Route path="/admin/payouts" component={gated(AdminPayouts)} />
       <Route path="/docs" component={Docs} />
+      <Route path="/how-it-works" component={HowItWorks} />
       <Route path="/changelog" component={Changelog} />
       <Route path="/templates" component={Templates} />
       <Route path="/status" component={Status} />
@@ -119,16 +120,6 @@ function Router() {
   );
 }
 
-/**
- * Mounts Neon's official `<NeonAuthUIProvider>` so the SDK's components
- * (`<AuthCallback>`, `<AuthView>`, `<AccountView>`, `<SignedIn>` /
- * `<SignedOut>`, `useAuthData()` …) can find their auth client + theme +
- * navigation context. We bridge wouter's `useLocation` into the provider's
- * `navigate`/`replace` props so post-login redirects stay SPA-routed.
- *
- * When auth isn't configured (no `VITE_NEON_AUTH_BASE_URL`), we render the
- * children unwrapped so the dev fallback (`demo` user) keeps working.
- */
 function AuthProviderShell({ children }: { children: React.ReactNode }) {
   const [, navigate] = useLocation();
   if (!authClient) return <>{children}</>;
@@ -155,7 +146,7 @@ function App() {
       <TooltipProvider>
         <SessionSync />
         <ConfigPrewarm />
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "") }>
           <AuthProviderShell>
             <Router />
           </AuthProviderShell>
