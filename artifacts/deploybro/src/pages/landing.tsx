@@ -1,14 +1,8 @@
 import {
   ArrowUp,
   ArrowRight,
-  Database,
-  Shield,
   Globe,
-  BarChart3,
-  CreditCard,
   Cpu,
-  Sparkles,
-  Quote,
   Check,
   Plus,
   Image as ImageIcon,
@@ -78,33 +72,6 @@ const STEPS = [
     title: "Refine and ship",
     body: "Tweak it with simple feedback — \"make the hero bigger\", \"add login\". When it's right, hit Publish. You get a real URL in seconds.",
     url: "recipes.deploybro.app",
-  },
-];
-
-const FEATURES = [
-  { icon: Globe, title: "Live in seconds", body: "Hit publish and your app is on the internet — at a real, shareable URL. Add your own domain whenever you're ready." },
-  { icon: Shield, title: "Logins built in", body: "Sign-in with Google, email, or magic link. Toggle on, you're done. No SDKs to wire up." },
-  { icon: Database, title: "Saves everything", body: "Users, posts, photos, orders — your app remembers it all. No databases to set up, no servers to babysit." },
-  { icon: CreditCard, title: "Charge for it", body: "Take payments from day one. Subscriptions or one-offs, in any currency. Powered by Stripe." },
-  { icon: BarChart3, title: "See what's working", body: "Page views, signups, sales — visible from the dashboard. No tracking script to install." },
-  { icon: Sparkles, title: "Smart by default", body: "DeployBro picks the right AI for the job, so you focus on the idea — not which model to use." },
-];
-
-const TESTIMONIALS = [
-  {
-    quote: "I built and shipped a paid SaaS in a weekend. I don't even know what React is.",
-    name: "Maya R.",
-    role: "Yoga teacher · maya-flow.app",
-  },
-  {
-    quote: "Replaced six contractors with DeployBro. We ship 3x faster and the code is actually nice.",
-    name: "Daniel K.",
-    role: "Founder, Plotly Studio",
-  },
-  {
-    quote: "My nephew built our family reunion site in 20 minutes. He's nine. Nine.",
-    name: "Priya S.",
-    role: "Aunt, very impressed",
   },
 ];
 
@@ -738,45 +705,6 @@ export default function Landing() {
           </div>
         </section>
 
-        {/* Bento features */}
-        <section className="py-20 md:py-28 px-4 sm:px-6 border-t border-border bg-surface/40">
-          <div className="max-w-7xl mx-auto">
-            <div className="text-center max-w-2xl mx-auto mb-12">
-              <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-4">
-                Everything's in the box.
-              </h2>
-              <p className="text-secondary">
-                You don't bolt things on. Database, auth, payments, analytics —
-                they just work. Toggle and go.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
-              {FEATURES.map((f, i) => {
-                const Icon = f.icon;
-                const big = i === 0;
-                return (
-                  <div
-                    key={f.title}
-                    className={`group relative rounded-2xl border border-border bg-background hover-elevate p-6 md:p-7 overflow-hidden ${
-                      big ? "sm:col-span-2 lg:col-span-2 lg:row-span-2" : ""
-                    }`}
-                  >
-                    <div className="absolute -top-12 -right-12 w-40 h-40 bg-primary/10 blur-3xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
-                    <div className="w-10 h-10 rounded-lg bg-primary text-primary-foreground flex items-center justify-center mb-5">
-                      <Icon className="w-5 h-5" />
-                    </div>
-                    <h3 className={`font-bold mb-2 ${big ? "text-2xl" : "text-lg"}`}>
-                      {f.title}
-                    </h3>
-                    <p className="text-sm text-secondary leading-relaxed">{f.body}</p>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </section>
-
         {/* Templates */}
         <section id="templates" className="py-20 md:py-28 px-4 sm:px-6 border-t border-border">
           <div className="max-w-7xl mx-auto">
@@ -829,37 +757,6 @@ export default function Landing() {
                     <p className="text-xs text-secondary">{t.desc}</p>
                   </div>
                 </Link>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Testimonials */}
-        <section className="py-20 md:py-28 px-4 sm:px-6 border-t border-border bg-surface/40">
-          <div className="max-w-7xl mx-auto">
-            <div className="text-center max-w-2xl mx-auto mb-12">
-              <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-4">
-                People are shipping wild things.
-              </h2>
-              <p className="text-secondary">
-                A teacher with a SaaS. A founder cutting agency bills. A nine-year-old.
-              </p>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-5">
-              {TESTIMONIALS.map((t) => (
-                <div
-                  key={t.name}
-                  className="rounded-2xl border border-border bg-background p-6 flex flex-col"
-                >
-                  <Quote className="w-5 h-5 text-primary mb-4" />
-                  <p className="text-base text-foreground leading-relaxed mb-6 flex-1">
-                    {t.quote}
-                  </p>
-                  <div>
-                    <div className="text-sm font-medium">{t.name}</div>
-                    <div className="text-xs text-secondary">{t.role}</div>
-                  </div>
-                </div>
               ))}
             </div>
           </div>
