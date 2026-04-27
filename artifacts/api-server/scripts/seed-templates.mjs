@@ -48,10 +48,16 @@ const indexHtml = (title) => `<!doctype html>
 </html>
 `;
 
+// `__APP_BASENAME__` is set by the api-server's preview HTML rewriter to
+// the iframe's URL prefix (`/api/preview/{u}/{s}`), so React Router's
+// root `<Route path="/">` matches correctly inside the prefixed iframe.
+// The same template, when built and deployed to a Vercel root URL, has
+// no prefix — the regex misses, the global stays `""`, and BrowserRouter
+// behaves as if no basename were set. Same source code works in both.
 const appJsx = `const { BrowserRouter, Routes, Route } = ReactRouterDOM;
 function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={window.__APP_BASENAME__ || ""}>
       <div className="min-h-screen flex flex-col bg-page text-ink">
         <Nav />
         <main className="flex-1">

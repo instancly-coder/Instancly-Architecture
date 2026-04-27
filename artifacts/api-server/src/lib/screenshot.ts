@@ -67,13 +67,26 @@ export async function captureScreenshot(liveUrl: string): Promise<string | null>
     }
 
     // --- Default: Microlink ---
+    // - `force=true` bypasses Microlink's URL-keyed response cache so a
+    //   re-capture after we change the underlying page actually re-fetches
+    //   instead of serving the previous PNG.
+    // - `waitUntil=networkidle0` waits for all in-flight network requests
+    //   to settle. Vite-built React apps load their bundle as a single JS
+    //   file, so once the network is idle the React tree has mounted.
+    // - Explicit viewport keeps the captured PNG at a predictable
+    //   aspect ratio across all template/project cards.
     const microlinkKey = process.env.MICROLINK_API_KEY;
     const qs = new URLSearchParams({
       url: liveUrl,
       screenshot: "true",
       meta: "false",
+      force: "true",
+      waitUntil: "networkidle0",
       "screenshot.type": "png",
       "screenshot.fullPage": "false",
+      "viewport.width": "1280",
+      "viewport.height": "800",
+      "viewport.deviceScaleFactor": "1",
     });
     // API key is sent via header only — keeping it out of the query string
     // avoids the key appearing in server/proxy access logs.

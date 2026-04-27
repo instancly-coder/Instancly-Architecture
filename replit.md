@@ -120,16 +120,29 @@ Three official starter templates are seeded under the reserved `deploybro` user:
 
 ## Project screenshots
 
-After a project publishes successfully, the server calls Microlink's public API to capture an above-the-fold screenshot of the live Vercel URL and stores the resulting CDN image URL as `screenshotUrl` on the project row. The Explore page and landing page template cards prefer `screenshotUrl` over the manually-set `coverImageUrl` when both are present.
+After a project publishes successfully, the server calls Microlink's public API to capture an above-the-fold screenshot and stores the resulting CDN image URL as `screenshotUrl` on the project row. The Explore page and landing page template cards prefer `screenshotUrl` over the manually-set `coverImageUrl` when both are present.
+
+Capture URL: `runPublishPipeline` (in `routes/deployments.ts`) screenshots the **preview URL** (`${SITE_URL}/api/preview/{u}/{s}/`), NOT the live Vercel URL. User Vercel deployments are auth-protected by default, so a Microlink hit on the live URL would capture Vercel's "Sign in" wall. The preview URL renders the same files server-side via the in-builder iframe route — no auth, no cache. Featured templates are an exception: their Vercel projects are pre-cleared via `disableProjectProtection` so the operator-run `seed-template-screenshots.mjs` can capture from `live_url` directly.
 
 - `artifacts/api-server/src/lib/screenshot.ts` — `captureScreenshot(liveUrl)` helper. Returns a hosted image URL or `null` (non-fatal; never blocks the deployment). Provider is configurable via env vars:
   - `SCREENSHOT_API_URL` — custom provider base URL. When set, called with `?url=<encoded>` + `Authorization: Bearer <SCREENSHOT_API_KEY>`. Expects `{ screenshotUrl: string }` or Microlink-compatible JSON.
   - `SCREENSHOT_API_KEY` — API key for the custom provider (only used if `SCREENSHOT_API_URL` is set).
   - `MICROLINK_API_KEY` — optional; used with the default Microlink provider to unlock Pro rate limits.
+- Microlink call uses `force=true` (cache-bust on re-capture), `waitUntil=networkidle0` (lets the React/Vite bundle mount before snapshotting), and a fixed `1280×800` viewport. Without these the captured PNG is often a 605-byte blank from a too-early snapshot.
 - Triggered automatically at the end of `runPublishPipeline` in `routes/deployments.ts` (after READY state is confirmed).
 - `POST /api/projects/:username/:slug/screenshot` — owner-only endpoint to manually retrigger a screenshot capture (e.g. after design changes). Returns `{ screenshotUrl }`.
 - Frontend hook: `useRetriggerScreenshot(username, slug)` in `api.ts`. Wired into a "Refresh screenshot" button in the builder Settings tab (visible when project has a live URL).
 - Explore page (`explore.tsx`) and landing page template cards (`landing.tsx`) use `screenshotUrl ?? coverImageUrl` with `object-top` cropping to show above-the-fold content.
+- Featured-template backfill: `artifacts/api-server/scripts/seed-template-screenshots.mjs` re-screenshots every `is_featured_template = TRUE` row. Prefers `live_url` (the public Vercel deployment) and falls back to the `${SITE_URL}/api/preview/{u}/{s}/` endpoint for never-deployed projects. Note: the local Replit dev URL is NOT reachable by Microlink (mTLS proxy), so `SITE_URL` must point at a publicly-served instance.
+- Templates' Vercel deployments are made public via `disableProjectProtection(name)` in `lib/vercel.ts` (clears `ssoProtection` + `passwordProtection`). Without this, Microlink would capture Vercel's "Sign in" wall instead of the rendered site. Re-run when seeding new featured templates.
+
+## In-builder preview routing
+
+`/api/preview/:username/:slug/*` serves the user's project files inside the iframe in the builder. The HTML response is rewritten in `routes/files.ts` to inject two head scripts before any user `<script type="text/babel">` tags:
+1. **`__APP_BASENAME__` shim** — exposes the URL prefix (`/api/preview/{u}/{s}`) as `window.__APP_BASENAME__` so the AI's generated `<BrowserRouter basename={window.__APP_BASENAME__ || ""}>` matches `/` correctly inside the prefixed iframe AND matches `/` correctly when deployed to a Vercel root URL (where the regex misses and the global stays `""`).
+2. **Error overlay + babel deferral** — pre-existing diagnostics layer.
+
+The three seeded starter templates' `app.jsx` use the basename pattern. New AI generations should follow the same convention (see `lib/components-catalog.ts`).
 
 ## Publish to Vercel + Neon
 

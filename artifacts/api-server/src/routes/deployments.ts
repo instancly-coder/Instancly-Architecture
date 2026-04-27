@@ -72,7 +72,7 @@ async function findProjectWithOwner(username: string, slug: string) {
 // In-process pipeline. Runs after the HTTP response has already gone back
 // to the client; status is communicated exclusively through the deployments
 // row that the frontend polls.
-async function runPublishPipeline(args: {
+export async function runPublishPipeline(args: {
   deploymentId: string;
   projectId: string;
   username: string;
@@ -326,19 +326,26 @@ async function runPublishPipeline(args: {
     // fire-and-forget so the publish flow is not delayed by the screenshot
     // provider's round-trip. Non-fatal: a failure is logged but never
     // surfaces to the user or affects the deployment record.
-    if (finalUrl) {
-      captureScreenshot(finalUrl)
-        .then((screenshotUrl) => {
-          if (!screenshotUrl) return;
-          return db
-            .update(projectsTable)
-            .set({ screenshotUrl })
-            .where(eq(projectsTable.id, projectId));
-        })
-        .catch((err) => {
-          logger.warn({ err, projectId }, "Background screenshot capture failed (non-fatal)");
-        });
-    }
+    //
+    // We screenshot the PUBLIC preview URL (`/api/preview/...`) rather
+    // than the Vercel `live_url` because user Vercel projects can be
+    // marked private/protected — in that case the screenshot service
+    // hits a Vercel auth wall and we'd persist a "Sign in to Vercel"
+    // image. The preview endpoint serves the same files anonymously,
+    // so the resulting card image always reflects the real app.
+    const siteUrl = (process.env.SITE_URL ?? "https://deploybro.app").replace(/\/+$/, "");
+    const previewUrl = `${siteUrl}/api/preview/${encodeURIComponent(username)}/${encodeURIComponent(slug)}/`;
+    captureScreenshot(previewUrl)
+      .then((screenshotUrl) => {
+        if (!screenshotUrl) return;
+        return db
+          .update(projectsTable)
+          .set({ screenshotUrl })
+          .where(eq(projectsTable.id, projectId));
+      })
+      .catch((err) => {
+        logger.warn({ err, projectId }, "Background screenshot capture failed (non-fatal)");
+      });
   } catch (err) {
     logger.error({ err, deploymentId }, "Publish pipeline failed");
     await setStatus("failed", {

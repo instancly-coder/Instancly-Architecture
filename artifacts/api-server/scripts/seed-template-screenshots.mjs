@@ -1,24 +1,33 @@
-// One-shot backfill: captures an above-the-fold screenshot for every
-// featured starter template that has no `screenshot_url` yet, and
-// persists the resulting hosted image URL to the `projects.screenshot_url`
-// column.
+// Backfill / refresh: captures an above-the-fold screenshot for every
+// `is_featured_template = TRUE` project and persists the hosted image URL
+// to the `projects.screenshot_url` column.
 //
-// Templates with a `live_url` (real Vercel deployment) get screenshotted
-// from that URL. Templates without one (the seeded starter templates)
-// fall back to the public preview endpoint
-// `${SITE_URL}/api/preview/{author}/{slug}/`, which renders the
-// template's actual files in the sandboxed iframe. SITE_URL defaults to
-// https://deploybro.app and can be overridden for staging.
+// Source URL preference per row:
+//   1. `live_url` (the project's real Vercel deployment) — used whenever
+//      set. Vercel deployments are static, fast, and reachable by
+//      Microlink. Featured templates' projects must first have their
+//      Vercel `ssoProtection` / `passwordProtection` cleared (see
+//      `disableProjectProtection` in `src/lib/vercel.ts`) so Microlink
+//      doesn't capture a sign-in wall.
+//   2. Public preview endpoint `${SITE_URL}/api/preview/{u}/{s}/` as a
+//      fallback for never-deployed projects. SITE_URL defaults to
+//      https://deploybro.app and can be overridden for staging. NOTE:
+//      the local Replit dev URL is NOT reachable by Microlink (mTLS
+//      proxy), so SITE_URL must point at a publicly-served instance.
 //
 // Why this exists:
 //   The three seeded starter templates (`bro-cloud-saas`,
 //   `studio-bro-agency`, `bro-folio-portfolio`) were published before
 //   automatic screenshot capture shipped, so their cards on the landing
-//   page and Explore still render the CSS mock / letter placeholder.
-//   Running this script once paints them with real screenshots.
+//   page and Explore showed placeholders. Running this script paints
+//   them with real screenshots.
 //
-// Idempotent: skips any project that already has `screenshot_url` set,
-// so re-running is safe.
+// NOT idempotent in the "skip-existing" sense: this script re-screenshots
+// every featured template every run (no `IS NULL` filter on
+// `screenshot_url`) so an operator can refresh the homepage cards after
+// a content change without first hand-clearing the column. It IS safe to
+// re-run — the only side effect is overwriting `screenshot_url` with the
+// freshly-captured Microlink URL.
 //
 // Mirrors the provider logic in `src/lib/screenshot.ts` so the same env
 // vars work (SCREENSHOT_API_URL / SCREENSHOT_API_KEY for a custom
@@ -74,8 +83,18 @@ async function captureScreenshot(liveUrl) {
       url: liveUrl,
       screenshot: "true",
       meta: "false",
+      // Bust Microlink's URL-keyed cache so re-captures after a deploy
+      // change actually re-fetch instead of serving the previous PNG.
+      force: "true",
+      // Wait for the React/Vite bundle to finish rendering before taking
+      // the snapshot — without this Microlink fires the screenshot at
+      // first paint and captures a blank page.
+      waitUntil: "networkidle0",
       "screenshot.type": "png",
       "screenshot.fullPage": "false",
+      "viewport.width": "1280",
+      "viewport.height": "800",
+      "viewport.deviceScaleFactor": "1",
     });
     const resp = await fetch(`https://api.microlink.io?${qs}`, {
       headers: microlinkKey ? { "x-api-key": microlinkKey } : {},
@@ -106,12 +125,26 @@ async function main() {
   const pool = new Pool({ connectionString: DATABASE_URL });
   const client = await pool.connect();
   try {
+    // Re-screenshots ALL featured templates every run (no IS NULL filter)
+    // so an operator can refresh the homepage cards after a content
+    // change without first hand-clearing screenshot_url.
+    //
+    // Source URL preference per row:
+    //   1. `live_url` (the project's real Vercel deployment) — used
+    //      whenever set. Vercel deployments are static, fast, and
+    //      reachable by Microlink. For featured templates we run a
+    //      one-shot to clear `ssoProtection` / `passwordProtection` so
+    //      Microlink doesn't capture a sign-in wall (see Vercel client's
+    //      `disableProjectProtection`).
+    //   2. Public preview endpoint `${SITE_URL}/api/preview/{u}/{s}/`
+    //      as a fallback for never-deployed projects. Note: the local
+    //      Replit dev URL is NOT reachable by Microlink (mTLS proxy),
+    //      so SITE_URL must point at a publicly-served instance.
     const { rows } = await client.query(
       `SELECT p.id, p.slug, p.name, p.live_url, u.username
          FROM projects p
          JOIN users u ON p.user_id = u.id
         WHERE p.is_featured_template = TRUE
-          AND p.screenshot_url IS NULL
         ORDER BY p.slug`,
     );
 
@@ -125,9 +158,9 @@ async function main() {
     let captured = 0;
     let skipped = 0;
     for (const row of rows) {
-      const targetUrl =
-        row.live_url ??
-        `${SITE_URL}/api/preview/${encodeURIComponent(row.username)}/${encodeURIComponent(row.slug)}/`;
+      const targetUrl = row.live_url
+        ? row.live_url
+        : `${SITE_URL}/api/preview/${encodeURIComponent(row.username)}/${encodeURIComponent(row.slug)}/`;
       console.log(`- ${row.slug} → ${targetUrl}`);
       const screenshotUrl = await captureScreenshot(targetUrl);
       if (!screenshotUrl) {

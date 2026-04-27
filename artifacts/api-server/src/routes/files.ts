@@ -786,22 +786,56 @@ function hotPatchVisualCdns(html: string): string {
   return out;
 }
 
+// Tiny runtime shim that exposes the preview iframe's URL prefix as
+// `window.__APP_BASENAME__` so user code can pass it as `basename` to
+// `<BrowserRouter>` (or any equivalent router). Two scenarios:
+//
+//   - In the in-builder iframe (`/api/preview/{u}/{s}/`): the regex
+//     matches and the global becomes `/api/preview/{u}/{s}`. NOTE: today
+//     `processDeferred` also monkey-patches `ReactRouterDOM.BrowserRouter`
+//     to `HashRouter` for the iframe (see `patchReactRouterForPreview`
+//     above). HashRouter ignores `basename` entirely and routes off the
+//     URL fragment, so the iframe currently works either way. The shim
+//     is kept as a forward-compatible second layer so removing the
+//     HashRouter patch later won't immediately re-break preview routing.
+//
+//   - In the production Vercel build (sits at the project root): the
+//     regex misses and the global stays `""`, so `basename={"" || ""}`
+//     is identical to the BrowserRouter default. This is the path that
+//     ACTUALLY relies on the shim — without `basename` set, deeply-nested
+//     deployed apps still work, but the same template source can opt into
+//     the basename pattern and stay portable across both environments.
+//
+// Keep this script minuscule and side-effect-free — it runs before
+// everything else on the page.
+const BASENAME_SHIM_SCRIPT = `<script data-deploybro-basename-shim>
+(function () {
+  try {
+    var m = window.location.pathname.match(/^\\/api\\/preview\\/[^\\/]+\\/[^\\/]+/);
+    window.__APP_BASENAME__ = m ? m[0] : "";
+  } catch (e) {
+    window.__APP_BASENAME__ = "";
+  }
+})();
+</script>`;
+
 function injectErrorOverlay(html: string): string {
   const patched = hotPatchVisualCdns(fixUpReactRouterCdn(html));
   if (/data-deploybro-error-overlay/.test(patched)) return patched;
-  // Inject at the START of <head> so the script-tag renamer runs BEFORE
-  // the parser reaches any `<script type="text/babel">` tags further
-  // down the page. Falls back to body / prepend if no <head>.
+  // Inject at the START of <head> so:
+  //   1) `__APP_BASENAME__` is defined before any other script reads it
+  //   2) the script-tag renamer runs BEFORE the parser reaches any
+  //      `<script type="text/babel">` tags further down the page
+  // Order matters — basename shim FIRST (so user code can read it from
+  // the very first JSX file evaluated), error overlay second.
+  const headInjection = `${BASENAME_SHIM_SCRIPT}\n${ERROR_OVERLAY_SCRIPT}`;
   if (/<head[^>]*>/i.test(patched)) {
-    return patched.replace(
-      /<head[^>]*>/i,
-      (m) => `${m}\n${ERROR_OVERLAY_SCRIPT}`,
-    );
+    return patched.replace(/<head[^>]*>/i, (m) => `${m}\n${headInjection}`);
   }
   if (/<\/body>/i.test(patched)) {
-    return patched.replace(/<\/body>/i, `${ERROR_OVERLAY_SCRIPT}\n</body>`);
+    return patched.replace(/<\/body>/i, `${headInjection}\n</body>`);
   }
-  return ERROR_OVERLAY_SCRIPT + "\n" + patched;
+  return headInjection + "\n" + patched;
 }
 
 function emptyHtml(headline = "Your app will appear here"): string {

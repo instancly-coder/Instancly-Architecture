@@ -296,6 +296,27 @@ export async function getDeploymentBuildErrors(
 // blocks; they MUST swallow their own errors so they never mask the original
 // failure. We log via the orchestrator's logger when invoked.
 
+// Make a Vercel project's deployments publicly accessible by clearing
+// both the SSO and password-protection settings. Used for showcase
+// templates whose live URLs are screenshot-captured by an external
+// service (Microlink) that can't authenticate against Vercel's SSO
+// wall. Idempotent — calling it on an already-public project is a no-op.
+//
+// Vercel's PATCH /v9/projects accepts `null` for these fields to disable
+// protection. Sending `undefined` or omitting them leaves them unchanged.
+export async function disableProjectProtection(
+  nameOrId: string,
+): Promise<void> {
+  await request(
+    "PATCH",
+    `/v9/projects/${encodeURIComponent(nameOrId)}${teamQuery()}`,
+    {
+      ssoProtection: null,
+      passwordProtection: null,
+    },
+  );
+}
+
 export async function deleteProject(nameOrId: string): Promise<void> {
   await request(
     "DELETE",
