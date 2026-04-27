@@ -75,8 +75,8 @@ export async function captureScreenshot(liveUrl: string): Promise<string | null>
       "screenshot.type": "png",
       "screenshot.fullPage": "false",
     });
-    if (microlinkKey) qs.set("apiKey", microlinkKey);
-
+    // API key is sent via header only — keeping it out of the query string
+    // avoids the key appearing in server/proxy access logs.
     const resp = await fetch(`https://api.microlink.io?${qs}`, {
       headers: microlinkKey ? { "x-api-key": microlinkKey } : {},
       signal: AbortSignal.timeout(SCREENSHOT_TIMEOUT_MS),

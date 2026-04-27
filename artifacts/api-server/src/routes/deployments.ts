@@ -311,23 +311,34 @@ async function runPublishPipeline(args: {
       finishedAt: new Date(),
     });
 
-    // Capture an above-the-fold screenshot of the deployed site and persist it.
-    // Fire-and-forget with a brief delay so the Vercel edge has a moment to
-    // propagate before Microlink fetches the page. Non-fatal: a screenshot
-    // failure never blocks or fails the deployment record.
-    const screenshotUrl = finalUrl
-      ? await captureScreenshot(finalUrl).catch(() => null)
-      : null;
-
+    // Mark the project live immediately so the UI can show the live URL
+    // without waiting for screenshot capture.
     await db
       .update(projectsTable)
       .set({
         liveUrl: finalUrl,
         lastPublishedAt: new Date(),
         publishStatus: "live",
-        ...(screenshotUrl ? { screenshotUrl } : {}),
       })
       .where(eq(projectsTable.id, projectId));
+
+    // Capture an above-the-fold screenshot in the background — truly
+    // fire-and-forget so the publish flow is not delayed by the screenshot
+    // provider's round-trip. Non-fatal: a failure is logged but never
+    // surfaces to the user or affects the deployment record.
+    if (finalUrl) {
+      captureScreenshot(finalUrl)
+        .then((screenshotUrl) => {
+          if (!screenshotUrl) return;
+          return db
+            .update(projectsTable)
+            .set({ screenshotUrl })
+            .where(eq(projectsTable.id, projectId));
+        })
+        .catch((err) => {
+          logger.warn({ err, projectId }, "Background screenshot capture failed (non-fatal)");
+        });
+    }
   } catch (err) {
     logger.error({ err, deploymentId }, "Publish pipeline failed");
     await setStatus("failed", {
