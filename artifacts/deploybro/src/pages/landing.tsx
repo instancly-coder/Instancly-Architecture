@@ -331,10 +331,6 @@ export default function Landing() {
             </div>
             <div className="mt-10 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-secondary">
               <span>Powered by Anthropic Claude</span>
-              <span aria-hidden className="text-border">·</span>
-              <span>Real Postgres on Neon</span>
-              <span aria-hidden className="text-border">·</span>
-              <span>One-click publish to Vercel</span>
             </div>
           </div>
         </section>
