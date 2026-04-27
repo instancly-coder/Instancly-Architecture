@@ -195,7 +195,7 @@ export function Changelog() {
       date: "April 12, 2026",
       version: "v1.9",
       items: [
-        "Affiliate earnings dashboard with payouts in £.",
+        "Affiliate earnings dashboard with payouts in $.",
         "One-click publish to deploybro.app subdomains with Postgres provisioned.",
       ],
     },
@@ -582,7 +582,7 @@ export function Terms() {
 
       <Section title="Plans & billing">
         <p>
-          Paid plans are billed in £ Sterling on a recurring basis (monthly
+          Paid plans are billed in US Dollars on a recurring basis (monthly
           or annual, as you choose) until you cancel. Subscriptions auto-renew
           for another period unless cancelled at least one day before the
           renewal date. You can cancel any time from the billing page;
@@ -633,7 +633,7 @@ export function Terms() {
           liable for indirect, incidental, special, consequential or punitive
           damages, or for loss of profits, revenue, data or goodwill. Our
           aggregate liability for any claim arising out of these terms is
-          capped at the greater of £100 or the fees you paid us in the 12
+          capped at the greater of $100 or the fees you paid us in the 12
           months preceding the event giving rise to the claim. Nothing in
           these terms excludes liability for death or personal injury caused
           by negligence, fraud, or any other liability that cannot be

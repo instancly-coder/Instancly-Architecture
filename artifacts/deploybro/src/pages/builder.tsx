@@ -4124,12 +4124,12 @@ function DatabaseView() {
 
 function PaymentsView() {
   const payments = [
-    { who: "alex@startup.io", amount: "£29.00", when: "2 min ago", ok: true, plan: "Pro" },
-    { who: "sara@design.co", amount: "£29.00", when: "14 min ago", ok: true, plan: "Pro" },
-    { who: "mike@founder.dev", amount: "£99.00", when: "1 hr ago", ok: true, plan: "Team" },
-    { who: "lily@indie.com", amount: "£29.00", when: "3 hrs ago", ok: false, plan: "Pro" },
-    { who: "raj@studio.io", amount: "£9.00", when: "5 hrs ago", ok: true, plan: "Hobby" },
-    { who: "noah@labs.dev", amount: "£99.00", when: "1 day ago", ok: true, plan: "Team" },
+    { who: "alex@startup.io", amount: "$29.00", when: "2 min ago", ok: true, plan: "Pro" },
+    { who: "sara@design.co", amount: "$29.00", when: "14 min ago", ok: true, plan: "Pro" },
+    { who: "mike@founder.dev", amount: "$99.00", when: "1 hr ago", ok: true, plan: "Team" },
+    { who: "lily@indie.com", amount: "$29.00", when: "3 hrs ago", ok: false, plan: "Pro" },
+    { who: "raj@studio.io", amount: "$9.00", when: "5 hrs ago", ok: true, plan: "Hobby" },
+    { who: "noah@labs.dev", amount: "$99.00", when: "1 day ago", ok: true, plan: "Team" },
   ];
   return (
     <PaneShell
@@ -4147,7 +4147,7 @@ function PaymentsView() {
       }
     >
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiCard label="MRR" value="£1,284" delta="+12%" positive />
+        <KpiCard label="MRR" value="$1,284" delta="+12%" positive />
         <KpiCard label="Active subs" value="42" delta="+3" positive />
         <KpiCard label="Churn (30d)" value="2.1%" delta="-0.4%" positive />
         <KpiCard label="Failed (24h)" value="1" delta="+1" positive={false} />

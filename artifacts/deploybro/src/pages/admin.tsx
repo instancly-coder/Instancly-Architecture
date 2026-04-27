@@ -25,7 +25,7 @@ export default function Admin() {
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <StatCard title="Total Users" value={stats?.totalUsers?.toLocaleString() ?? "—"} icon={Users} />
-          <StatCard title="Total Revenue" value={stats ? `£${stats.revenueGbp.toFixed(2)}` : "—"} icon={CreditCard} />
+          <StatCard title="Total Revenue" value={stats ? `$${stats.revenueGbp.toFixed(2)}` : "—"} icon={CreditCard} />
           <StatCard title="Builds (24h)" value={stats?.buildsToday?.toLocaleString() ?? "—"} icon={Activity} />
           <StatCard title="Total Projects" value={stats?.totalProjects?.toLocaleString() ?? "—"} icon={Database} />
         </div>
@@ -54,7 +54,7 @@ export default function Admin() {
                       <td className="p-3 font-mono">@{build.username}</td>
                       <td className="p-3 font-mono">{build.project}</td>
                       <td className="p-3 text-secondary">{timeAgo(build.createdAt)}</td>
-                      <td className="p-3 font-mono">£{build.cost.toFixed(2)}</td>
+                      <td className="p-3 font-mono">${build.cost.toFixed(2)}</td>
                       <td className="p-3">
                         <span
                           className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs ${
@@ -76,12 +76,12 @@ export default function Admin() {
             <div className="space-y-3 flex-1">
               <div className="p-3 bg-surface-raised border border-border rounded text-sm">
                 <div className="text-secondary text-xs mb-1">Compute spend</div>
-                <div className="font-mono text-lg">£{(stats?.spendGbp ?? 0).toFixed(2)}</div>
+                <div className="font-mono text-lg">${(stats?.spendGbp ?? 0).toFixed(2)}</div>
               </div>
               <div className="p-3 bg-surface-raised border border-border rounded text-sm">
                 <div className="text-secondary text-xs mb-1">Net (revenue − spend)</div>
                 <div className="font-mono text-lg">
-                  £{((stats?.revenueGbp ?? 0) - (stats?.spendGbp ?? 0)).toFixed(2)}
+                  ${((stats?.revenueGbp ?? 0) - (stats?.spendGbp ?? 0)).toFixed(2)}
                 </div>
               </div>
             </div>

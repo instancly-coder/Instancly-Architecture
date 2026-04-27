@@ -4,9 +4,9 @@ import { AdminLayout } from "@/components/admin-layout";
 import { useAdminCostByModel } from "@/lib/api";
 
 const CONFIGURED_MODELS = [
-  { name: "Economy Bro", provider: "Anthropic · Haiku 4.5",  costRange: "£0.005 - £0.025" },
-  { name: "Smart Bro",   provider: "Anthropic · Sonnet 4.5", costRange: "£0.012 - £0.06"  },
-  { name: "Power Bro",   provider: "Anthropic · Opus",       costRange: "£0.02 - £0.10"   },
+  { name: "Economy Bro", provider: "Anthropic · Haiku 4.5",  costRange: "$0.005 - $0.025" },
+  { name: "Smart Bro",   provider: "Anthropic · Sonnet 4.5", costRange: "$0.012 - $0.06"  },
+  { name: "Power Bro",   provider: "Anthropic · Opus",       costRange: "$0.02 - $0.10"   },
 ];
 
 export default function AdminModels() {
@@ -37,7 +37,7 @@ export default function AdminModels() {
                   <td className="p-4 font-mono font-medium">{model.name}</td>
                   <td className="p-4 text-secondary">{model.provider}</td>
                   <td className="p-4 font-mono text-secondary">{model.costRange}</td>
-                  <td className="p-4 font-mono">£{(lookup.get(model.name) ?? 0).toFixed(2)}</td>
+                  <td className="p-4 font-mono">${(lookup.get(model.name) ?? 0).toFixed(2)}</td>
                   <td className="p-4 text-right">
                     <Button
                       variant="outline"

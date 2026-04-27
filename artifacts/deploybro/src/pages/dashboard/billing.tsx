@@ -1,17 +1,36 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { useMe, useMyTransactions } from "@/lib/api";
-import { Loader2 } from "lucide-react";
+import { Loader2, Sparkles } from "lucide-react";
+import { CardCheckout, type CardCheckoutMode } from "@/components/card-checkout";
+
+const PRO_MONTHLY_PRICE = 20;
 
 export default function Billing() {
   const { data: user, isLoading: userLoading } = useMe();
   const { data: transactions = [], isLoading: txLoading } = useMyTransactions();
 
-  const topup = (_amount: number) => {
-    toast.message("Stripe top-up isn't connected yet.", {
-      description: "We'll wire this to a real checkout once Stripe is enabled.",
-    });
+  // One Dialog instance, swapped between top-up and plan modes via
+  // local state. We keep the dialog mounted so the close animation
+  // doesn't tear down its form mid-flight.
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [checkoutMode, setCheckoutMode] = useState<CardCheckoutMode>("topup");
+  const [checkoutAmount, setCheckoutAmount] = useState(10);
+
+  const isFreePlan = (user?.plan ?? "free").toLowerCase() === "free";
+
+  const openTopup = (amount: number) => {
+    setCheckoutMode("topup");
+    setCheckoutAmount(amount);
+    setCheckoutOpen(true);
+  };
+
+  const openPlanUpgrade = () => {
+    setCheckoutMode("plan");
+    setCheckoutAmount(PRO_MONTHLY_PRICE);
+    setCheckoutOpen(true);
   };
 
   return (
@@ -30,20 +49,20 @@ export default function Billing() {
               {userLoading ? (
                 <Loader2 className="w-6 h-6 animate-spin text-secondary" />
               ) : (
-                `£${(user?.balance ?? 0).toFixed(2)}`
+                `$${(user?.balance ?? 0).toFixed(2)}`
               )}
             </div>
 
             <h3 className="text-sm font-medium mb-3">Quick Top-up</h3>
             <div className="flex gap-2">
-              {[5, 10, 25, 50].map((amt) => (
+              {[10, 25, 50].map((amt) => (
                 <Button
                   key={amt}
                   variant="outline"
-                  onClick={() => topup(amt)}
+                  onClick={() => openTopup(amt)}
                   className="flex-1 border-border hover:bg-surface-raised"
                 >
-                  £{amt}
+                  ${amt}
                 </Button>
               ))}
             </div>
@@ -54,7 +73,7 @@ export default function Billing() {
               Current Plan
             </h2>
             <div className="flex items-center gap-2 mb-2">
-              <div className="text-2xl font-bold">{user?.plan ?? "—"}</div>
+              <div className="text-2xl font-bold capitalize">{user?.plan ?? "—"}</div>
               {user?.status === "active" && (
                 <div className="px-2 py-0.5 rounded text-xs font-medium bg-primary/10 text-primary">
                   Active
@@ -62,18 +81,31 @@ export default function Billing() {
               )}
             </div>
             <p className="text-sm text-secondary mb-6 flex-1">
-              {user?.plan === "free"
+              {isFreePlan
                 ? "Free plan: enough credit to try DeployBro out. Upgrade for higher limits and custom domains."
                 : "Includes custom domains, priority support, and higher compute limits."}
             </p>
-            <Button
-              onClick={() =>
-                toast.message("Stripe portal isn't connected yet.")
-              }
-              className="w-full bg-surface-raised hover:bg-border text-foreground border border-border"
-            >
-              Manage in Stripe <ExternalLink className="w-3 h-3 ml-2" />
-            </Button>
+            {isFreePlan ? (
+              <Button
+                onClick={openPlanUpgrade}
+                className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                <Sparkles className="w-3.5 h-3.5 mr-2" />
+                Upgrade to Pro — ${PRO_MONTHLY_PRICE}/mo
+              </Button>
+            ) : (
+              <Button
+                onClick={() =>
+                  toast.message("Plan management isn't connected yet.", {
+                    description:
+                      "We'll wire this to a real customer portal once Stripe is enabled.",
+                  })
+                }
+                className="w-full bg-surface-raised hover:bg-border text-foreground border border-border"
+              >
+                Manage subscription
+              </Button>
+            )}
           </div>
         </div>
 
@@ -113,7 +145,7 @@ export default function Billing() {
                     <td className="p-3 md:p-4 text-secondary">{tx.method}</td>
                     <td className="p-3 md:p-4 font-mono text-right">
                       {tx.amount >= 0 ? "+" : ""}
-                      £{tx.amount.toFixed(2)}
+                      ${tx.amount.toFixed(2)}
                     </td>
                     <td className="p-3 md:p-4 text-right">
                       <span
@@ -138,27 +170,20 @@ export default function Billing() {
           </table>
         </div>
       </div>
-    </DashboardLayout>
-  );
-}
 
-function ExternalLink(props: any) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      {...props}
-    >
-      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-      <polyline points="15 3 21 3 21 9" />
-      <line x1="10" x2="21" y1="14" y2="3" />
-    </svg>
+      <CardCheckout
+        open={checkoutOpen}
+        onOpenChange={setCheckoutOpen}
+        mode={checkoutMode}
+        amount={checkoutAmount}
+        productLabel={checkoutMode === "plan" ? "Pro" : `${checkoutAmount} top-up`}
+        cadenceLabel={checkoutMode === "plan" ? "month" : undefined}
+        description={
+          checkoutMode === "plan"
+            ? "Pro: $20 of monthly usage, unused balance rolls over up to $10, Sonnet + Opus access, custom domains, one-click Vercel + Neon deploys."
+            : `Add $${checkoutAmount.toFixed(2)} of usage credit instantly. Never expires.`
+        }
+      />
+    </DashboardLayout>
   );
 }

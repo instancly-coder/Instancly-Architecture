@@ -485,7 +485,7 @@ router.get(
         : null;
 
     // We still surface `pendingTotal` because the earnings page wants
-    // to render "you have £X waiting" alongside the connect CTA. The
+    // to render "you have $X waiting" alongside the connect CTA. The
     // live admin-tunable payout threshold is fetched from the settings
     // singleton (with env fallback) so creators always see the same
     // number the cron would actually use.

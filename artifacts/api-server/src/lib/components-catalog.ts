@@ -353,7 +353,7 @@ function RevenueChart() {
   return (
     <div className="p-6 rounded-2xl border bg-white">
       <h3 className="text-sm font-medium text-neutral-500 mb-1">Monthly revenue</h3>
-      <p className="text-2xl font-semibold mb-4">£11,200</p>
+      <p className="text-2xl font-semibold mb-4">$11,200</p>
       <div className="h-56">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>

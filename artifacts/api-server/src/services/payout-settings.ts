@@ -21,7 +21,7 @@ const FALLBACK_INTERVAL_MIN = 60;
 // not just in the route) means the cron can also trust whatever it
 // reads from the DB even if a future code path writes directly.
 //   - Min payout: must be > 0 (otherwise we'd ship empty transfers)
-//     and capped at £10,000 to catch obvious admin mistakes.
+//     and capped at $10,000 to catch obvious admin mistakes.
 //   - Interval: must be at least 1 minute (sub-minute polling would
 //     hammer the DB pointlessly) and at most 7 days (longer than that
 //     and creators would complain that payouts feel broken).
@@ -127,7 +127,7 @@ export async function updatePayoutSettings(
     );
   }
 
-  // Round the GBP threshold to whole pence so the persisted value
+  // Round the dollar threshold to whole cents so the persisted value
   // matches what an admin actually typed, not a binary-float artifact.
   const roundedMin = Math.round(minPayoutGbp * 100) / 100;
 

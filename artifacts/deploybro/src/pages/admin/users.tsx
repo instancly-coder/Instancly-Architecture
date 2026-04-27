@@ -85,7 +85,7 @@ export default function AdminUsers() {
                         {user.plan}
                       </span>
                     </td>
-                    <td className="p-4 font-mono">£{user.balance.toFixed(2)}</td>
+                    <td className="p-4 font-mono">${user.balance.toFixed(2)}</td>
                     <td className="p-4 text-secondary">{user.signupDate}</td>
                     <td className="p-4">
                       <CommissionCell user={user} />

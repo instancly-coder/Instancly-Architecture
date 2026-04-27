@@ -79,7 +79,7 @@ export default function Dashboard() {
           <div className="flex items-start sm:items-center gap-2 text-amber-500 text-sm font-medium">
             <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 sm:mt-0" />
             <span>
-              Your balance is running low (£{balance.toFixed(2)}). Top up to ensure continuous service.
+              Your balance is running low (${balance.toFixed(2)}). Top up to ensure continuous service.
             </span>
           </div>
           <Link href="/dashboard/billing">
@@ -103,7 +103,7 @@ export default function Dashboard() {
             href="/dashboard/billing"
             className="px-3 py-1.5 rounded-full bg-surface border border-border text-sm font-mono font-medium hover:bg-surface-raised transition-colors"
           >
-            £{balance.toFixed(2)}
+            ${balance.toFixed(2)}
           </Link>
           <Button
             onClick={handleNewProject}

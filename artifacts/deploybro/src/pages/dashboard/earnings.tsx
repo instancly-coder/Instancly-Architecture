@@ -532,10 +532,10 @@ function PayoutMethodCard({
 
       <p className="text-xs text-secondary mb-4">
         {verified
-          ? `We send payouts to your connected account once your pending balance reaches £${minPayout.toFixed(0)}.`
+          ? `We send payouts to your connected account once your pending balance reaches $${minPayout.toFixed(0)}.`
           : inProgress
             ? "Stripe is still verifying your details. We'll start paying out as soon as that finishes."
-            : `Connect a payout method to receive your earnings. We pay out automatically once you've earned £${minPayout.toFixed(0)} or more.`}
+            : `Connect a payout method to receive your earnings. We pay out automatically once you've earned $${minPayout.toFixed(0)} or more.`}
       </p>
 
       {!verified && pending > 0 && (
@@ -546,7 +546,7 @@ function PayoutMethodCard({
           <span className="font-mono">{formatGbp(pending)}</span> waiting
           {aboveThreshold
             ? " — connect now and we'll pay it out on the next cycle."
-            : ` (£${(minPayout - pending).toFixed(2)} to go).`}
+            : ` ($${(minPayout - pending).toFixed(2)} to go).`}
         </p>
       )}
 
@@ -615,7 +615,7 @@ function PayoutStatusBadge({
 }
 
 function formatGbp(n: number): string {
-  return `£${n.toFixed(2)}`;
+  return `$${n.toFixed(2)}`;
 }
 
 function SummaryCard({

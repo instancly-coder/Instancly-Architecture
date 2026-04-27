@@ -192,7 +192,7 @@ export async function createTransfer(opts: {
     {
       destination: opts.destination,
       amount: opts.amountMinor,
-      currency: opts.currency ?? "gbp",
+      currency: opts.currency ?? "usd",
       description: opts.description,
       metadata: opts.metadata,
     },

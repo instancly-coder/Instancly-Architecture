@@ -240,7 +240,7 @@ async function batchAndPayCreator(
     const transfer = await createTransfer({
       destination: destinationAccount,
       amountMinor: Math.round(reserved.amount * 100),
-      currency: "gbp",
+      currency: "usd",
       description: `DeployBro referral earnings payout`,
       metadata: { payoutId: reserved.payoutId, userId },
       idempotencyKey: `payout:${reserved.payoutId}`,

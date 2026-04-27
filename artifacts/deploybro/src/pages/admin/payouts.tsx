@@ -230,7 +230,7 @@ function PayoutSettingsCard() {
       minPayoutGbp > MIN_GBP_CEILING
     ) {
       setError(
-        `Minimum payout must be between £${MIN_GBP_FLOOR} and £${MIN_GBP_CEILING.toLocaleString()}.`,
+        `Minimum payout must be between $${MIN_GBP_FLOOR} and $${MIN_GBP_CEILING.toLocaleString()}.`,
       );
       return;
     }
@@ -272,7 +272,7 @@ function PayoutSettingsCard() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
             <label className="block">
               <span className="text-xs uppercase tracking-wide text-secondary">
-                Minimum payout (GBP)
+                Minimum payout (USD)
               </span>
               <input
                 type="number"
@@ -379,7 +379,7 @@ function PayoutRow({ payout }: { payout: ApiAdminPayout }) {
         )}
       </td>
       <td className="p-3 font-mono text-right">
-        £{payout.amount.toFixed(2)}
+        ${payout.amount.toFixed(2)}
       </td>
       <td className="p-3">
         <PayoutStatusPill status={payout.status} />
@@ -470,7 +470,7 @@ function TotalCard({
         </div>
         <Icon className={`w-4 h-4 ${tint}`} />
       </div>
-      <div className="text-2xl font-bold font-mono">£{amount.toFixed(2)}</div>
+      <div className="text-2xl font-bold font-mono">${amount.toFixed(2)}</div>
       <div className="text-xs text-secondary mt-1">
         {count} payout{count === 1 ? "" : "s"}
       </div>

@@ -20,7 +20,7 @@ export default function AdminRevenue() {
           <div className="p-6 border border-border bg-surface rounded-xl flex items-center justify-between">
             <div>
               <div className="text-secondary text-sm mb-1">Total Revenue</div>
-              <div className="text-3xl font-bold font-mono">£{revenue.toFixed(2)}</div>
+              <div className="text-3xl font-bold font-mono">${revenue.toFixed(2)}</div>
             </div>
             <div className="w-12 h-12 rounded-lg bg-surface-raised flex items-center justify-center text-primary">
               <TrendingUp className="w-6 h-6" />
@@ -29,7 +29,7 @@ export default function AdminRevenue() {
           <div className="p-6 border border-border bg-surface rounded-xl flex items-center justify-between">
             <div>
               <div className="text-secondary text-sm mb-1">Compute Cost</div>
-              <div className="text-3xl font-bold font-mono">£{spend.toFixed(2)}</div>
+              <div className="text-3xl font-bold font-mono">${spend.toFixed(2)}</div>
             </div>
           </div>
           <div className="p-6 border border-border bg-surface rounded-xl flex items-center justify-between">
@@ -52,7 +52,7 @@ export default function AdminRevenue() {
                 {sortedCosts.map((row) => (
                   <tr key={row.model} className="border-b border-border last:border-0 hover:bg-surface-raised/30">
                     <td className="p-4 font-mono">{row.model}</td>
-                    <td className="p-4 text-right font-mono">£{row.total.toFixed(2)}</td>
+                    <td className="p-4 text-right font-mono">${row.total.toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>
