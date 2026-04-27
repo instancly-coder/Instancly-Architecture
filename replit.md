@@ -122,10 +122,13 @@ Three official starter templates are seeded under the reserved `deploybro` user:
 
 After a project publishes successfully, the server calls Microlink's public API to capture an above-the-fold screenshot of the live Vercel URL and stores the resulting CDN image URL as `screenshotUrl` on the project row. The Explore page and landing page template cards prefer `screenshotUrl` over the manually-set `coverImageUrl` when both are present.
 
-- `lib/screenshot.ts` — `captureScreenshot(liveUrl)` helper. Calls `https://api.microlink.io?url=<url>&screenshot=true&meta=false`. Returns a hosted image URL or `null` (non-fatal; never blocks the deployment). Optional `MICROLINK_API_KEY` env var unlocks Pro rate limits.
+- `artifacts/api-server/src/lib/screenshot.ts` — `captureScreenshot(liveUrl)` helper. Returns a hosted image URL or `null` (non-fatal; never blocks the deployment). Provider is configurable via env vars:
+  - `SCREENSHOT_API_URL` — custom provider base URL. When set, called with `?url=<encoded>` + `Authorization: Bearer <SCREENSHOT_API_KEY>`. Expects `{ screenshotUrl: string }` or Microlink-compatible JSON.
+  - `SCREENSHOT_API_KEY` — API key for the custom provider (only used if `SCREENSHOT_API_URL` is set).
+  - `MICROLINK_API_KEY` — optional; used with the default Microlink provider to unlock Pro rate limits.
 - Triggered automatically at the end of `runPublishPipeline` in `routes/deployments.ts` (after READY state is confirmed).
 - `POST /api/projects/:username/:slug/screenshot` — owner-only endpoint to manually retrigger a screenshot capture (e.g. after design changes). Returns `{ screenshotUrl }`.
-- Frontend hook: `useRetriggerScreenshot(username, slug)` in `api.ts`.
+- Frontend hook: `useRetriggerScreenshot(username, slug)` in `api.ts`. Wired into a "Refresh screenshot" button in the builder Settings tab (visible when project has a live URL).
 - Explore page (`explore.tsx`) and landing page template cards (`landing.tsx`) use `screenshotUrl ?? coverImageUrl` with `object-top` cropping to show above-the-fold content.
 
 ## Publish to Vercel + Neon

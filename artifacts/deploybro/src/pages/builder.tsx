@@ -117,6 +117,7 @@ import {
   useDeleteProjectEnvVar,
   useRevealProjectEnvVar,
   useUpdateProject,
+  useRetriggerScreenshot,
   type ApiBuild,
   type ApiDeployment,
   type ApiProject,
@@ -5127,6 +5128,7 @@ function SettingsPane({
 }) {
   const update = useUpdateProject(username, slug);
   const { data: publishStatus } = usePublishStatus(username, slug);
+  const retriggerScreenshot = useRetriggerScreenshot(username, slug);
 
   // Local form state, seeded from server data once loaded. Stored as raw
   // strings (one feature per line) so the textarea behaves like a normal
@@ -5406,18 +5408,49 @@ function SettingsPane({
 
             <div className="flex flex-wrap items-center gap-2 pt-1">
               {liveUrl ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={handleUseLiveScreenshot}
-                  disabled={isUploading}
-                  className="h-7 text-xs"
-                  data-testid="use-live-screenshot-button"
-                >
-                  <Camera className="w-3.5 h-3.5 mr-1.5" />
-                  Use a screenshot of my live site
-                </Button>
+                <>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleUseLiveScreenshot}
+                    disabled={isUploading}
+                    className="h-7 text-xs"
+                    data-testid="use-live-screenshot-button"
+                  >
+                    <Camera className="w-3.5 h-3.5 mr-1.5" />
+                    Use a screenshot of my live site
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={retriggerScreenshot.isPending}
+                    onClick={() =>
+                      retriggerScreenshot.mutate(undefined, {
+                        onSuccess: () =>
+                          toast.success(
+                            "Screenshot refreshed — Explore and homepage cards will update.",
+                          ),
+                        onError: (err) =>
+                          toast.error(
+                            err instanceof Error
+                              ? err.message
+                              : "Screenshot capture failed",
+                          ),
+                      })
+                    }
+                    className="h-7 text-xs"
+                    data-testid="refresh-screenshot-button"
+                  >
+                    {retriggerScreenshot.isPending ? (
+                      <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                    ) : (
+                      <RotateCw className="w-3.5 h-3.5 mr-1.5" />
+                    )}
+                    Refresh screenshot
+                  </Button>
+                </>
               ) : null}
               <Button
                 type="button"
