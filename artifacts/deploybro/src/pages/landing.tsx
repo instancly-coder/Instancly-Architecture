@@ -16,6 +16,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { MarketingNav } from "@/components/marketing-nav";
 import { MarketingFooter } from "@/components/marketing-footer";
+import { useTemplates } from "@/lib/api";
 import {
   Popover,
   PopoverContent,
@@ -75,17 +76,6 @@ const STEPS = [
   },
 ];
 
-const TEMPLATES = [
-  { name: "Personal portfolio", desc: "Show off your work, your way", tag: "Portfolio" },
-  { name: "Pitch deck slides", desc: "Code-powered presentations", tag: "Slides" },
-  { name: "Architect studio site", desc: "Firm showcase & gallery", tag: "Agency" },
-  { name: "Fashion blog", desc: "Minimal, playful, scrollable", tag: "Blog" },
-  { name: "Event platform", desc: "Find, register, host events", tag: "Marketplace" },
-  { name: "Personal blog", desc: "Muted, intimate, reader-first", tag: "Blog" },
-  { name: "Lifestyle magazine", desc: "Sophisticated long-form", tag: "Editorial" },
-  { name: "Ecommerce store", desc: "Premium product showcase", tag: "Shop" },
-];
-
 export default function Landing() {
   const [, navigate] = useLocation();
   const [prompt, setPrompt] = useState("");
@@ -102,6 +92,7 @@ export default function Landing() {
   const [urlError, setUrlError] = useState("");
   const [attachNotice, setAttachNotice] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { data: templates = [], isLoading } = useTemplates();
 
   useEffect(() => {
     const id = window.setInterval(() => {
@@ -714,7 +705,7 @@ export default function Landing() {
                   Or start from a template.
                 </h2>
                 <p className="text-secondary">
-                  Remix something proven. Customize from there.
+                  Remix something proven. These are pulled from the live template library.
                 </p>
               </div>
               <Link
@@ -725,40 +716,47 @@ export default function Landing() {
               </Link>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {TEMPLATES.map((t, i) => (
-                <Link
-                  key={t.name}
-                  href="/login"
-                  className="group rounded-xl border border-border bg-surface hover-elevate overflow-hidden flex flex-col"
-                >
-                  <div className="aspect-[4/3] bg-gradient-to-br from-primary/20 via-surface-raised to-background relative overflow-hidden p-3">
-                    <div className="absolute top-2 right-2 px-2 py-0.5 rounded bg-primary text-primary-foreground text-[10px] font-mono uppercase z-10">
-                      {t.tag}
-                    </div>
-                    {/* mini UI mock per card */}
-                    <div className="absolute inset-3 rounded bg-background/80 backdrop-blur-sm border border-border/50 p-2 flex flex-col gap-1.5 transition-transform group-hover:scale-[1.02]">
-                      <div className="h-1.5 w-1/3 rounded bg-foreground/30" />
-                      <div className="h-1 w-2/3 rounded bg-foreground/15" />
-                      <div className="grid grid-cols-3 gap-1 mt-1 flex-1">
-                        <div className={`rounded ${i % 3 === 0 ? "bg-primary/60" : "bg-foreground/15"}`} />
-                        <div className="rounded bg-foreground/15" />
-                        <div className={`rounded ${i % 3 === 1 ? "bg-primary/60" : "bg-foreground/15"}`} />
-                        <div className="rounded bg-foreground/15" />
-                        <div className={`rounded ${i % 3 === 2 ? "bg-primary/60" : "bg-foreground/15"}`} />
-                        <div className="rounded bg-foreground/15" />
+            {isLoading ? (
+              <div className="text-sm text-secondary">Loading templates…</div>
+            ) : templates.length === 0 ? (
+              <div className="rounded-2xl border border-border bg-surface p-8 text-center text-sm text-secondary">
+                No templates yet.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {templates.slice(0, 4).map((t) => (
+                  <Link
+                    key={t.id}
+                    href={`/${t.author}/${t.slug}`}
+                    className="group rounded-xl border border-border bg-surface hover-elevate overflow-hidden flex flex-col"
+                  >
+                    <div className="aspect-[4/3] bg-gradient-to-br from-primary/20 via-surface-raised to-background relative overflow-hidden p-3">
+                      <div className="absolute top-2 right-2 px-2 py-0.5 rounded bg-primary text-primary-foreground text-[10px] font-mono uppercase z-10">
+                        {t.framework}
+                      </div>
+                      <div className="absolute inset-3 rounded bg-background/80 backdrop-blur-sm border border-border/50 p-2 flex flex-col gap-1.5 transition-transform group-hover:scale-[1.02]">
+                        <div className="h-1.5 w-1/3 rounded bg-foreground/30" />
+                        <div className="h-1 w-2/3 rounded bg-foreground/15" />
+                        <div className="grid grid-cols-3 gap-1 mt-1 flex-1">
+                          <div className="rounded bg-primary/60" />
+                          <div className="rounded bg-foreground/15" />
+                          <div className="rounded bg-foreground/15" />
+                          <div className="rounded bg-foreground/15" />
+                          <div className="rounded bg-primary/60" />
+                          <div className="rounded bg-foreground/15" />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="p-4">
-                    <h3 className="font-medium text-sm mb-1 group-hover:text-primary transition-colors">
-                      {t.name}
-                    </h3>
-                    <p className="text-xs text-secondary">{t.desc}</p>
-                  </div>
-                </Link>
-              ))}
-            </div>
+                    <div className="p-4">
+                      <h3 className="font-medium text-sm mb-1 group-hover:text-primary transition-colors">
+                        {t.name}
+                      </h3>
+                      <p className="text-xs text-secondary">{t.description}</p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
         </section>
 
