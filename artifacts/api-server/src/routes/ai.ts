@@ -27,7 +27,12 @@ import {
   parseRequestSecretDirectives,
   stripRequestSecretDirectives,
 } from "../lib/file-blocks";
-import { enhancePrompt } from "../lib/prompt-enhancer";
+import {
+  enhancePrompt,
+  shouldExpandBrief,
+  expandToBrief,
+  buildBriefPrompt,
+} from "../lib/prompt-enhancer";
 import { requireAuth, getAuthedUser } from "../middlewares/auth";
 import { provisionAppDatabase, parentProjectId } from "../lib/neon";
 import { encryptSecret, decryptSecret } from "../lib/secret-cipher";
@@ -604,31 +609,68 @@ router.post(
           ? "\n\nPLAN MODE IS ON: Begin your response with a numbered plan (3 to 7 short bullet points) describing exactly which files you will create or change and why. After the plan, write a line containing only '---' and then proceed with the implementation as normal."
           : "");
 
-      // Server-side prompt enhancement. For first-build cases where the
-      // user typed a terse brief (e.g. "plumber landing page"), we expand
-      // their prompt with structured design + content direction so Claude
-      // ships something that looks designed, not templated. For
-      // iterations or prompts with reference URLs / images / explicit
-      // structure, this is a no-op.
-      const enhanced = enhancePrompt({
+      // ── Two-stage prompt enhancement ──────────────────────────────────────
+      //
+      // Stage 1 (AI brief): for short first-build prompts, call Haiku first to
+      // generate a structured design brief (colours, fonts, sections, tone).
+      // This costs ~$0.001 and ~300ms but dramatically lifts output quality.
+      //
+      // Stage 2 (static fallback): keyword-based vertical guidance. Used when
+      // Stage 1 is unavailable or the prompt isn't eligible.
+      const enhanceOpts = {
         prompt,
         hasExistingFiles: existingFiles.length > 0,
         hasReferenceUrls: urls.length > 0,
         hasImages: images.length > 0,
-      });
-      if (enhanced.wasEnhanced) {
-        send("status", {
-          message: enhanced.vertical
-            ? `Expanding brief (${enhanced.vertical.replace("_", " ")})…`
-            : "Expanding brief…",
-        });
+      };
+
+      let finalPrompt = prompt;
+      let wasEnhanced = false;
+
+      if (anthropic && shouldExpandBrief(enhanceOpts)) {
+        send("status", { message: "Designing your brief…" });
+        try {
+          const brief = await expandToBrief(prompt, anthropic);
+          finalPrompt = buildBriefPrompt(brief, prompt, "");
+          wasEnhanced = true;
+          // Let the client know which brief tone was chosen (cosmetic)
+          send("status", {
+            message: `Brief ready (${brief.tone}) — building…`,
+          });
+        } catch (briefErr) {
+          // Brief expansion failed — fall back to static enhancer silently.
+          logger.warn({ err: briefErr }, "Brief expansion failed, falling back to static enhancer");
+          const staticEnhanced = enhancePrompt(enhanceOpts);
+          finalPrompt = staticEnhanced.enhanced;
+          wasEnhanced = staticEnhanced.wasEnhanced;
+          if (wasEnhanced) {
+            const v = staticEnhanced.vertical;
+            send("status", {
+              message: v ? `Expanding brief (${v.replace("_", " ")})…` : "Expanding brief…",
+            });
+          }
+        }
+      } else {
+        // Not eligible for brief expansion — use static enhancer (no-op for
+        // iterations and long / structured prompts).
+        const staticEnhanced = enhancePrompt(enhanceOpts);
+        finalPrompt = staticEnhanced.enhanced;
+        wasEnhanced = staticEnhanced.wasEnhanced;
+        if (wasEnhanced) {
+          const v = staticEnhanced.vertical;
+          send("status", {
+            message: v ? `Expanding brief (${v.replace("_", " ")})…` : "Expanding brief…",
+          });
+        }
       }
+
+      void wasEnhanced; // suppress unused-var lint — used only for logging above
 
       // Compose the user message. If images were attached we send a
       // multi-part content array (text + image blocks) which Claude's
       // vision models accept natively. Otherwise we keep it as a string
       // for backward compatibility.
-      const textPart = `${filesContext}${urlContext}\n\n---\n\nUser request:\n${enhanced.enhanced}`;
+      const textPart = `${filesContext}${urlContext}\n\n---\n\nUser request:\n${finalPrompt}`;
       const userContent =
         images.length > 0
           ? [

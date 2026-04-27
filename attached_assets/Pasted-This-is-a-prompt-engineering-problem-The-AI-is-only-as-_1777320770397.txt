@@ -1,0 +1,191 @@
+This is a prompt engineering problem. The AI is only as good as the instructions you give it. Here’s a concrete system:
+
+The Problem Right Now
+User types: "build seo agency"
+AI gets: "build seo agency"
+Result: Generic, boring, unstyled mess
+
+The Solution — A System Prompt Pipeline
+Instead of passing the user’s raw input directly, you run it through two stages:
+
+Stage 1 — Expand the User’s Input Into a Design Brief
+Before building anything, send the user’s raw prompt to Claude with this expander prompt:
+
+const expandPrompt = async (userInput) => {
+  const response = await anthropic.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 1000,
+    messages: [{
+      role: "user",
+      content: `You are a senior product designer and UX strategist. 
+      
+A user wants to build: "${userInput}"
+
+Generate a detailed design brief in JSON format with:
+{
+  "projectType": "what kind of site/app this is",
+  "targetAudience": "who this is for",
+  "colorScheme": {
+    "primary": "#hex",
+    "secondary": "#hex", 
+    "accent": "#hex",
+    "background": "#hex",
+    "text": "#hex"
+  },
+  "typography": {
+    "heading": "font name and style",
+    "body": "font name and style"
+  },
+  "sections": ["list of sections to include"],
+  "tone": "professional/playful/minimal/bold etc",
+  "keyFeatures": ["list of must-have features"],
+  "inspiration": "2-3 real world sites this should feel like",
+  "uniqueSellingPoints": ["what makes this stand out"]
+}
+
+Only return the JSON, nothing else.`
+    }]
+  })
+  
+  return JSON.parse(response.content[0].text)
+}
+
+
+Stage 2 — The Master Builder System Prompt
+Now pass that brief into your actual builder with a rock solid system prompt:
+
+const buildPrompt = (userInput, brief) => `
+You are an expert full-stack developer and UI/UX designer with 15 years experience 
+building stunning, conversion-focused websites. You have deep knowledge of:
+- Modern design systems (Vercel, Linear, Stripe, Loom)
+- Conversion rate optimization
+- Typography hierarchy
+- Whitespace and visual breathing room
+- Micro-interactions and hover states
+
+USER WANTS TO BUILD: ${userInput}
+
+DESIGN BRIEF:
+- Project Type: ${brief.projectType}
+- Target Audience: ${brief.targetAudience}
+- Tone: ${brief.tone}
+- Inspired by: ${brief.inspiration}
+
+COLOR SYSTEM:
+- Primary: ${brief.colorScheme.primary}
+- Secondary: ${brief.colorScheme.secondary}
+- Accent: ${brief.colorScheme.accent}
+- Background: ${brief.colorScheme.background}
+- Text: ${brief.colorScheme.text}
+
+TYPOGRAPHY:
+- Headings: ${brief.typography.heading}
+- Body: ${brief.typography.body}
+
+REQUIRED SECTIONS: ${brief.sections.join(", ")}
+
+KEY FEATURES: ${brief.keyFeatures.join(", ")}
+
+STRICT DESIGN RULES — YOU MUST FOLLOW THESE:
+1. Never use plain white backgrounds — use subtle gradients or off-white (#FAFAFA)
+2. Every section must have generous padding (min 80px top/bottom)
+3. Headlines must be large and bold (min 48px on desktop)
+4. Use real, specific copy — never placeholder text like "Lorem ipsum"
+5. Every CTA button must have a hover state and subtle shadow
+6. Include at least one gradient or glassmorphism element
+7. Navigation must be sticky with a blur backdrop
+8. Add subtle animations (fade-in on scroll, hover lifts)
+9. Mobile responsive — think mobile first
+10. Include social proof (testimonials, logos, stats) where relevant
+11. Use emojis sparingly but effectively for visual breaks
+12. Every image placeholder must have a realistic gradient background
+
+COPY RULES:
+- Write real headlines that speak to the target audience's pain points
+- Include real pricing if it's a SaaS or agency site
+- Use power words: Transform, Scale, Dominate, Launch, Grow
+- Stats and numbers build trust — make them up but make them realistic
+
+OUTPUT: A single complete HTML file with embedded CSS and JavaScript.
+Tailwind CSS via CDN. Google Fonts via CDN. No external dependencies.
+The result must look like it was designed by a professional agency.
+`
+
+
+Stage 3 — Section-Specific Sub-Prompts
+For each section type, inject extra specific instructions:
+
+const sectionGuidance = {
+  hero: `
+    - Full viewport height
+    - Large gradient headline (use CSS gradient text)
+    - Subheadline that explains the value prop in one line
+    - Two CTAs: primary (filled) and secondary (outlined)
+    - Floating abstract shapes or mesh gradient background
+    - Trust badges below CTAs (Google Partner, 5 stars, X clients)
+  `,
+  services: `
+    - Card grid (3 columns desktop, 1 mobile)
+    - Each card: icon, title, description, subtle border
+    - Hover effect: card lifts with shadow
+    - Section headline focuses on outcome not feature
+  `,
+  testimonials: `
+    - Dark background section for contrast
+    - Large quote marks
+    - Star ratings
+    - Real sounding names and companies
+    - Include a photo placeholder with gradient avatar
+  `,
+  pricing: `
+    - 3 tiers always (Starter, Pro, Enterprise)
+    - Middle tier highlighted as "Most Popular"
+    - Feature comparison list with checkmarks
+    - Annual/monthly toggle
+  `,
+  cta: `
+    - Bold contrasting background (use primary color)
+    - Single focused headline
+    - One button only
+    - Create urgency subtly
+  `
+}
+
+
+The Full Pipeline
+
+export async function generateApp(userInput) {
+
+  // Step 1 — expand input into brief (cheap, fast, Haiku)
+  const brief = await expandPrompt(userInput) // ~$0.001
+
+  // Step 2 — build with full context (Sonnet)
+  const systemPrompt = buildPrompt(userInput, brief)
+  
+  const response = await anthropic.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 8096,
+    system: systemPrompt,
+    messages: [{
+      role: "user", 
+      content: `Build the complete ${brief.projectType} now. 
+      Make it stunning. Make it professional. Make it real.`
+    }]
+  })
+
+  return { code: response.content[0].text, brief }
+}
+
+
+Result Difference
+
+
+
+|           |Before                              |After                                                   |
+|-----------|------------------------------------|--------------------------------------------------------|
+|Input      |“build seo agency”                  |“build seo agency”                                      |
+|AI receives|“build seo agency”                  |Full design brief + strict rules                        |
+|Output     |Generic white page, placeholder text|Professional dark site, real copy, gradients, animations|
+|Cost       |~$0.08                              |~$0.10 (brief expansion adds ~$0.002)                   |
+
+The brief expansion on Haiku costs almost nothing and completely transforms the output quality. The extra $0.002 per generation is invisible to users but the quality jump is massive.​​​​​​​​​​​​​​​​
