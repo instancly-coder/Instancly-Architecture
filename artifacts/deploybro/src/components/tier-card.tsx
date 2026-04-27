@@ -115,7 +115,7 @@ export function TierCard({ tier, cadence, selectable, selected, onSelect }: Tier
   // styling so the user's pick reads as "this one" regardless of which
   // tier is the marketing default.
   const wrapperClass = [
-    "relative flex flex-col rounded-2xl border p-7 text-left transition-all",
+    "relative flex flex-col rounded-2xl border p-5 sm:p-7 text-left transition-all",
     tier.highlight
       ? "border-primary/40 bg-surface shadow-2xl shadow-primary/10"
       : "border-border bg-surface/60",

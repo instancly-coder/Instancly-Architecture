@@ -257,12 +257,16 @@ export default function Onboarding() {
               // On small screens the three TierCards become a horizontal
               // snap-scrolling carousel ("swipeable"); on sm+ they fall
               // back to the same 3-column grid the pricing page uses.
+              // The mobile scroller needs `pt-5` so the badges that sit
+              // at `-top-3` on each card stay visible — `overflow-x-auto`
+              // forces vertical overflow to clip too, so anything above
+              // the card's top edge gets cut off without the padding.
               <div className="-mx-4 sm:mx-0 px-4 sm:px-0">
-                <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-3 sm:grid sm:grid-cols-3 sm:gap-5 sm:overflow-visible sm:pb-0">
+                <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory pt-5 pb-3 sm:grid sm:grid-cols-3 sm:gap-5 sm:overflow-visible sm:pt-3 sm:pb-0">
                   {TIERS.map((tier) => (
                     <div
                       key={tier.id}
-                      className="snap-center shrink-0 w-[85vw] max-w-sm sm:w-auto sm:max-w-none flex"
+                      className="snap-center shrink-0 w-[80vw] max-w-sm sm:w-auto sm:max-w-none flex"
                     >
                       <div className="w-full">
                         <TierCard
@@ -277,7 +281,7 @@ export default function Onboarding() {
                   ))}
                 </div>
                 <p className="text-center text-xs text-secondary mt-4">
-                  You can change this any time from billing.
+                  Swipe to compare · You can change this any time from billing.
                 </p>
               </div>
             )}
