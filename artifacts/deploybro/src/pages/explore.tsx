@@ -230,7 +230,7 @@ export default function Explore() {
   if (isAuthed) {
     return (
       <DashboardLayout>
-        <div className="px-4 md:px-8 py-6 md:py-8 max-w-6xl mx-auto">
+        <div className="px-4 md:px-8 py-6 md:py-8">
           <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-6">
             <div>
               <div className="text-xs uppercase tracking-wider text-secondary mb-1">

@@ -8,7 +8,6 @@ import {
   LogOut,
   Menu,
   X,
-  Library,
   Coins,
 } from "lucide-react";
 import {
@@ -25,7 +24,6 @@ import { authClient, authConfigured } from "@/auth";
 const NAV = [
   { href: "/dashboard", label: "Projects", icon: LayoutDashboard },
   { href: "/explore", label: "Explore", icon: Code },
-  { href: "/library", label: "Library", icon: Library },
   { href: "/dashboard/billing", label: "Billing", icon: CreditCard },
   { href: "/dashboard/earnings", label: "Earnings", icon: Coins },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },

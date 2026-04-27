@@ -16,7 +16,7 @@ export default function Billing() {
 
   return (
     <DashboardLayout>
-      <div className="p-4 md:p-8 max-w-4xl">
+      <div className="p-4 md:p-8">
         <h1 className="text-2xl font-bold tracking-tight mb-6 md:mb-8">
           Billing & Plans
         </h1>

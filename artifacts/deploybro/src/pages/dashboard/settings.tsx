@@ -55,7 +55,7 @@ export default function SettingsPage() {
 
   return (
     <DashboardLayout>
-      <div className="p-4 md:p-8 max-w-2xl">
+      <div className="p-4 md:p-8">
         <h1 className="text-2xl font-bold tracking-tight mb-6 md:mb-8">
           Account Settings
         </h1>
