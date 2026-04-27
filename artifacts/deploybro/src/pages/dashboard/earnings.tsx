@@ -7,13 +7,19 @@ import {
   Percent,
   Users,
   TrendingUp,
+  Banknote,
+  AlertCircle,
+  ExternalLink,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import {
   useMe,
   useMyEarnings,
   useMyEarningsSummary,
+  useMyPayoutAccount,
   useMyReferrals,
+  useStartPayoutOnboarding,
+  type ApiMyPayoutAccount,
 } from "@/lib/api";
 
 export default function Earnings() {
@@ -21,6 +27,8 @@ export default function Earnings() {
   const { data: summary, isLoading: summaryLoading } = useMyEarningsSummary();
   const { data: earnings = [], isLoading: earningsLoading } = useMyEarnings();
   const { data: referrals, isLoading: referralsLoading } = useMyReferrals();
+  const { data: payoutAccount, isLoading: payoutAccountLoading } =
+    useMyPayoutAccount();
 
   const username = me?.username;
 
@@ -61,6 +69,11 @@ export default function Earnings() {
             icon={Percent}
           />
         </div>
+
+        <PayoutMethodCard
+          account={payoutAccount}
+          loading={payoutAccountLoading}
+        />
 
         <div className="border border-border bg-surface rounded-xl p-5 md:p-6 mb-8">
           <h2 className="text-sm font-medium mb-2">Your referral link</h2>
@@ -348,6 +361,143 @@ export default function Earnings() {
         </div>
       </div>
     </DashboardLayout>
+  );
+}
+
+// CTA card for connecting (or managing) the creator's Stripe Connect
+// Express payout account. Status copy is driven by the cached account
+// state on the server — see `/me/payouts/account` for how that's set.
+function PayoutMethodCard({
+  account,
+  loading,
+}: {
+  account: ApiMyPayoutAccount | undefined;
+  loading: boolean;
+}) {
+  const startOnboarding = useStartPayoutOnboarding();
+
+  const verified = account?.payoutsEnabled === true;
+  const inProgress =
+    !!account && account.status === "pending" && !verified;
+  const pending = account?.pendingTotal ?? 0;
+  const minPayout = account?.minPayoutGbp ?? 10;
+  const aboveThreshold = pending >= minPayout;
+
+  const handleConnect = async () => {
+    // Stripe rejects relative URLs, so we always pass full window URLs.
+    const here = window.location.href;
+    try {
+      const link = await startOnboarding.mutateAsync({
+        returnUrl: here,
+        refreshUrl: here,
+      });
+      window.location.href = link.url;
+    } catch {
+      // The mutation surfaces the error via `startOnboarding.error`
+      // below — no console noise needed.
+    }
+  };
+
+  const errMsg =
+    startOnboarding.error instanceof Error
+      ? startOnboarding.error.message
+      : null;
+
+  return (
+    <div className="border border-border bg-surface rounded-xl p-5 md:p-6 mb-8">
+      <div className="flex items-start justify-between gap-4 mb-2">
+        <div className="flex items-center gap-2">
+          <Banknote className="w-4 h-4 text-secondary" />
+          <h2 className="text-sm font-medium">Payout method</h2>
+        </div>
+        <PayoutStatusBadge
+          loading={loading}
+          verified={verified}
+          inProgress={inProgress}
+        />
+      </div>
+
+      <p className="text-xs text-secondary mb-4">
+        {verified
+          ? `We send payouts to your connected account once your pending balance reaches £${minPayout.toFixed(0)}.`
+          : inProgress
+            ? "Stripe is still verifying your details. We'll start paying out as soon as that finishes."
+            : `Connect a payout method to receive your earnings. We pay out automatically once you've earned £${minPayout.toFixed(0)} or more.`}
+      </p>
+
+      {!verified && pending > 0 && (
+        <p
+          className={`text-xs mb-4 ${aboveThreshold ? "text-foreground" : "text-secondary"}`}
+        >
+          You currently have{" "}
+          <span className="font-mono">{formatGbp(pending)}</span> waiting
+          {aboveThreshold
+            ? " — connect now and we'll pay it out on the next cycle."
+            : ` (£${(minPayout - pending).toFixed(2)} to go).`}
+        </p>
+      )}
+
+      {errMsg && (
+        <div className="flex items-start gap-2 text-xs text-red-500 mb-4">
+          <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+          <span>{errMsg}</span>
+        </div>
+      )}
+
+      <button
+        onClick={handleConnect}
+        disabled={startOnboarding.isPending}
+        className="inline-flex items-center gap-2 px-3 py-2 text-xs font-medium rounded-lg bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 transition"
+      >
+        {startOnboarding.isPending ? (
+          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+        ) : (
+          <ExternalLink className="w-3.5 h-3.5" />
+        )}
+        {verified
+          ? "Manage payout account"
+          : inProgress
+            ? "Resume onboarding"
+            : "Connect payout method"}
+      </button>
+    </div>
+  );
+}
+
+function PayoutStatusBadge({
+  loading,
+  verified,
+  inProgress,
+}: {
+  loading: boolean;
+  verified: boolean;
+  inProgress: boolean;
+}) {
+  if (loading) {
+    return (
+      <span className="text-xs text-secondary inline-flex items-center gap-1">
+        <Loader2 className="w-3 h-3 animate-spin" />
+      </span>
+    );
+  }
+  if (verified) {
+    return (
+      <span className="text-[10px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded-full bg-green-500/10 text-green-500">
+        Verified
+      </span>
+    );
+  }
+  if (inProgress) {
+    return (
+      <span className="text-[10px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500">
+        Pending verification
+      </span>
+    );
+  }
+  return (
+    <span className="text-[10px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded-full bg-surface-raised text-secondary">
+      Not connected
+    </span>
   );
 }
 

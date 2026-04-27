@@ -817,6 +817,111 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MyReferrals"
+  /me/payouts/account:
+    get:
+      operationId: getMyPayoutAccount
+      tags: [me]
+      summary: Current user's Stripe Connect payout account status
+      responses:
+        "200":
+          description: Connect account status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MyPayoutAccount"
+  /me/payouts/account/onboarding-link:
+    post:
+      operationId: createMyPayoutOnboardingLink
+      tags: [me]
+      summary: Start (or resume) Stripe Connect Express onboarding
+      description: >
+        Lazily provisions a Connect Express account on first call, then
+        returns a single-use Stripe-hosted onboarding URL. The frontend
+        navigates the user to it; Stripe redirects back to
+        `returnUrl`/`refreshUrl` when they're done.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOnboardingLinkBody"
+      responses:
+        "200":
+          description: Onboarding URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PayoutOnboardingLink"
+        "503":
+          description: Stripe is not configured on this server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PayoutError"
+  /admin/payouts:
+    get:
+      operationId: listAdminPayouts
+      tags: [admin]
+      summary: All payouts across all creators
+      responses:
+        "200":
+          description: Payouts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminPayout"
+  /admin/payouts/run:
+    post:
+      operationId: runAdminPayouts
+      tags: [admin]
+      summary: Trigger one payout cycle now
+      description: >
+        Synchronously runs the same batching pipeline as the cron tick.
+        Returns the per-status counts so the admin sees what happened.
+      responses:
+        "200":
+          description: Cycle summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PayoutCycleResult"
+        "503":
+          description: Stripe is not configured on this server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PayoutError"
+  /admin/payouts/{id}/retry:
+    post:
+      operationId: retryAdminPayout
+      tags: [admin]
+      summary: Re-queue a failed payout for the next cycle
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Retry status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RetryPayoutResponse"
+        "404":
+          description: Payout not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PayoutError"
+        "409":
+          description: Payout is not in a retryable state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PayoutError"
   /admin/cost-by-model:
     get:
       operationId: listAdminCostByModel
@@ -1725,6 +1830,130 @@ components:
         - conversionPct
         - bySource
         - users
+    MyPayoutAccount:
+      type: object
+      description: |
+        Cached state of the current user's Stripe Connect Express
+        account. `status` is null until they first click "Connect", then
+        "pending" until Stripe finishes verifying ID + bank, then
+        "verified" once `payouts_enabled` is true. `pendingTotal` is
+        their unpaid referral earnings in GBP — useful for rendering
+        "you have £X waiting" copy alongside the CTA.
+      properties:
+        connected: { type: boolean }
+        status:
+          type: string
+          enum: [pending, verified]
+          nullable: true
+        payoutsEnabled: { type: boolean }
+        detailsSubmitted: { type: boolean }
+        pendingTotal: { type: number }
+        minPayoutGbp: { type: number }
+      required:
+        - connected
+        - status
+        - payoutsEnabled
+        - detailsSubmitted
+        - pendingTotal
+        - minPayoutGbp
+    CreateOnboardingLinkBody:
+      type: object
+      description: |
+        Where Stripe should bounce the user back to once they finish (or
+        bail out of) the hosted onboarding flow. Both URLs MUST be
+        absolute — Stripe rejects relative URLs.
+      properties:
+        returnUrl:
+          type: string
+          format: uri
+        refreshUrl:
+          type: string
+          format: uri
+      required:
+        - returnUrl
+        - refreshUrl
+    PayoutOnboardingLink:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+        expiresAt: { type: integer }
+      required:
+        - url
+        - expiresAt
+    AdminPayout:
+      type: object
+      properties:
+        id: { type: string }
+        amount: { type: number }
+        status:
+          type: string
+          enum: [queued, paid, failed]
+        failureReason:
+          type: string
+          nullable: true
+        stripeTransferId:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        paidAt:
+          type: string
+          format: date-time
+          nullable: true
+        failedAt:
+          type: string
+          format: date-time
+          nullable: true
+        referrerUserId: { type: string }
+        referrerUsername:
+          type: string
+          nullable: true
+      required:
+        - id
+        - amount
+        - status
+        - failureReason
+        - stripeTransferId
+        - createdAt
+        - paidAt
+        - failedAt
+        - referrerUserId
+        - referrerUsername
+    PayoutCycleResult:
+      type: object
+      properties:
+        considered: { type: integer }
+        paidOut: { type: integer }
+        failed: { type: integer }
+        skipped: { type: integer }
+        configured: { type: boolean }
+      required:
+        - considered
+        - paidOut
+        - failed
+        - skipped
+        - configured
+    RetryPayoutResponse:
+      type: object
+      properties:
+        requeued: { type: boolean }
+        reason:
+          type: string
+          nullable: true
+      required:
+        - requeued
+        - reason
+    PayoutError:
+      type: object
+      properties:
+        status: { type: string }
+        message: { type: string }
+      required:
+        - status
+        - message
     UploadUrlRequest:
       type: object
       properties:

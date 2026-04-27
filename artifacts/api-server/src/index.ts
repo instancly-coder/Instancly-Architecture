@@ -1,6 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { startDomainPoller } from "./jobs/poll-domains";
+import { startPayoutScheduler } from "./jobs/run-payouts";
 
 const rawPort = process.env["PORT"];
 
@@ -26,4 +27,7 @@ app.listen(port, (err) => {
   // Kick off the domain verification poller. It self-skips when
   // VERCEL_API_TOKEN isn't configured, so this is safe to always call.
   startDomainPoller();
+  // Kick off the referral-earnings payout scheduler. Self-skips when
+  // STRIPE_SECRET_KEY isn't set, so safe to always call.
+  startPayoutScheduler();
 });

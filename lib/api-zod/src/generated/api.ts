@@ -899,6 +899,83 @@ export const GetMyReferralsResponse = zod.object({
 });
 
 /**
+ * @summary Current user's Stripe Connect payout account status
+ */
+export const GetMyPayoutAccountResponse = zod
+  .object({
+    connected: zod.boolean(),
+    status: zod.enum(["pending", "verified"]).nullable(),
+    payoutsEnabled: zod.boolean(),
+    detailsSubmitted: zod.boolean(),
+    pendingTotal: zod.number(),
+    minPayoutGbp: zod.number(),
+  })
+  .describe(
+    'Cached state of the current user\'s Stripe Connect Express\naccount. `status` is null until they first click \"Connect\", then\n\"pending\" until Stripe finishes verifying ID + bank, then\n\"verified\" once `payouts_enabled` is true. `pendingTotal` is\ntheir unpaid referral earnings in GBP — useful for rendering\n\"you have £X waiting\" copy alongside the CTA.\n',
+  );
+
+/**
+ * Lazily provisions a Connect Express account on first call, then returns a single-use Stripe-hosted onboarding URL. The frontend navigates the user to it; Stripe redirects back to `returnUrl`/`refreshUrl` when they're done.
+
+ * @summary Start (or resume) Stripe Connect Express onboarding
+ */
+export const CreateMyPayoutOnboardingLinkBody = zod
+  .object({
+    returnUrl: zod.string().url(),
+    refreshUrl: zod.string().url(),
+  })
+  .describe(
+    "Where Stripe should bounce the user back to once they finish (or\nbail out of) the hosted onboarding flow. Both URLs MUST be\nabsolute — Stripe rejects relative URLs.\n",
+  );
+
+export const CreateMyPayoutOnboardingLinkResponse = zod.object({
+  url: zod.string().url(),
+  expiresAt: zod.number(),
+});
+
+/**
+ * @summary All payouts across all creators
+ */
+export const ListAdminPayoutsResponseItem = zod.object({
+  id: zod.string(),
+  amount: zod.number(),
+  status: zod.enum(["queued", "paid", "failed"]),
+  failureReason: zod.string().nullable(),
+  stripeTransferId: zod.string().nullable(),
+  createdAt: zod.string().datetime({}),
+  paidAt: zod.string().datetime({}).nullable(),
+  failedAt: zod.string().datetime({}).nullable(),
+  referrerUserId: zod.string(),
+  referrerUsername: zod.string().nullable(),
+});
+export const ListAdminPayoutsResponse = zod.array(ListAdminPayoutsResponseItem);
+
+/**
+ * Synchronously runs the same batching pipeline as the cron tick. Returns the per-status counts so the admin sees what happened.
+
+ * @summary Trigger one payout cycle now
+ */
+export const RunAdminPayoutsResponse = zod.object({
+  considered: zod.number(),
+  paidOut: zod.number(),
+  failed: zod.number(),
+  skipped: zod.number(),
+  configured: zod.boolean(),
+});
+
+/**
+ * @summary Re-queue a failed payout for the next cycle
+ */
+export const RetryAdminPayoutParams = zod.object({
+  id: zod.string(),
+});
+
+export const RetryAdminPayoutResponse = zod.object({
+  requeued: zod.boolean(),
+  reason: zod.string().nullable(),
+});
+
+/**
  * @summary AI cost broken down by model
  */
 export const ListAdminCostByModelResponseItem = zod.object({

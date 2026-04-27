@@ -20,6 +20,7 @@ import type {
   AddDomainBody,
   AdminCostByModel,
   AdminMe,
+  AdminPayout,
   AdminRecentBuild,
   AdminStats,
   AdminTemplateItem,
@@ -27,6 +28,7 @@ import type {
   AppConfig,
   Build,
   CreateBuildBody,
+  CreateOnboardingLinkBody,
   CreateProjectBody,
   CreateProjectResponse,
   DeleteProjectFileResponse,
@@ -39,7 +41,11 @@ import type {
   FinalizeUploadResponse,
   HealthStatus,
   Me,
+  MyPayoutAccount,
   MyReferrals,
+  PayoutCycleResult,
+  PayoutError,
+  PayoutOnboardingLink,
   Project,
   ProjectDomain,
   ProjectFile,
@@ -48,6 +54,7 @@ import type {
   PublishResponse,
   PublishStatus,
   RenameProjectBody,
+  RetryPayoutResponse,
   SetFeaturedTemplateBody,
   SetPrimaryDomainResponse,
   StorageError,
@@ -3485,6 +3492,415 @@ export function useGetMyReferrals<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Current user's Stripe Connect payout account status
+ */
+export const getGetMyPayoutAccountUrl = () => {
+  return `/api/me/payouts/account`;
+};
+
+export const getMyPayoutAccount = async (
+  options?: RequestInit,
+): Promise<MyPayoutAccount> => {
+  return customFetch<MyPayoutAccount>(getGetMyPayoutAccountUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMyPayoutAccountQueryKey = () => {
+  return [`/api/me/payouts/account`] as const;
+};
+
+export const getGetMyPayoutAccountQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyPayoutAccount>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyPayoutAccount>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetMyPayoutAccountQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMyPayoutAccount>>
+  > = ({ signal }) => getMyPayoutAccount({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyPayoutAccount>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMyPayoutAccountQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyPayoutAccount>>
+>;
+export type GetMyPayoutAccountQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Current user's Stripe Connect payout account status
+ */
+
+export function useGetMyPayoutAccount<
+  TData = Awaited<ReturnType<typeof getMyPayoutAccount>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyPayoutAccount>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMyPayoutAccountQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Lazily provisions a Connect Express account on first call, then returns a single-use Stripe-hosted onboarding URL. The frontend navigates the user to it; Stripe redirects back to `returnUrl`/`refreshUrl` when they're done.
+
+ * @summary Start (or resume) Stripe Connect Express onboarding
+ */
+export const getCreateMyPayoutOnboardingLinkUrl = () => {
+  return `/api/me/payouts/account/onboarding-link`;
+};
+
+export const createMyPayoutOnboardingLink = async (
+  createOnboardingLinkBody: CreateOnboardingLinkBody,
+  options?: RequestInit,
+): Promise<PayoutOnboardingLink> => {
+  return customFetch<PayoutOnboardingLink>(
+    getCreateMyPayoutOnboardingLinkUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(createOnboardingLinkBody),
+    },
+  );
+};
+
+export const getCreateMyPayoutOnboardingLinkMutationOptions = <
+  TError = ErrorType<PayoutError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createMyPayoutOnboardingLink>>,
+    TError,
+    { data: BodyType<CreateOnboardingLinkBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createMyPayoutOnboardingLink>>,
+  TError,
+  { data: BodyType<CreateOnboardingLinkBody> },
+  TContext
+> => {
+  const mutationKey = ["createMyPayoutOnboardingLink"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createMyPayoutOnboardingLink>>,
+    { data: BodyType<CreateOnboardingLinkBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createMyPayoutOnboardingLink(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateMyPayoutOnboardingLinkMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createMyPayoutOnboardingLink>>
+>;
+export type CreateMyPayoutOnboardingLinkMutationBody =
+  BodyType<CreateOnboardingLinkBody>;
+export type CreateMyPayoutOnboardingLinkMutationError = ErrorType<PayoutError>;
+
+/**
+ * @summary Start (or resume) Stripe Connect Express onboarding
+ */
+export const useCreateMyPayoutOnboardingLink = <
+  TError = ErrorType<PayoutError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createMyPayoutOnboardingLink>>,
+    TError,
+    { data: BodyType<CreateOnboardingLinkBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createMyPayoutOnboardingLink>>,
+  TError,
+  { data: BodyType<CreateOnboardingLinkBody> },
+  TContext
+> => {
+  return useMutation(getCreateMyPayoutOnboardingLinkMutationOptions(options));
+};
+
+/**
+ * @summary All payouts across all creators
+ */
+export const getListAdminPayoutsUrl = () => {
+  return `/api/admin/payouts`;
+};
+
+export const listAdminPayouts = async (
+  options?: RequestInit,
+): Promise<AdminPayout[]> => {
+  return customFetch<AdminPayout[]>(getListAdminPayoutsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListAdminPayoutsQueryKey = () => {
+  return [`/api/admin/payouts`] as const;
+};
+
+export const getListAdminPayoutsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listAdminPayouts>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listAdminPayouts>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListAdminPayoutsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listAdminPayouts>>
+  > = ({ signal }) => listAdminPayouts({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listAdminPayouts>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListAdminPayoutsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listAdminPayouts>>
+>;
+export type ListAdminPayoutsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary All payouts across all creators
+ */
+
+export function useListAdminPayouts<
+  TData = Awaited<ReturnType<typeof listAdminPayouts>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listAdminPayouts>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListAdminPayoutsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Synchronously runs the same batching pipeline as the cron tick. Returns the per-status counts so the admin sees what happened.
+
+ * @summary Trigger one payout cycle now
+ */
+export const getRunAdminPayoutsUrl = () => {
+  return `/api/admin/payouts/run`;
+};
+
+export const runAdminPayouts = async (
+  options?: RequestInit,
+): Promise<PayoutCycleResult> => {
+  return customFetch<PayoutCycleResult>(getRunAdminPayoutsUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getRunAdminPayoutsMutationOptions = <
+  TError = ErrorType<PayoutError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof runAdminPayouts>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof runAdminPayouts>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["runAdminPayouts"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof runAdminPayouts>>,
+    void
+  > = () => {
+    return runAdminPayouts(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RunAdminPayoutsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof runAdminPayouts>>
+>;
+
+export type RunAdminPayoutsMutationError = ErrorType<PayoutError>;
+
+/**
+ * @summary Trigger one payout cycle now
+ */
+export const useRunAdminPayouts = <
+  TError = ErrorType<PayoutError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof runAdminPayouts>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof runAdminPayouts>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getRunAdminPayoutsMutationOptions(options));
+};
+
+/**
+ * @summary Re-queue a failed payout for the next cycle
+ */
+export const getRetryAdminPayoutUrl = (id: string) => {
+  return `/api/admin/payouts/${id}/retry`;
+};
+
+export const retryAdminPayout = async (
+  id: string,
+  options?: RequestInit,
+): Promise<RetryPayoutResponse> => {
+  return customFetch<RetryPayoutResponse>(getRetryAdminPayoutUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getRetryAdminPayoutMutationOptions = <
+  TError = ErrorType<PayoutError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof retryAdminPayout>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof retryAdminPayout>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["retryAdminPayout"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof retryAdminPayout>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return retryAdminPayout(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RetryAdminPayoutMutationResult = NonNullable<
+  Awaited<ReturnType<typeof retryAdminPayout>>
+>;
+
+export type RetryAdminPayoutMutationError = ErrorType<PayoutError>;
+
+/**
+ * @summary Re-queue a failed payout for the next cycle
+ */
+export const useRetryAdminPayout = <
+  TError = ErrorType<PayoutError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof retryAdminPayout>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof retryAdminPayout>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getRetryAdminPayoutMutationOptions(options));
+};
 
 /**
  * @summary AI cost broken down by model

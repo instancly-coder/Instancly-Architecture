@@ -6,6 +6,7 @@ import {
   projectsTable,
   buildsTable,
   transactionsTable,
+  payoutsTable,
 } from "@workspace/db";
 import { authConfigured, getAuthedUser } from "../middlewares/auth";
 import {
@@ -14,7 +15,13 @@ import {
   ListAdminRecentBuildsResponse,
   ListAdminUsersResponse,
   ListAdminCostByModelResponse,
+  ListAdminPayoutsResponse,
+  RunAdminPayoutsResponse,
+  RetryAdminPayoutResponse,
 } from "@workspace/api-zod";
+import { stripeConfigured } from "../lib/stripe";
+import { retryFailedPayout, runPayoutCycle } from "../services/payouts";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
@@ -299,6 +306,118 @@ router.patch(
       authorDisplayName: author?.displayName ?? "",
       createdAt: updated.createdAt.toISOString(),
     });
+  },
+);
+
+router.get(
+  "/admin/payouts",
+  requireAdmin,
+  async (_req: Request, res: Response): Promise<void> => {
+    // Most-recent first so admins see fresh failures at the top.
+    const rows = await db
+      .select({
+        id: payoutsTable.id,
+        amount: payoutsTable.amount,
+        status: payoutsTable.status,
+        failureReason: payoutsTable.failureReason,
+        stripeTransferId: payoutsTable.stripeTransferId,
+        createdAt: payoutsTable.createdAt,
+        paidAt: payoutsTable.paidAt,
+        failedAt: payoutsTable.failedAt,
+        referrerUserId: payoutsTable.referrerUserId,
+        referrerUsername: usersTable.username,
+      })
+      .from(payoutsTable)
+      .leftJoin(usersTable, eq(usersTable.id, payoutsTable.referrerUserId))
+      .orderBy(desc(payoutsTable.createdAt))
+      .limit(500);
+
+    res.json(
+      ListAdminPayoutsResponse.parse(
+        rows.map((r) => ({
+          id: r.id,
+          amount: Number(r.amount),
+          status: r.status,
+          failureReason: r.failureReason,
+          stripeTransferId: r.stripeTransferId,
+          createdAt: r.createdAt.toISOString(),
+          paidAt: r.paidAt ? r.paidAt.toISOString() : null,
+          failedAt: r.failedAt ? r.failedAt.toISOString() : null,
+          referrerUserId: r.referrerUserId,
+          referrerUsername: r.referrerUsername,
+        })),
+      ),
+    );
+  },
+);
+
+router.post(
+  "/admin/payouts/run",
+  requireAdmin,
+  async (_req: Request, res: Response): Promise<void> => {
+    if (!stripeConfigured()) {
+      res.status(503).json({
+        status: "error",
+        message:
+          "Payouts are not configured on this server (STRIPE_SECRET_KEY missing).",
+      });
+      return;
+    }
+    try {
+      const result = await runPayoutCycle();
+      res.json(RunAdminPayoutsResponse.parse(result));
+    } catch (err) {
+      logger.error({ err }, "admin/payouts/run: cycle failed");
+      res.status(500).json({
+        status: "error",
+        message: err instanceof Error ? err.message : "Payout cycle failed",
+      });
+    }
+  },
+);
+
+router.post(
+  "/admin/payouts/:id/retry",
+  requireAdmin,
+  async (req: Request, res: Response): Promise<void> => {
+    const id = req.params.id;
+    if (typeof id !== "string" || id.length === 0) {
+      res
+        .status(400)
+        .json({ status: "error", message: "Missing payout id" });
+      return;
+    }
+    try {
+      // Retry just unlinks the earnings + deletes the failed payout
+      // row; the next cycle (manual or cron) re-batches and re-attempts
+      // the transfer with a fresh idempotency key.
+      const result = await retryFailedPayout(id);
+      if (!result.requeued) {
+        if (result.reason === "not_found") {
+          res
+            .status(404)
+            .json({ status: "error", message: "Payout not found" });
+          return;
+        }
+        res.status(409).json({
+          status: "error",
+          message: `Only failed payouts can be retried (${result.reason ?? "not retryable"})`,
+        });
+        return;
+      }
+      res.json(
+        RetryAdminPayoutResponse.parse({
+          requeued: true,
+          reason: null,
+        }),
+      );
+    } catch (err) {
+      logger.error({ err, payoutId: id }, "admin/payouts/:id/retry failed");
+      res.status(500).json({
+        status: "error",
+        message: err instanceof Error ? err.message : "Retry failed",
+      });
+    }
   },
 );
 

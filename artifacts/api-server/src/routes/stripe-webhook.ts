@@ -7,6 +7,7 @@ import {
   usersTable,
   transactionsTable,
   referralEarningsTable,
+  payoutsTable,
 } from "@workspace/db";
 import { logger } from "../lib/logger";
 import {
@@ -379,6 +380,178 @@ const PAYMENT_SUCCESS_EVENTS = new Set([
   "invoice.payment_succeeded",
 ]);
 
+// Connect Express onboarding lifecycle: fires whenever the linked
+// account's capabilities change (e.g. `payouts_enabled` flips true
+// once Stripe finishes verifying ID + bank). We mirror it onto our
+// own cached `users.stripeConnectStatus` so the earnings UI doesn't
+// have to round-trip Stripe on every page load.
+const CONNECT_ACCOUNT_EVENTS = new Set(["account.updated"]);
+
+// Outgoing transfer lifecycle. We use these as a backstop for the
+// in-process payout pipeline (which already updates the payout row
+// synchronously on the API call's response) — if the immediate path
+// loses the race or the transfer ultimately reverses, the webhook
+// event is the source of truth.
+const TRANSFER_EVENTS = new Set([
+  "transfer.paid",
+  "transfer.failed",
+  "transfer.reversed",
+]);
+
+type StripeConnectAccountObject = {
+  id?: string | null;
+  payouts_enabled?: boolean;
+  charges_enabled?: boolean;
+  details_submitted?: boolean;
+};
+
+type StripeTransferObject = {
+  id?: string | null;
+  failure_message?: string | null;
+  failure_code?: string | null;
+  amount_reversed?: number | null;
+  amount?: number | null;
+  metadata?: Record<string, string> | null;
+};
+
+/**
+ * Mirror Stripe Connect account state onto the local users row whenever
+ * Stripe tells us something changed. We deliberately key off
+ * `payouts_enabled` (not `charges_enabled` or `details_submitted`)
+ * because that's the only flag that gates whether we can actually ship
+ * a transfer to this destination.
+ */
+async function processConnectAccountUpdate(
+  event: { id: string },
+  obj: StripeConnectAccountObject,
+): Promise<void> {
+  const accountId = obj.id;
+  if (!accountId) return;
+  const status = obj.payouts_enabled ? "verified" : "pending";
+  const updated = await db
+    .update(usersTable)
+    .set({ stripeConnectStatus: status })
+    .where(eq(usersTable.stripeConnectAccountId, accountId))
+    .returning({ id: usersTable.id });
+  if (updated.length === 0) {
+    // Account belongs to nobody we know about — log so we can spot
+    // configuration drift, but ack to stop Stripe retrying.
+    logger.warn(
+      { eventId: event.id, accountId },
+      "Stripe webhook: account.updated for unknown Connect account",
+    );
+    return;
+  }
+  logger.info(
+    { eventId: event.id, accountId, status, userIds: updated.map((u) => u.id) },
+    "Stripe webhook: refreshed Connect account status",
+  );
+}
+
+/**
+ * Reconcile a payout row from a `transfer.*` event. Most of the time
+ * the in-process pipeline has already done the right thing
+ * synchronously; this exists as the source-of-truth fallback for the
+ * cases where:
+ *   - the transfer eventually fails async (rare but real with bank
+ *     rejections that come back hours later) → flip payout to failed
+ *     and revert the linked earnings rows so they get re-batched
+ *   - the transfer is reversed (e.g. recipient closed their bank) →
+ *     same revert path
+ *   - the transfer paid event arrives after a transient blip dropped
+ *     the in-process update → ensure the row is `paid`
+ *
+ * We look up the payout by its `stripeTransferId`. If we don't have a
+ * row matching the transfer, the metadata.payoutId fallback covers the
+ * (very narrow) window where the transfer was created but the local
+ * row hadn't yet been stamped with the id.
+ */
+async function processTransferEvent(
+  event: { id: string; type: string },
+  obj: StripeTransferObject,
+): Promise<void> {
+  const transferId = obj.id;
+  if (!transferId) return;
+
+  let payoutRow = (
+    await db
+      .select({
+        id: payoutsTable.id,
+        status: payoutsTable.status,
+        referrerUserId: payoutsTable.referrerUserId,
+      })
+      .from(payoutsTable)
+      .where(eq(payoutsTable.stripeTransferId, transferId))
+      .limit(1)
+  )[0];
+
+  if (!payoutRow && obj.metadata?.payoutId) {
+    payoutRow = (
+      await db
+        .select({
+          id: payoutsTable.id,
+          status: payoutsTable.status,
+          referrerUserId: payoutsTable.referrerUserId,
+        })
+        .from(payoutsTable)
+        .where(eq(payoutsTable.id, obj.metadata.payoutId))
+        .limit(1)
+    )[0];
+  }
+
+  if (!payoutRow) {
+    logger.warn(
+      { eventId: event.id, transferId },
+      "Stripe webhook: transfer event for unknown payout, skipping",
+    );
+    return;
+  }
+
+  if (event.type === "transfer.paid") {
+    if (payoutRow.status === "paid") return;
+    await db
+      .update(payoutsTable)
+      .set({
+        status: "paid",
+        stripeTransferId: transferId,
+        paidAt: new Date(),
+        failureReason: null,
+        failedAt: null,
+      })
+      .where(eq(payoutsTable.id, payoutRow.id));
+    await db
+      .update(referralEarningsTable)
+      .set({ status: "paid", paidAt: new Date(), failureReason: null })
+      .where(eq(referralEarningsTable.payoutId, payoutRow.id));
+    return;
+  }
+
+  // transfer.failed / transfer.reversed
+  const reason =
+    obj.failure_message ?? obj.failure_code ?? `Stripe ${event.type}`;
+  await db
+    .update(payoutsTable)
+    .set({
+      status: "failed",
+      failureReason: reason.slice(0, 200),
+      failedAt: new Date(),
+    })
+    .where(eq(payoutsTable.id, payoutRow.id));
+  await db
+    .update(referralEarningsTable)
+    .set({
+      status: "pending",
+      payoutId: null,
+      paidAt: null,
+      failureReason: reason.slice(0, 200),
+    })
+    .where(eq(referralEarningsTable.payoutId, payoutRow.id));
+  logger.warn(
+    { eventId: event.id, transferId, payoutId: payoutRow.id, reason },
+    "Stripe webhook: transfer failed/reversed, reverted earnings to pending",
+  );
+}
+
 /**
  * Stripe webhook receiver. Mounted with `express.raw` (not the global
  * JSON parser) so we still have the original byte stream available for
@@ -428,21 +601,36 @@ router.post(
       return;
     }
 
-    if (!event.type || !PAYMENT_SUCCESS_EVENTS.has(event.type)) {
+    const isPayment = event.type && PAYMENT_SUCCESS_EVENTS.has(event.type);
+    const isConnect = event.type && CONNECT_ACCOUNT_EVENTS.has(event.type);
+    const isTransfer = event.type && TRANSFER_EVENTS.has(event.type);
+    if (!isPayment && !isConnect && !isTransfer) {
       // Acknowledge unrelated events so Stripe stops retrying them.
       res.json({ received: true, handled: false });
       return;
     }
 
     try {
-      await processPaymentSuccess(event);
+      if (isPayment) {
+        await processPaymentSuccess(event);
+      } else if (isConnect) {
+        await processConnectAccountUpdate(
+          event,
+          (event.data?.object ?? {}) as StripeConnectAccountObject,
+        );
+      } else if (isTransfer) {
+        await processTransferEvent(
+          event,
+          (event.data?.object ?? {}) as StripeTransferObject,
+        );
+      }
     } catch (err) {
       logger.error(
         { err, eventId: event.id, eventType: event.type },
-        "Stripe webhook: failed to process payment success event",
+        "Stripe webhook: failed to process event",
       );
       // Surface a 500 so Stripe retries — better than silently dropping
-      // the event and leaving the user under-credited.
+      // the event and leaving downstream state out of sync.
       res
         .status(500)
         .json({ status: "error", message: "Processing failed" });

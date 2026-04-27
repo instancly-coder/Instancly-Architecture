@@ -18,10 +18,21 @@ import {
   GetMyEarningsSummaryResponse,
   ListMyEarningsResponse,
   GetMyReferralsResponse,
+  GetMyPayoutAccountResponse,
+  CreateMyPayoutOnboardingLinkBody,
+  CreateMyPayoutOnboardingLinkResponse,
 } from "@workspace/api-zod";
 import { DEFAULT_REFERRAL_COMMISSION_PCT } from "../lib/referral-commission";
 import { authConfigured, getAuthedUser } from "../middlewares/auth";
 import { removeProjectDomain } from "../lib/vercel";
+import {
+  createAccountLink,
+  createConnectExpressAccount,
+  getConnectAccount,
+  StripeApiError,
+  stripeConfigured,
+} from "../lib/stripe";
+import { minPayoutGbp } from "../services/payouts";
 import { logger } from "../lib/logger";
 
 // Best-effort cleanup of every custom domain attached to a Vercel project
@@ -369,6 +380,150 @@ router.get(
         })),
       }),
     );
+  },
+);
+
+router.get(
+  "/me/payouts/account",
+  async (req: Request, res: Response): Promise<void> => {
+    const user = await getMe(req);
+    if (!user) {
+      res.status(401).json({ status: "error", message: "Unauthenticated" });
+      return;
+    }
+
+    // The cached `stripeConnectStatus` is the source of truth for the
+    // CTA copy — we don't round-trip Stripe on every page load. The
+    // `account.updated` webhook keeps the cache fresh, and the
+    // onboarding-link endpoint refreshes it on demand.
+    const cachedStatus = user.stripeConnectStatus;
+    const validStatus =
+      cachedStatus === "pending" || cachedStatus === "verified"
+        ? cachedStatus
+        : null;
+
+    // We still surface `pendingTotal` because the earnings page wants
+    // to render "you have £X waiting" alongside the connect CTA.
+    const [agg] = await db
+      .select({
+        pending: sql<string>`coalesce(sum(${referralEarningsTable.amount}) filter (where ${referralEarningsTable.status} = 'pending'), 0)`,
+      })
+      .from(referralEarningsTable)
+      .where(eq(referralEarningsTable.referrerUserId, user.id));
+
+    res.json(
+      GetMyPayoutAccountResponse.parse({
+        connected: !!user.stripeConnectAccountId,
+        status: validStatus,
+        // `payoutsEnabled`/`detailsSubmitted` mirror the cached fields
+        // so the UI can branch on a richer "in progress vs done" state
+        // without an extra round-trip. Both default to false until we
+        // see a verified status.
+        payoutsEnabled: validStatus === "verified",
+        detailsSubmitted: validStatus !== null,
+        pendingTotal: Number(agg?.pending ?? 0),
+        minPayoutGbp: minPayoutGbp(),
+      }),
+    );
+  },
+);
+
+router.post(
+  "/me/payouts/account/onboarding-link",
+  async (req: Request, res: Response): Promise<void> => {
+    const user = await getMe(req);
+    if (!user) {
+      res.status(401).json({ status: "error", message: "Unauthenticated" });
+      return;
+    }
+    if (!stripeConfigured()) {
+      res.status(503).json({
+        status: "error",
+        message:
+          "Payouts are not configured on this server (STRIPE_SECRET_KEY missing).",
+      });
+      return;
+    }
+
+    const parsed = CreateMyPayoutOnboardingLinkBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        status: "error",
+        message: parsed.error.issues[0]?.message ?? "Invalid body",
+      });
+      return;
+    }
+
+    try {
+      // Lazily provision the Connect account on first call. Subsequent
+      // calls just refresh the cached status and mint a new link.
+      let accountId = user.stripeConnectAccountId;
+      if (!accountId) {
+        const account = await createConnectExpressAccount({
+          email: user.email,
+          metadata: { userId: user.id, username: user.username },
+        });
+        accountId = account.id;
+        await db
+          .update(usersTable)
+          .set({
+            stripeConnectAccountId: accountId,
+            stripeConnectStatus: account.payouts_enabled
+              ? "verified"
+              : "pending",
+          })
+          .where(eq(usersTable.id, user.id));
+      } else {
+        // Refresh the cached status so the UI doesn't show "pending"
+        // forever if the user comes back after finishing onboarding.
+        try {
+          const account = await getConnectAccount(accountId);
+          await db
+            .update(usersTable)
+            .set({
+              stripeConnectStatus: account.payouts_enabled
+                ? "verified"
+                : "pending",
+            })
+            .where(eq(usersTable.id, user.id));
+        } catch (err) {
+          // Status refresh failures shouldn't block minting a fresh
+          // onboarding link — the webhook will eventually catch up.
+          logger.warn(
+            { err, accountId, userId: user.id },
+            "onboarding-link: status refresh failed, continuing",
+          );
+        }
+      }
+
+      const link = await createAccountLink({
+        account: accountId,
+        returnUrl: parsed.data.returnUrl,
+        refreshUrl: parsed.data.refreshUrl,
+      });
+
+      res.json(
+        CreateMyPayoutOnboardingLinkResponse.parse({
+          url: link.url,
+          expiresAt: link.expires_at,
+        }),
+      );
+    } catch (err) {
+      const reason =
+        err instanceof StripeApiError
+          ? `Stripe ${err.status}${err.stripeCode ? ` (${err.stripeCode})` : ""}`
+          : err instanceof Error
+            ? err.message
+            : "Unknown error";
+      logger.error(
+        { err, userId: user.id },
+        "onboarding-link: failed to create Connect onboarding link",
+      );
+      res.status(502).json({
+        status: "error",
+        message: `Failed to start onboarding: ${reason}`,
+      });
+    }
   },
 );
 

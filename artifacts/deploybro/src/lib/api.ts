@@ -19,9 +19,13 @@ import type {
   DomainDnsMismatch,
   DomainSuggestedRecord,
   DomainVerificationRecord,
+  AdminPayout as GeneratedAdminPayout,
   Earning as GeneratedEarning,
   EarningsSummary as GeneratedEarningsSummary,
+  MyPayoutAccount as GeneratedMyPayoutAccount,
   MyReferrals as GeneratedMyReferrals,
+  PayoutCycleResult as GeneratedPayoutCycleResult,
+  PayoutOnboardingLink as GeneratedPayoutOnboardingLink,
   ReferralSourceBreakdown as GeneratedReferralSourceBreakdown,
   ReferredUser as GeneratedReferredUser,
   ExploreItem,
@@ -941,5 +945,70 @@ export function useRevealProjectEnvVar(
         `/projects/${username}/${slug}/env-vars/${encodeURIComponent(key)}/reveal`,
         { method: "POST" },
       ),
+  });
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Creator payouts (Stripe Connect)
+// ────────────────────────────────────────────────────────────────────
+
+export type ApiMyPayoutAccount = GeneratedMyPayoutAccount;
+export type ApiPayoutOnboardingLink = GeneratedPayoutOnboardingLink;
+export type ApiAdminPayout = GeneratedAdminPayout;
+export type ApiPayoutCycleResult = GeneratedPayoutCycleResult;
+
+export function useMyPayoutAccount() {
+  return useQuery({
+    queryKey: ["me", "payouts", "account"],
+    queryFn: () => request<ApiMyPayoutAccount>("/me/payouts/account"),
+  });
+}
+
+// Returns the Stripe-hosted onboarding URL. The caller should redirect
+// the browser to it; on completion Stripe sends the user back to
+// `returnUrl` (or `refreshUrl` if they bail out mid-flow).
+export function useStartPayoutOnboarding() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { returnUrl: string; refreshUrl: string }) =>
+      request<ApiPayoutOnboardingLink>(
+        "/me/payouts/account/onboarding-link",
+        { method: "POST", body: JSON.stringify(vars) },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["me", "payouts", "account"] });
+    },
+  });
+}
+
+export function useAdminPayouts() {
+  return useQuery({
+    queryKey: ["admin", "payouts"],
+    queryFn: () => request<ApiAdminPayout[]>("/admin/payouts"),
+  });
+}
+
+export function useRunAdminPayouts() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      request<ApiPayoutCycleResult>("/admin/payouts/run", { method: "POST" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "payouts"] });
+    },
+  });
+}
+
+export function useRetryAdminPayout() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      request<{ requeued: boolean; reason: string | null }>(
+        `/admin/payouts/${id}/retry`,
+        { method: "POST" },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "payouts"] });
+    },
   });
 }

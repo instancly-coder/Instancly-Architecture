@@ -6,4 +6,5 @@ export * from "./project-files";
 export * from "./deployments";
 export * from "./project-domains";
 export * from "./referral-earnings";
+export * from "./payouts";
 export * from "./project-env-vars";

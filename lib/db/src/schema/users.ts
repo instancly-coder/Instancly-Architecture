@@ -21,6 +21,20 @@ export const usersTable = pgTable("users", {
   // NULL means "use the global default" (currently 15). Stored as an
   // integer for clean JSON; values are interpreted as a percentage.
   referralCommissionPct: integer("referral_commission_pct"),
+  // Stripe Connect Express account that earnings get paid out to.
+  // NULL until the creator clicks "Connect payout method" on the
+  // earnings page. Once present, the payout pipeline can transfer
+  // pending earnings to this destination on its next run.
+  stripeConnectAccountId: text("stripe_connect_account_id"),
+  // Cached high-level state of the linked Connect account so the
+  // earnings UI can render the right CTA without round-tripping to
+  // Stripe on every page load. Refreshed via the `account.updated`
+  // webhook AND on every onboarding-link request:
+  //   NULL        — never connected
+  //   "pending"   — account created but onboarding incomplete OR
+  //                 `payouts_enabled` is still false
+  //   "verified"  — `payouts_enabled === true`; eligible for payouts
+  stripeConnectStatus: text("stripe_connect_status"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 

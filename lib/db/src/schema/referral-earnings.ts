@@ -34,6 +34,18 @@ export const referralEarningsTable = pgTable(
     commissionPct: integer("commission_pct").notNull(),
     kind: text("kind").default("recurring").notNull(),
     status: text("status").default("pending").notNull(),
+    // Set when the row gets attached to a payout batch. We deliberately
+    // do NOT FK-constrain this with a hard reference because the
+    // payouts table itself imports this one's owner column transitively
+    // through `usersTable`; a stringly-loose ref via uuid is enough for
+    // joins and avoids a circular schema import. On payout failure we
+    // null this back out and revert `status` to 'pending'.
+    payoutId: uuid("payout_id"),
+    // Mirrors `payouts.failureReason` for the most recent failed
+    // attempt against this row, copied here so the per-creator
+    // earnings table can surface the error inline without a join.
+    // Cleared when the row is re-batched into a fresh payout.
+    failureReason: text("failure_reason"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),

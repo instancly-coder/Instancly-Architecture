@@ -455,6 +455,89 @@ referral earning. 0 when `total` is 0. Rounded to 1 decimal.
   users: ReferredUser[];
 }
 
+export type MyPayoutAccountStatus =
+  | (typeof MyPayoutAccountStatus)[keyof typeof MyPayoutAccountStatus]
+  | null;
+
+export const MyPayoutAccountStatus = {
+  pending: "pending",
+  verified: "verified",
+} as const;
+
+/**
+ * Cached state of the current user's Stripe Connect Express
+account. `status` is null until they first click "Connect", then
+"pending" until Stripe finishes verifying ID + bank, then
+"verified" once `payouts_enabled` is true. `pendingTotal` is
+their unpaid referral earnings in GBP — useful for rendering
+"you have £X waiting" copy alongside the CTA.
+
+ */
+export interface MyPayoutAccount {
+  connected: boolean;
+  status: MyPayoutAccountStatus;
+  payoutsEnabled: boolean;
+  detailsSubmitted: boolean;
+  pendingTotal: number;
+  minPayoutGbp: number;
+}
+
+/**
+ * Where Stripe should bounce the user back to once they finish (or
+bail out of) the hosted onboarding flow. Both URLs MUST be
+absolute — Stripe rejects relative URLs.
+
+ */
+export interface CreateOnboardingLinkBody {
+  returnUrl: string;
+  refreshUrl: string;
+}
+
+export interface PayoutOnboardingLink {
+  url: string;
+  expiresAt: number;
+}
+
+export type AdminPayoutStatus =
+  (typeof AdminPayoutStatus)[keyof typeof AdminPayoutStatus];
+
+export const AdminPayoutStatus = {
+  queued: "queued",
+  paid: "paid",
+  failed: "failed",
+} as const;
+
+export interface AdminPayout {
+  id: string;
+  amount: number;
+  status: AdminPayoutStatus;
+  failureReason: string | null;
+  stripeTransferId: string | null;
+  createdAt: string;
+  paidAt: string | null;
+  failedAt: string | null;
+  referrerUserId: string;
+  referrerUsername: string | null;
+}
+
+export interface PayoutCycleResult {
+  considered: number;
+  paidOut: number;
+  failed: number;
+  skipped: number;
+  configured: boolean;
+}
+
+export interface RetryPayoutResponse {
+  requeued: boolean;
+  reason: string | null;
+}
+
+export interface PayoutError {
+  status: string;
+  message: string;
+}
+
 export interface UploadUrlRequest {
   /** @minLength 1 */
   name: string;

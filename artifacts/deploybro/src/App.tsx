@@ -45,6 +45,7 @@ import AdminModels from "@/pages/admin/models";
 import AdminUsers from "@/pages/admin/users";
 import AdminTemplates from "@/pages/admin/templates";
 import AdminRevenue from "@/pages/admin/revenue";
+import AdminPayouts from "@/pages/admin/payouts";
 import {
   Docs,
   Changelog,
@@ -93,6 +94,7 @@ function Router() {
       <Route path="/admin/users" component={gated(AdminUsers)} />
       <Route path="/admin/templates" component={gated(AdminTemplates)} />
       <Route path="/admin/revenue" component={gated(AdminRevenue)} />
+      <Route path="/admin/payouts" component={gated(AdminPayouts)} />
       <Route path="/docs" component={Docs} />
       <Route path="/changelog" component={Changelog} />
       <Route path="/templates" component={Templates} />
