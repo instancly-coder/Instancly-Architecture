@@ -16,7 +16,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { MarketingNav } from "@/components/marketing-nav";
 import { MarketingFooter } from "@/components/marketing-footer";
-import { useTemplates, useUser } from "@/lib/api";
+import { useTemplates, useMe } from "@/lib/api";
 import {
   Popover,
   PopoverContent,
@@ -88,7 +88,7 @@ export default function Landing() {
   const [attachNotice, setAttachNotice] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { data: templates = [], isLoading } = useTemplates();
-  const { data: user } = useUser(undefined);
+  const { data: me } = useMe();
 
   useEffect(() => {
     const id = window.setInterval(() => {
@@ -98,8 +98,8 @@ export default function Landing() {
   }, []);
 
   useEffect(() => {
-    if (user) navigate("/dashboard");
-  }, [user, navigate]);
+    if (me) navigate("/dashboard");
+  }, [me, navigate]);
 
   const onPickFiles = (files: FileList | null) => {
     if (!files) return;
