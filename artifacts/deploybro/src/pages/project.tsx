@@ -134,7 +134,7 @@ export default function Project() {
                 <div className="w-3 h-3 rounded-full bg-foreground/20"></div>
               </div>
               <div className="mx-auto text-[10px] sm:text-xs font-mono text-secondary bg-background px-3 sm:px-12 lg:px-24 py-1 rounded border border-border truncate max-w-[70%] sm:max-w-[60%] lg:max-w-none">
-                {slug}.deploybro.com
+                {slug}.deploybro.app
               </div>
             </div>
             <div className="aspect-[16/10] bg-background relative">

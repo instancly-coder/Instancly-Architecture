@@ -588,7 +588,7 @@ export default function Builder() {
   const [activeTab, setActiveTab] = useState<TabKey>("preview");
   const [viewport, setViewport] = useState<"desktop" | "tablet" | "mobile">("desktop");
 
-  const liveUrl = `https://${slug}.deploybro.com`;
+  const liveUrl = `https://${slug}.deploybro.app`;
   const [urlValue, setUrlValue] = useState(liveUrl);
   const [iframeKey, setIframeKey] = useState(0);
 
@@ -1373,7 +1373,7 @@ export default function Builder() {
   }, [isStreaming, chatInput]);
 
   const copyUrl = () => {
-    navigator.clipboard.writeText(`${slug}.deploybro.com`);
+    navigator.clipboard.writeText(`${slug}.deploybro.app`);
     toast.success("URL copied");
   };
 

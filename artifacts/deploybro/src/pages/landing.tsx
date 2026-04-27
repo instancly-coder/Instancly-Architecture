@@ -59,7 +59,7 @@ const STEPS = [
     step: "03",
     title: "Refine and ship",
     body: "Tweak it with simple feedback — \"make the hero bigger\", \"add login\". When it's right, hit Publish. You get a real URL in seconds.",
-    url: "recipes.deploybro.com",
+    url: "recipes.deploybro.app",
   },
 ];
 
