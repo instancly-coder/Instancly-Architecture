@@ -203,14 +203,14 @@ export default function Landing() {
             </Link>
           </div>
           <div className="px-4 sm:px-8 max-w-7xl mx-auto w-full text-center flex flex-col items-center justify-center min-h-[80vh] pt-2 pb-16">
-            <h1 className="flex flex-col items-center text-4xl sm:text-5xl md:text-7xl font-bold tracking-tight mb-6 leading-none gap-3 sm:gap-4 md:gap-5">
+            <h1 className="flex flex-col items-center text-4xl sm:text-5xl md:text-7xl font-black tracking-tight mb-6 leading-none gap-3 sm:gap-4 md:gap-5">
               <span>Ship your</span>
               <span key={nounIndex} className="inline-block text-primary animate-rotate-in italic font-black text-5xl sm:text-6xl md:text-8xl leading-none tracking-tight" style={{ textShadow: "0 0 50px hsl(215 100% 60% / 0.6)" }}>
                 {ROTATING_NOUNS[nounIndex]}
               </span>
               <span>in an afternoon.</span>
             </h1>
-            <p className="text-base sm:text-lg text-foreground font-semibold max-w-xl mx-auto mb-10">
+            <p className="text-base sm:text-lg text-muted-foreground font-normal max-w-xl mx-auto mb-10">
               Describe it. Watch DeployBro build it live. <span className="whitespace-nowrap">Publish to a real URL.</span>
             </p>
             <div className="w-full max-w-2xl mx-auto">
