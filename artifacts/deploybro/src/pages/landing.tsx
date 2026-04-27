@@ -23,10 +23,10 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 
-const HOME_MODELS: { name: string; key: "haiku" | "sonnet" | "opus"; note: string }[] = [
+const HOME_MODELS: { name: string; key: "haiku" | "sonnet" | "opus"; note: string; isPro?: boolean }[] = [
   { name: "Economy Bro", key: "haiku",  note: "Fast & cheap"   },
-  { name: "Smart Bro",   key: "sonnet", note: "Balanced (recommended)" },
-  { name: "Power Bro",   key: "opus",   note: "Most capable"   },
+  { name: "Smart Bro",   key: "sonnet", note: "Balanced (recommended)", isPro: true },
+  { name: "Power Bro",   key: "opus",   note: "Most capable",            isPro: true },
 ];
 
 const ROTATING_NOUNS = [
@@ -273,6 +273,11 @@ export default function Landing() {
                         <button type="button" className="h-8 px-2.5 rounded-md inline-flex items-center gap-1.5 text-xs font-mono text-secondary hover:text-foreground hover:bg-surface-raised transition-colors min-w-0" title="Choose model">
                           <Cpu className="w-3.5 h-3.5 shrink-0" />
                           <span className="truncate">{selectedModel}</span>
+                          {HOME_MODELS.find((m) => m.name === selectedModel)?.isPro && (
+                            <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-mono uppercase tracking-wider bg-primary/15 text-primary border border-primary/30">
+                              Pro
+                            </span>
+                          )}
                           <ChevronDown className="w-3 h-3 opacity-60 shrink-0" />
                         </button>
                       </PopoverTrigger>
@@ -283,7 +288,14 @@ export default function Landing() {
                           return (
                             <button key={m.name} type="button" onClick={() => { setSelectedModel(m.name); setModelOpen(false); }} className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-xs text-foreground hover:bg-surface-raised transition-colors">
                               <div className="flex-1 min-w-0">
-                                <div className="font-medium truncate">{m.name}</div>
+                                <div className="font-medium truncate flex items-center gap-1.5">
+                                  <span className="truncate">{m.name}</span>
+                                  {m.isPro && (
+                                    <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-mono uppercase tracking-wider bg-primary/15 text-primary border border-primary/30">
+                                      Pro
+                                    </span>
+                                  )}
+                                </div>
                                 <div className="text-[10px] text-secondary font-mono">{m.note}</div>
                               </div>
                               {active && <Check className="w-3.5 h-3.5 text-primary shrink-0" />}
