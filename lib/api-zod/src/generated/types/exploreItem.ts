@@ -15,6 +15,7 @@ export interface ExploreItem {
   features: string[];
   clones: number;
   coverImageUrl: string | null;
+  screenshotUrl: string | null;
   lastBuiltAt: string;
   author: string;
   authorDisplayName: string;

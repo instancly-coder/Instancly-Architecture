@@ -48,6 +48,7 @@ router.get("/explore", async (req, res) => {
       features: projectsTable.features,
       clones: projectsTable.clones,
       coverImageUrl: projectsTable.coverImageUrl,
+      screenshotUrl: projectsTable.screenshotUrl,
       lastBuiltAt: projectsTable.lastBuiltAt,
       author: usersTable.username,
       authorDisplayName: usersTable.displayName,
@@ -63,6 +64,7 @@ router.get("/explore", async (req, res) => {
       rows.map((r) => ({
         ...r,
         features: r.features ?? [],
+        screenshotUrl: r.screenshotUrl ?? null,
         lastBuiltAt: r.lastBuiltAt.toISOString(),
       })),
     ),
@@ -82,6 +84,7 @@ router.get("/templates", async (_req, res) => {
       framework: projectsTable.framework,
       features: projectsTable.features,
       coverImageUrl: projectsTable.coverImageUrl,
+      screenshotUrl: projectsTable.screenshotUrl,
       clones: projectsTable.clones,
       author: usersTable.username,
       authorDisplayName: usersTable.displayName,
@@ -101,6 +104,7 @@ router.get("/templates", async (_req, res) => {
     rows.map((r) => ({
       ...r,
       features: r.features ?? [],
+      screenshotUrl: r.screenshotUrl ?? null,
     })),
   );
 });

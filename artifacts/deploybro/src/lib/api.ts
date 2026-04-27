@@ -703,6 +703,28 @@ export function usePublishStatus(
   });
 }
 
+// Trigger a fresh screenshot of a published project's live URL.
+// Returns the new screenshotUrl (or null if capture fails on the server).
+// On success, invalidates the project query so any card thumbnail updates.
+export function useRetriggerScreenshot(
+  username: string | undefined,
+  slug: string | undefined,
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      request<{ screenshotUrl: string | null }>(
+        `/projects/${username}/${slug}/screenshot`,
+        { method: "POST" },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["projects", username, slug] });
+      qc.invalidateQueries({ queryKey: ["explore"] });
+      qc.invalidateQueries({ queryKey: ["templates"] });
+    },
+  });
+}
+
 // ---- Custom domains ----
 export type ApiDomainVerificationRecord = DomainVerificationRecord;
 export type ApiDomainSuggestedRecord = DomainSuggestedRecord;

@@ -464,20 +464,29 @@ export default function Landing() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {templates.slice(0, 4).map((t) => (
                   <Link key={t.id} href={`/${t.author}/${t.slug}`} className="group rounded-xl border border-border bg-surface hover-elevate overflow-hidden flex flex-col">
-                    <div className="aspect-[4/3] bg-gradient-to-br from-primary/20 via-surface-raised to-background relative overflow-hidden p-3">
+                    <div className="aspect-[4/3] bg-gradient-to-br from-primary/20 via-surface-raised to-background relative overflow-hidden">
                       <div className="absolute top-2 right-2 px-2 py-0.5 rounded bg-primary text-primary-foreground text-[10px] font-mono uppercase z-10">{t.framework}</div>
-                      <div className="absolute inset-3 rounded bg-background/80 backdrop-blur-sm border border-border/50 p-2 flex flex-col gap-1.5 transition-transform group-hover:scale-[1.02]">
-                        <div className="h-1.5 w-1/3 rounded bg-foreground/30" />
-                        <div className="h-1 w-2/3 rounded bg-foreground/15" />
-                        <div className="grid grid-cols-3 gap-1 mt-1 flex-1">
-                          <div className="rounded bg-primary/60" />
-                          <div className="rounded bg-foreground/15" />
-                          <div className="rounded bg-foreground/15" />
-                          <div className="rounded bg-foreground/15" />
-                          <div className="rounded bg-primary/60" />
-                          <div className="rounded bg-foreground/15" />
+                      {(t.screenshotUrl ?? t.coverImageUrl) ? (
+                        <img
+                          src={(t.screenshotUrl ?? t.coverImageUrl)!}
+                          alt={t.name}
+                          loading="lazy"
+                          className="absolute inset-0 w-full h-full object-cover object-top transition-transform group-hover:scale-[1.02]"
+                        />
+                      ) : (
+                        <div className="absolute inset-3 rounded bg-background/80 backdrop-blur-sm border border-border/50 p-2 flex flex-col gap-1.5 transition-transform group-hover:scale-[1.02]">
+                          <div className="h-1.5 w-1/3 rounded bg-foreground/30" />
+                          <div className="h-1 w-2/3 rounded bg-foreground/15" />
+                          <div className="grid grid-cols-3 gap-1 mt-1 flex-1">
+                            <div className="rounded bg-primary/60" />
+                            <div className="rounded bg-foreground/15" />
+                            <div className="rounded bg-foreground/15" />
+                            <div className="rounded bg-foreground/15" />
+                            <div className="rounded bg-primary/60" />
+                            <div className="rounded bg-foreground/15" />
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                     <div className="p-4">
                       <h3 className="font-medium text-sm mb-1 group-hover:text-primary transition-colors">{t.name}</h3>

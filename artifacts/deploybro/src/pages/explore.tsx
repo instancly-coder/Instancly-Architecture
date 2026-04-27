@@ -147,12 +147,12 @@ function ExploreBody({
                 className="group rounded-xl border border-border bg-surface hover-elevate overflow-hidden flex flex-col"
               >
                 <div className="aspect-[4/3] bg-background relative overflow-hidden">
-                  {project.coverImageUrl ? (
+                  {(project.screenshotUrl ?? project.coverImageUrl) ? (
                     <img
-                      src={project.coverImageUrl}
+                      src={(project.screenshotUrl ?? project.coverImageUrl)!}
                       alt=""
                       loading="lazy"
-                      className="absolute inset-0 w-full h-full object-cover"
+                      className="absolute inset-0 w-full h-full object-cover object-top"
                     />
                   ) : (
                     <div className="absolute inset-0 flex items-center justify-center bg-surface-raised">

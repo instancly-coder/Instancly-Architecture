@@ -17,6 +17,7 @@ export interface TemplateItem {
   framework: string;
   features: string[];
   coverImageUrl: string | null;
+  screenshotUrl: string | null;
   clones: number;
   author: string;
   authorDisplayName: string;

@@ -118,6 +118,16 @@ Per-project public listing fields (`description`, `features text[]`, `coverImage
 
 Three official starter templates are seeded under the reserved `deploybro` user: `bro-cloud-saas` (dark indigo SaaS landing), `studio-bro-agency` (cream/serif creative agency), and `bro-folio-portfolio` (minimal monochrome dev portfolio). Each is a 7-file React Router app (index.html + app.jsx + 4 pages + 2 components). The idempotent seed script lives at `artifacts/api-server/scripts/seed-templates.mjs` — re-running it updates copy in place and replaces the file set inside a single transaction.
 
+## Project screenshots
+
+After a project publishes successfully, the server calls Microlink's public API to capture an above-the-fold screenshot of the live Vercel URL and stores the resulting CDN image URL as `screenshotUrl` on the project row. The Explore page and landing page template cards prefer `screenshotUrl` over the manually-set `coverImageUrl` when both are present.
+
+- `lib/screenshot.ts` — `captureScreenshot(liveUrl)` helper. Calls `https://api.microlink.io?url=<url>&screenshot=true&meta=false`. Returns a hosted image URL or `null` (non-fatal; never blocks the deployment). Optional `MICROLINK_API_KEY` env var unlocks Pro rate limits.
+- Triggered automatically at the end of `runPublishPipeline` in `routes/deployments.ts` (after READY state is confirmed).
+- `POST /api/projects/:username/:slug/screenshot` — owner-only endpoint to manually retrigger a screenshot capture (e.g. after design changes). Returns `{ screenshotUrl }`.
+- Frontend hook: `useRetriggerScreenshot(username, slug)` in `api.ts`.
+- Explore page (`explore.tsx`) and landing page template cards (`landing.tsx`) use `screenshotUrl ?? coverImageUrl` with `object-top` cropping to show above-the-fold content.
+
 ## Publish to Vercel + Neon
 
 The Publish flow in the builder deploys to Vercel and (when the user has provisioned a per-project DB via the Database tab) wires `DATABASE_URL` into the deployed app. Pro-plan-gated. Pipeline runs in-process (no external job queue).

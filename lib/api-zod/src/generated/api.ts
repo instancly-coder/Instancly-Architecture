@@ -775,6 +775,7 @@ export const ExploreResponseItem = zod.object({
   features: zod.array(zod.string()),
   clones: zod.number(),
   coverImageUrl: zod.string().nullable(),
+  screenshotUrl: zod.string().nullable(),
   lastBuiltAt: zod.string().datetime({}),
   author: zod.string(),
   authorDisplayName: zod.string(),
@@ -793,12 +794,25 @@ export const ListTemplatesResponseItem = zod
     framework: zod.string(),
     features: zod.array(zod.string()),
     coverImageUrl: zod.string().nullable(),
+    screenshotUrl: zod.string().nullable(),
     clones: zod.number(),
     author: zod.string(),
     authorDisplayName: zod.string(),
   })
   .describe("A public, admin-featured template surfaced on \/templates.");
 export const ListTemplatesResponse = zod.array(ListTemplatesResponseItem);
+
+/**
+ * @summary Retrigger a screenshot capture for a published project
+ */
+export const CaptureProjectScreenshotParams = zod.object({
+  username: zod.string(),
+  slug: zod.string(),
+});
+
+export const CaptureProjectScreenshotResponse = zod.object({
+  screenshotUrl: zod.string().nullable(),
+});
 
 /**
  * @summary All public projects, with featured status, for admin curation

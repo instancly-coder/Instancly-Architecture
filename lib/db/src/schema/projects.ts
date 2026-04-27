@@ -34,6 +34,11 @@ export const projectsTable = pgTable(
     // Hosted image URL used as the card thumbnail on /templates and
     // /explore. Nullable — falls back to the first-letter avatar.
     coverImageUrl: text("cover_image_url"),
+    // Auto-captured above-the-fold screenshot of the live Vercel URL.
+    // Populated after a successful publish; owner can retrigger via
+    // POST /projects/:username/:slug/screenshot. Takes precedence over
+    // coverImageUrl in card thumbnails when both are present.
+    screenshotUrl: text("screenshot_url"),
     clones: integer("clones").default(0).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     lastBuiltAt: timestamp("last_built_at", { withTimezone: true }).defaultNow().notNull(),

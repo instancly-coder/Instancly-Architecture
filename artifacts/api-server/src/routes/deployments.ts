@@ -28,11 +28,13 @@ import {
   type ProjectFileLite,
 } from "../lib/deploy-payload";
 import { encryptSecret, decryptSecret } from "../lib/secret-cipher";
+import { captureScreenshot } from "../lib/screenshot";
 import {
   PublishProjectResponse,
   ListProjectDeploymentsResponse,
   GetProjectDeploymentResponse,
   GetPublishStatusResponse,
+  CaptureProjectScreenshotResponse,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -308,12 +310,22 @@ async function runPublishPipeline(args: {
       liveUrl: finalUrl,
       finishedAt: new Date(),
     });
+
+    // Capture an above-the-fold screenshot of the deployed site and persist it.
+    // Fire-and-forget with a brief delay so the Vercel edge has a moment to
+    // propagate before Microlink fetches the page. Non-fatal: a screenshot
+    // failure never blocks or fails the deployment record.
+    const screenshotUrl = finalUrl
+      ? await captureScreenshot(finalUrl).catch(() => null)
+      : null;
+
     await db
       .update(projectsTable)
       .set({
         liveUrl: finalUrl,
         lastPublishedAt: new Date(),
         publishStatus: "live",
+        ...(screenshotUrl ? { screenshotUrl } : {}),
       })
       .where(eq(projectsTable.id, projectId));
   } catch (err) {
@@ -605,6 +617,48 @@ router.get(
         primaryCustomDomain: row.project.primaryCustomDomain,
       }),
     );
+  },
+);
+
+// ---------- POST /screenshot — manual retrigger ----------
+// Owner can call this to re-capture a screenshot (e.g. after design
+// changes and re-publishing). Requires the project to already have a
+// live URL; returns null screenshotUrl if capture fails (non-fatal).
+router.post(
+  "/projects/:username/:slug/screenshot",
+  requireAuth,
+  async (req: Request, res: Response): Promise<void> => {
+    const username = String(req.params.username);
+    const slug = String(req.params.slug);
+
+    const row = await findProjectWithOwner(username, slug);
+    if (!row) {
+      res.status(404).json({ status: "error", message: "Project not found" });
+      return;
+    }
+    const me = getAuthedUser(req);
+    if (!me || me.id !== row.ownerId) {
+      res.status(403).json({ status: "error", message: "Forbidden" });
+      return;
+    }
+    const liveUrl = row.project.liveUrl;
+    if (!liveUrl) {
+      res.status(400).json({
+        status: "error",
+        message: "Project has no live URL yet. Publish first.",
+      });
+      return;
+    }
+
+    const screenshotUrl = await captureScreenshot(liveUrl);
+    if (screenshotUrl) {
+      await db
+        .update(projectsTable)
+        .set({ screenshotUrl })
+        .where(eq(projectsTable.id, row.project.id));
+    }
+
+    res.json(CaptureProjectScreenshotResponse.parse({ screenshotUrl }));
   },
 );
 
