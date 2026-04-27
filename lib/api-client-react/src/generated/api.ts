@@ -47,6 +47,7 @@ import type {
   PayoutCycleResult,
   PayoutError,
   PayoutOnboardingLink,
+  PayoutSettings,
   Project,
   ProjectDomain,
   ProjectFile,
@@ -62,6 +63,7 @@ import type {
   TemplateItem,
   Transaction,
   UpdateMeBody,
+  UpdatePayoutSettingsBody,
   UpdateProjectBody,
   UpdateUserCommissionBody,
   UploadProjectFileBody,
@@ -3987,6 +3989,173 @@ export const useRetryAdminPayout = <
   TContext
 > => {
   return useMutation(getRetryAdminPayoutMutationOptions(options));
+};
+
+/**
+ * Returns the live values used by the cron scheduler and the per-cycle threshold check. When no row has been saved yet, the response reflects the env-derived defaults the server is currently using.
+
+ * @summary Current payout configuration (min threshold + cycle interval)
+ */
+export const getGetAdminPayoutSettingsUrl = () => {
+  return `/api/admin/payout-settings`;
+};
+
+export const getAdminPayoutSettings = async (
+  options?: RequestInit,
+): Promise<PayoutSettings> => {
+  return customFetch<PayoutSettings>(getGetAdminPayoutSettingsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAdminPayoutSettingsQueryKey = () => {
+  return [`/api/admin/payout-settings`] as const;
+};
+
+export const getGetAdminPayoutSettingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAdminPayoutSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAdminPayoutSettings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetAdminPayoutSettingsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAdminPayoutSettings>>
+  > = ({ signal }) => getAdminPayoutSettings({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAdminPayoutSettings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAdminPayoutSettingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAdminPayoutSettings>>
+>;
+export type GetAdminPayoutSettingsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Current payout configuration (min threshold + cycle interval)
+ */
+
+export function useGetAdminPayoutSettings<
+  TData = Awaited<ReturnType<typeof getAdminPayoutSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAdminPayoutSettings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAdminPayoutSettingsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Both fields are required. Validation enforces sensible bounds (positive threshold capped at £10,000, interval between 1 minute and 7 days). The cron picks up the new interval after the current cycle finishes; the threshold takes effect on the very next cycle.
+
+ * @summary Update the payout threshold and/or cycle interval
+ */
+export const getUpdateAdminPayoutSettingsUrl = () => {
+  return `/api/admin/payout-settings`;
+};
+
+export const updateAdminPayoutSettings = async (
+  updatePayoutSettingsBody: UpdatePayoutSettingsBody,
+  options?: RequestInit,
+): Promise<PayoutSettings> => {
+  return customFetch<PayoutSettings>(getUpdateAdminPayoutSettingsUrl(), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updatePayoutSettingsBody),
+  });
+};
+
+export const getUpdateAdminPayoutSettingsMutationOptions = <
+  TError = ErrorType<PayoutError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateAdminPayoutSettings>>,
+    TError,
+    { data: BodyType<UpdatePayoutSettingsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateAdminPayoutSettings>>,
+  TError,
+  { data: BodyType<UpdatePayoutSettingsBody> },
+  TContext
+> => {
+  const mutationKey = ["updateAdminPayoutSettings"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateAdminPayoutSettings>>,
+    { data: BodyType<UpdatePayoutSettingsBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return updateAdminPayoutSettings(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateAdminPayoutSettingsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateAdminPayoutSettings>>
+>;
+export type UpdateAdminPayoutSettingsMutationBody =
+  BodyType<UpdatePayoutSettingsBody>;
+export type UpdateAdminPayoutSettingsMutationError = ErrorType<PayoutError>;
+
+/**
+ * @summary Update the payout threshold and/or cycle interval
+ */
+export const useUpdateAdminPayoutSettings = <
+  TError = ErrorType<PayoutError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateAdminPayoutSettings>>,
+    TError,
+    { data: BodyType<UpdatePayoutSettingsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateAdminPayoutSettings>>,
+  TError,
+  { data: BodyType<UpdatePayoutSettingsBody> },
+  TContext
+> => {
+  return useMutation(getUpdateAdminPayoutSettingsMutationOptions(options));
 };
 
 /**

@@ -17,19 +17,7 @@ import {
   StripeApiError,
   stripeConfigured,
 } from "../lib/stripe";
-
-// Don't ship a transfer for a creator with only a couple of pence of
-// pending earnings — Stripe's per-transaction overhead would eat it.
-// £10 keeps batches healthy and matches the threshold most affiliate
-// programs use. Override per-environment if needed.
-const MIN_PAYOUT_GBP = numFromEnv("PAYOUTS_MIN_GBP", 10);
-
-function numFromEnv(name: string, fallback: number): number {
-  const raw = process.env[name];
-  if (!raw) return fallback;
-  const n = Number(raw);
-  return Number.isFinite(n) && n > 0 ? n : fallback;
-}
+import { getPayoutSettings } from "./payout-settings";
 
 export type PayoutCycleResult = {
   considered: number;
@@ -72,6 +60,14 @@ export async function runPayoutCycle(): Promise<PayoutCycleResult> {
   // transfer roundtrip but short enough to free funds quickly.
   await recoverStaleQueuedPayouts();
 
+  // Read the live admin-tunable threshold ONCE per cycle so all
+  // creators in this run are evaluated against the same value (no
+  // half-and-half cycle if an admin saves a new threshold mid-run)
+  // and so we don't query the settings row inside the per-creator
+  // loop. The same value is also passed into the inner
+  // `batchAndPayCreator` reservation guard.
+  const { minPayoutGbp } = await getPayoutSettings();
+
   // Pull every creator who has at least one ready-to-pay row AND a
   // verified Connect account. We aggregate the eligible amount in SQL
   // so we can early-skip creators below the minimum without pulling
@@ -112,13 +108,17 @@ export async function runPayoutCycle(): Promise<PayoutCycleResult> {
     if (
       !c.stripeConnectAccountId ||
       c.stripeConnectStatus !== "verified" ||
-      total < MIN_PAYOUT_GBP
+      total < minPayoutGbp
     ) {
       skipped++;
       continue;
     }
     try {
-      const r = await batchAndPayCreator(c.userId, c.stripeConnectAccountId);
+      const r = await batchAndPayCreator(
+        c.userId,
+        c.stripeConnectAccountId,
+        minPayoutGbp,
+      );
       if (r === "paid") paidOut++;
       else if (r === "failed") failed++;
       else skipped++;
@@ -154,6 +154,7 @@ export async function runPayoutCycle(): Promise<PayoutCycleResult> {
 async function batchAndPayCreator(
   userId: string,
   destinationAccount: string,
+  minPayoutGbp: number,
 ): Promise<"paid" | "failed" | "skipped"> {
   type Reserved = {
     payoutId: string;
@@ -183,7 +184,7 @@ async function batchAndPayCreator(
 
     const total =
       Math.round(rows.reduce((n, r) => n + Number(r.amount), 0) * 100) / 100;
-    if (total < MIN_PAYOUT_GBP) return null;
+    if (total < minPayoutGbp) return null;
 
     const [inserted] = await tx
       .insert(payoutsTable)
@@ -351,10 +352,6 @@ export async function retryFailedPayout(
   });
 }
 
-// Re-export so admin route can import a single getter for the threshold.
-export function minPayoutGbp(): number {
-  return MIN_PAYOUT_GBP;
-}
 
 // How long a payout can sit in `queued` before we treat it as a crash
 // orphan. Healthy transfers complete in <30s; five minutes leaves

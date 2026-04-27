@@ -33,7 +33,7 @@ import {
   StripeApiError,
   stripeConfigured,
 } from "../lib/stripe";
-import { minPayoutGbp } from "../services/payouts";
+import { getPayoutSettings } from "../services/payout-settings";
 import { logger } from "../lib/logger";
 
 // Best-effort cleanup of every custom domain attached to a Vercel project
@@ -433,13 +433,20 @@ router.get(
         : null;
 
     // We still surface `pendingTotal` because the earnings page wants
-    // to render "you have £X waiting" alongside the connect CTA.
-    const [agg] = await db
-      .select({
-        pending: sql<string>`coalesce(sum(${referralEarningsTable.amount}) filter (where ${referralEarningsTable.status} = 'pending'), 0)`,
-      })
-      .from(referralEarningsTable)
-      .where(eq(referralEarningsTable.referrerUserId, user.id));
+    // to render "you have £X waiting" alongside the connect CTA. The
+    // live admin-tunable payout threshold is fetched from the settings
+    // singleton (with env fallback) so creators always see the same
+    // number the cron would actually use.
+    const [agg, settings] = await Promise.all([
+      db
+        .select({
+          pending: sql<string>`coalesce(sum(${referralEarningsTable.amount}) filter (where ${referralEarningsTable.status} = 'pending'), 0)`,
+        })
+        .from(referralEarningsTable)
+        .where(eq(referralEarningsTable.referrerUserId, user.id))
+        .then((r) => r[0]),
+      getPayoutSettings(),
+    ]);
 
     res.json(
       GetMyPayoutAccountResponse.parse({
@@ -452,7 +459,7 @@ router.get(
         payoutsEnabled: validStatus === "verified",
         detailsSubmitted: validStatus !== null,
         pendingTotal: Number(agg?.pending ?? 0),
-        minPayoutGbp: minPayoutGbp(),
+        minPayoutGbp: settings.minPayoutGbp,
       }),
     );
   },

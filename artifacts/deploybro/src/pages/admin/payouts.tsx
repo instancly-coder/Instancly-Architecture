@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Banknote,
   Loader2,
@@ -7,12 +7,16 @@ import {
   Clock,
   AlertCircle,
   Play,
+  Settings,
+  Save,
 } from "lucide-react";
 import { AdminLayout } from "@/components/admin-layout";
 import {
   useAdminPayouts,
+  useAdminPayoutSettings,
   useRetryAdminPayout,
   useRunAdminPayouts,
+  useUpdateAdminPayoutSettings,
   type ApiAdminPayout,
 } from "@/lib/api";
 
@@ -110,6 +114,8 @@ export default function AdminPayouts() {
           </div>
         )}
 
+        <PayoutSettingsCard />
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           <TotalCard
             label="Paid"
@@ -185,6 +191,167 @@ export default function AdminPayouts() {
       </main>
     </AdminLayout>
   );
+}
+
+// Inline settings card. Lives on the payouts page so admins can tune
+// the threshold/cycle in the same workflow they triage failures.
+// Both fields are required and clamped client-side to the same bounds
+// the API validates against; the backend re-validates so a malformed
+// request can't stick.
+const MIN_GBP_FLOOR = 0.01;
+const MIN_GBP_CEILING = 10_000;
+const INTERVAL_MIN_FLOOR = 1;
+const INTERVAL_MIN_CEILING = 7 * 24 * 60;
+
+function PayoutSettingsCard() {
+  const { data, isLoading } = useAdminPayoutSettings();
+  const update = useUpdateAdminPayoutSettings();
+  // Local form state mirrors the loaded values; we hydrate it via
+  // effect so admins can edit freely without each keystroke being
+  // overwritten by a refetch.
+  const [minGbp, setMinGbp] = useState<string>("");
+  const [intervalMin, setIntervalMin] = useState<string>("");
+  const [error, setError] = useState<string | null>(null);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!data) return;
+    setMinGbp(String(data.minPayoutGbp));
+    setIntervalMin(String(data.cycleIntervalMinutes));
+  }, [data]);
+
+  const handleSave = async () => {
+    setError(null);
+    const minPayoutGbp = Number(minGbp);
+    const cycleIntervalMinutes = Number(intervalMin);
+    if (
+      !Number.isFinite(minPayoutGbp) ||
+      minPayoutGbp < MIN_GBP_FLOOR ||
+      minPayoutGbp > MIN_GBP_CEILING
+    ) {
+      setError(
+        `Minimum payout must be between £${MIN_GBP_FLOOR} and £${MIN_GBP_CEILING.toLocaleString()}.`,
+      );
+      return;
+    }
+    if (
+      !Number.isInteger(cycleIntervalMinutes) ||
+      cycleIntervalMinutes < INTERVAL_MIN_FLOOR ||
+      cycleIntervalMinutes > INTERVAL_MIN_CEILING
+    ) {
+      setError(
+        `Cycle interval must be a whole number of minutes between ${INTERVAL_MIN_FLOOR} and ${INTERVAL_MIN_CEILING}.`,
+      );
+      return;
+    }
+    try {
+      await update.mutateAsync({ minPayoutGbp, cycleIntervalMinutes });
+      setSavedAt(Date.now());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Save failed");
+    }
+  };
+
+  const dirty =
+    !!data &&
+    (Number(minGbp) !== data.minPayoutGbp ||
+      Number(intervalMin) !== data.cycleIntervalMinutes);
+
+  return (
+    <div className="mb-8 border border-border bg-surface rounded-xl">
+      <div className="p-4 border-b border-border font-bold flex items-center gap-2">
+        <Settings className="w-4 h-4" />
+        Payout settings
+      </div>
+      <div className="p-4">
+        {isLoading ? (
+          <div className="text-secondary text-sm">
+            <Loader2 className="w-4 h-4 animate-spin inline" /> Loading…
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+            <label className="block">
+              <span className="text-xs uppercase tracking-wide text-secondary">
+                Minimum payout (GBP)
+              </span>
+              <input
+                type="number"
+                step="0.01"
+                min={MIN_GBP_FLOOR}
+                max={MIN_GBP_CEILING}
+                value={minGbp}
+                onChange={(e) => setMinGbp(e.target.value)}
+                className="mt-1 w-full px-3 py-2 rounded-lg border border-border bg-surface-raised/40 text-sm font-mono"
+              />
+              <span className="text-xs text-secondary mt-1 block">
+                Creators below this stay queued.
+              </span>
+            </label>
+            <label className="block">
+              <span className="text-xs uppercase tracking-wide text-secondary">
+                Cycle interval (minutes)
+              </span>
+              <input
+                type="number"
+                step="1"
+                min={INTERVAL_MIN_FLOOR}
+                max={INTERVAL_MIN_CEILING}
+                value={intervalMin}
+                onChange={(e) => setIntervalMin(e.target.value)}
+                className="mt-1 w-full px-3 py-2 rounded-lg border border-border bg-surface-raised/40 text-sm font-mono"
+              />
+              <span className="text-xs text-secondary mt-1 block">
+                {humanizeMinutes(Number(intervalMin) || 0)}. Picks up on
+                next tick.
+              </span>
+            </label>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleSave}
+                disabled={update.isPending || !dirty}
+                className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 transition"
+              >
+                {update.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
+                Save settings
+              </button>
+              {savedAt && !dirty && !update.isPending && (
+                <span className="text-xs text-secondary inline-flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3 text-green-500" />
+                  Saved
+                </span>
+              )}
+            </div>
+            {error && (
+              <div className="md:col-span-3 text-sm text-error flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function humanizeMinutes(min: number): string {
+  if (!Number.isFinite(min) || min <= 0) return "—";
+  if (min < 60) return `Every ${min} minute${min === 1 ? "" : "s"}`;
+  if (min % (24 * 60) === 0) {
+    const days = min / (24 * 60);
+    return `Every ${days} day${days === 1 ? "" : "s"}`;
+  }
+  if (min % 60 === 0) {
+    const hours = min / 60;
+    return `Every ${hours} hour${hours === 1 ? "" : "s"}`;
+  }
+  const hours = Math.floor(min / 60);
+  const rest = min % 60;
+  return `Every ${hours}h ${rest}m`;
 }
 
 function PayoutRow({ payout }: { payout: ApiAdminPayout }) {

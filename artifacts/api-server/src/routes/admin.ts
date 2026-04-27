@@ -18,9 +18,16 @@ import {
   ListAdminPayoutsResponse,
   RunAdminPayoutsResponse,
   RetryAdminPayoutResponse,
+  GetAdminPayoutSettingsResponse,
+  UpdateAdminPayoutSettingsResponse,
 } from "@workspace/api-zod";
 import { stripeConfigured } from "../lib/stripe";
 import { retryFailedPayout, runPayoutCycle } from "../services/payouts";
+import {
+  getPayoutSettings,
+  updatePayoutSettings,
+  InvalidPayoutSettingsError,
+} from "../services/payout-settings";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
@@ -416,6 +423,54 @@ router.post(
       res.status(500).json({
         status: "error",
         message: err instanceof Error ? err.message : "Retry failed",
+      });
+    }
+  },
+);
+
+router.get(
+  "/admin/payout-settings",
+  requireAdmin,
+  async (_req: Request, res: Response): Promise<void> => {
+    const settings = await getPayoutSettings();
+    res.json(GetAdminPayoutSettingsResponse.parse(settings));
+  },
+);
+
+router.patch(
+  "/admin/payout-settings",
+  requireAdmin,
+  async (req: Request, res: Response): Promise<void> => {
+    const body = (req.body ?? {}) as {
+      minPayoutGbp?: unknown;
+      cycleIntervalMinutes?: unknown;
+    };
+    if (
+      typeof body.minPayoutGbp !== "number" ||
+      typeof body.cycleIntervalMinutes !== "number"
+    ) {
+      res.status(400).json({
+        status: "error",
+        message:
+          "minPayoutGbp and cycleIntervalMinutes are both required and must be numbers.",
+      });
+      return;
+    }
+    try {
+      const updated = await updatePayoutSettings({
+        minPayoutGbp: body.minPayoutGbp,
+        cycleIntervalMinutes: body.cycleIntervalMinutes,
+      });
+      res.json(UpdateAdminPayoutSettingsResponse.parse(updated));
+    } catch (err) {
+      if (err instanceof InvalidPayoutSettingsError) {
+        res.status(400).json({ status: "error", message: err.message });
+        return;
+      }
+      logger.error({ err }, "admin/payout-settings PATCH failed");
+      res.status(500).json({
+        status: "error",
+        message: err instanceof Error ? err.message : "Update failed",
       });
     }
   },

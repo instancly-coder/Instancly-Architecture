@@ -604,6 +604,26 @@ export interface PayoutError {
   message: string;
 }
 
+export interface PayoutSettings {
+  /** Minimum pending balance (GBP) before a creator's payout ships. */
+  minPayoutGbp: number;
+  /** How often (in minutes) the payout cron wakes up. */
+  cycleIntervalMinutes: number;
+}
+
+export interface UpdatePayoutSettingsBody {
+  /**
+   * @minimum 0.01
+   * @maximum 10000
+   */
+  minPayoutGbp: number;
+  /**
+   * @minimum 1
+   * @maximum 10080
+   */
+  cycleIntervalMinutes: number;
+}
+
 export interface UploadUrlRequest {
   /** @minLength 1 */
   name: string;

@@ -1077,6 +1077,50 @@ export const RetryAdminPayoutResponse = zod.object({
 });
 
 /**
+ * Returns the live values used by the cron scheduler and the per-cycle threshold check. When no row has been saved yet, the response reflects the env-derived defaults the server is currently using.
+
+ * @summary Current payout configuration (min threshold + cycle interval)
+ */
+export const GetAdminPayoutSettingsResponse = zod.object({
+  minPayoutGbp: zod
+    .number()
+    .describe("Minimum pending balance (GBP) before a creator's payout ships."),
+  cycleIntervalMinutes: zod
+    .number()
+    .describe("How often (in minutes) the payout cron wakes up."),
+});
+
+/**
+ * Both fields are required. Validation enforces sensible bounds (positive threshold capped at £10,000, interval between 1 minute and 7 days). The cron picks up the new interval after the current cycle finishes; the threshold takes effect on the very next cycle.
+
+ * @summary Update the payout threshold and/or cycle interval
+ */
+export const updateAdminPayoutSettingsBodyMinPayoutGbpMin = 0.01;
+export const updateAdminPayoutSettingsBodyMinPayoutGbpMax = 10000;
+
+export const updateAdminPayoutSettingsBodyCycleIntervalMinutesMax = 10080;
+
+export const UpdateAdminPayoutSettingsBody = zod.object({
+  minPayoutGbp: zod
+    .number()
+    .min(updateAdminPayoutSettingsBodyMinPayoutGbpMin)
+    .max(updateAdminPayoutSettingsBodyMinPayoutGbpMax),
+  cycleIntervalMinutes: zod
+    .number()
+    .min(1)
+    .max(updateAdminPayoutSettingsBodyCycleIntervalMinutesMax),
+});
+
+export const UpdateAdminPayoutSettingsResponse = zod.object({
+  minPayoutGbp: zod
+    .number()
+    .describe("Minimum pending balance (GBP) before a creator's payout ships."),
+  cycleIntervalMinutes: zod
+    .number()
+    .describe("How often (in minutes) the payout cron wakes up."),
+});
+
+/**
  * @summary AI cost broken down by model
  */
 export const ListAdminCostByModelResponseItem = zod.object({

@@ -26,6 +26,8 @@ import type {
   MyReferrals as GeneratedMyReferrals,
   PayoutCycleResult as GeneratedPayoutCycleResult,
   PayoutOnboardingLink as GeneratedPayoutOnboardingLink,
+  PayoutSettings as GeneratedPayoutSettings,
+  UpdatePayoutSettingsBody as GeneratedUpdatePayoutSettingsBody,
   ReferralSourceBreakdown as GeneratedReferralSourceBreakdown,
   ReferredUser as GeneratedReferredUser,
   ExploreItem,
@@ -1034,6 +1036,33 @@ export function useRetryAdminPayout() {
       ),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin", "payouts"] });
+    },
+  });
+}
+
+export type ApiPayoutSettings = GeneratedPayoutSettings;
+export type ApiUpdatePayoutSettingsBody = GeneratedUpdatePayoutSettingsBody;
+
+export function useAdminPayoutSettings() {
+  return useQuery({
+    queryKey: ["admin", "payout-settings"],
+    queryFn: () => request<ApiPayoutSettings>("/admin/payout-settings"),
+  });
+}
+
+export function useUpdateAdminPayoutSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ApiUpdatePayoutSettingsBody) =>
+      request<ApiPayoutSettings>("/admin/payout-settings", {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: (data) => {
+      qc.setQueryData(["admin", "payout-settings"], data);
+      // The threshold also drives the creator-facing earnings page,
+      // so invalidate that cache too.
+      qc.invalidateQueries({ queryKey: ["me", "payouts", "account"] });
     },
   });
 }

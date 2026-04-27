@@ -34,6 +34,8 @@ export type {
   MyPayoutAccountStatus,
   PayoutCycleResult,
   PayoutOnboardingLink,
+  PayoutSettings,
+  UpdatePayoutSettingsBody,
   RetryPayoutResponse,
   UpdateUserCommissionBody,
   DomainSuggestedRecord,
