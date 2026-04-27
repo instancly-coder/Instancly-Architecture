@@ -30,6 +30,22 @@ export const referralEarningsTable = pgTable(
       () => transactionsTable.id,
       { onDelete: "set null" },
     ),
+    // The exact Stripe `event.id` (`evt_…`) that triggered this
+    // earning. Mirrors the column on `transactions` and exists for the
+    // same reason: Stripe retries webhook deliveries on any 5xx /
+    // timeout, and the unique index below is the last-line guarantee
+    // that a retry storm cannot double-credit the referrer even if
+    // every other dedup layer (payment_ref, transaction_id) is bypassed
+    // (e.g. by a future code path that inserts earnings without a
+    // transaction).
+    //
+    // Rollout / backfill: nullable on purpose. Existing rows stay NULL
+    // and Postgres allows unlimited NULLs in a unique B-tree index, so
+    // the constraint is safe to add without any data migration. Schema
+    // changes are applied by `scripts/post-merge.sh` (`pnpm --filter
+    // db push`) — the project does not maintain checked-in SQL
+    // migration files.
+    stripeEventId: text("stripe_event_id"),
     amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
     commissionPct: integer("commission_pct").notNull(),
     kind: text("kind").default("recurring").notNull(),
@@ -59,6 +75,13 @@ export const referralEarningsTable = pgTable(
     transactionUniq: uniqueIndex(
       "referral_earnings_transaction_id_uniq",
     ).on(t.transactionId),
+    // At most one earning row per Stripe event id. Independent of the
+    // transaction-id uniqueness above so that any future writer that
+    // forgets to set `transactionId` still can't double-credit on
+    // webhook retries.
+    stripeEventIdUniq: uniqueIndex(
+      "referral_earnings_stripe_event_id_uniq",
+    ).on(t.stripeEventId),
   }),
 );
 

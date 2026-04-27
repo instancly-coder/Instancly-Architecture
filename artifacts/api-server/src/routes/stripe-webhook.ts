@@ -194,6 +194,29 @@ async function processPaymentSuccess(event: StripeChargeEvent): Promise<void> {
   const obj = event.data?.object;
   if (!obj) return;
 
+  // First idempotency layer: exact event-id match. Stripe retries
+  // webhook deliveries on any 5xx / timeout, and every retry carries
+  // the SAME `event.id`. Catching it here means we don't even have to
+  // re-derive the payment ref or hit any other table — the cheapest
+  // possible short-circuit, and the one Stripe's docs explicitly
+  // recommend for safe retry handling.
+  if (event.id) {
+    const byEvent = (
+      await db
+        .select({ id: transactionsTable.id })
+        .from(transactionsTable)
+        .where(eq(transactionsTable.stripeEventId, event.id))
+        .limit(1)
+    )[0];
+    if (byEvent) {
+      logger.info(
+        { eventId: event.id, transactionId: byEvent.id },
+        "Stripe webhook: event already processed, skipping",
+      );
+      return;
+    }
+  }
+
   const paymentRef = pickPaymentRef(obj);
   if (!paymentRef) {
     logger.warn(
@@ -203,12 +226,12 @@ async function processPaymentSuccess(event: StripeChargeEvent): Promise<void> {
     return;
   }
 
-  // Idempotency keyed on the stable payment ref (invoice / payment
-  // intent / session id), NOT the event id. This means the second
-  // delivery of a subscription's initial charge —
-  // `checkout.session.completed` followed by `invoice.payment_succeeded`
-  // — collapses onto the same transaction and produces only one
-  // referral_earnings row.
+  // Second idempotency layer: stable payment ref (invoice / payment
+  // intent / session id). This catches the case the event-id check
+  // can't: a subscription's initial charge fires both
+  // `checkout.session.completed` and `invoice.payment_succeeded` —
+  // different event ids, but the same underlying invoice — and we want
+  // to credit the user (and referrer) exactly once across both.
   const existing = (
     await db
       .select({ id: transactionsTable.id })
@@ -282,11 +305,16 @@ async function processPaymentSuccess(event: StripeChargeEvent): Promise<void> {
         status: "Success",
         method,
         stripePaymentRef: paymentRef,
+        // Stamp the event id so a concurrent retry that beats both
+        // SELECTs above still trips the unique index here, not the
+        // payment-ref one (clearer logs about why we bailed).
+        stripeEventId: event.id ?? null,
       })
       .returning({ id: transactionsTable.id });
     transactionId = inserted[0].id;
   } catch (err) {
-    // 23505 = unique_violation; means another delivery already won.
+    // 23505 = unique_violation; means another delivery already won
+    // either on `stripe_payment_ref` or `stripe_event_id`.
     if (
       err &&
       typeof err === "object" &&
@@ -333,6 +361,10 @@ async function processPaymentSuccess(event: StripeChargeEvent): Promise<void> {
       referredUserId: user.id,
       sourceProjectId: user.referredViaProjectId ?? null,
       transactionId,
+      // Stamp the event id here too so the unique index on
+      // `referral_earnings.stripe_event_id` blocks a duplicate credit
+      // even if the transaction-id dedup is somehow bypassed.
+      stripeEventId: event.id ?? null,
       amount: earned.toFixed(2),
       commissionPct: pct,
       status: "pending",
