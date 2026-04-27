@@ -800,6 +800,23 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Earning"
+  /me/referrals:
+    get:
+      operationId: getMyReferrals
+      tags: [me]
+      summary: Users the current creator has referred, with funnel stats
+      description: |
+        Lists every user that signed up via the current creator's profile or
+        any of their templates, plus aggregate counts (total, paying,
+        conversion %) and a breakdown by referral source. "Paying" means the
+        referred user has produced at least one referral earning row.
+      responses:
+        "200":
+          description: Referrals + funnel
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MyReferrals"
   /admin/cost-by-model:
     get:
       operationId: listAdminCostByModel
@@ -1632,6 +1649,82 @@ components:
       required:
         - model
         - total
+    ReferralSourceBreakdown:
+      type: object
+      description: |
+        One row per referral entry-point. `sourceProjectSlug` is null when
+        the source project has been deleted OR when the signup came via the
+        creator's bare public profile (no template in the path). `kind`
+        disambiguates the two so the client can label "Deleted template"
+        separately from "Public profile".
+      properties:
+        sourceProjectSlug:
+          type: string
+          nullable: true
+        sourceProjectName:
+          type: string
+          nullable: true
+        kind:
+          type: string
+          enum: [profile, template, deleted_template]
+        total: { type: integer }
+        paying: { type: integer }
+      required:
+        - sourceProjectSlug
+        - sourceProjectName
+        - kind
+        - total
+        - paying
+    ReferredUser:
+      type: object
+      properties:
+        username: { type: string }
+        displayName: { type: string }
+        signupDate:
+          type: string
+          format: date
+        sourceProjectSlug:
+          type: string
+          nullable: true
+        sourceProjectName:
+          type: string
+          nullable: true
+        kind:
+          type: string
+          enum: [profile, template, deleted_template]
+        hasPaid: { type: boolean }
+      required:
+        - username
+        - displayName
+        - signupDate
+        - sourceProjectSlug
+        - sourceProjectName
+        - kind
+        - hasPaid
+    MyReferrals:
+      type: object
+      properties:
+        total: { type: integer }
+        paying: { type: integer }
+        conversionPct:
+          type: number
+          description: |
+            Percentage of referred users who have produced at least one
+            referral earning. 0 when `total` is 0. Rounded to 1 decimal.
+        bySource:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReferralSourceBreakdown"
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReferredUser"
+      required:
+        - total
+        - paying
+        - conversionPct
+        - bySource
+        - users
     UploadUrlRequest:
       type: object
       properties:

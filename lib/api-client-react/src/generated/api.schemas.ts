@@ -400,6 +400,61 @@ export interface AdminCostByModel {
   total: number;
 }
 
+export type ReferralSourceBreakdownKind =
+  (typeof ReferralSourceBreakdownKind)[keyof typeof ReferralSourceBreakdownKind];
+
+export const ReferralSourceBreakdownKind = {
+  profile: "profile",
+  template: "template",
+  deleted_template: "deleted_template",
+} as const;
+
+/**
+ * One row per referral entry-point. `sourceProjectSlug` is null when
+the source project has been deleted OR when the signup came via the
+creator's bare public profile (no template in the path). `kind`
+disambiguates the two so the client can label "Deleted template"
+separately from "Public profile".
+
+ */
+export interface ReferralSourceBreakdown {
+  sourceProjectSlug: string | null;
+  sourceProjectName: string | null;
+  kind: ReferralSourceBreakdownKind;
+  total: number;
+  paying: number;
+}
+
+export type ReferredUserKind =
+  (typeof ReferredUserKind)[keyof typeof ReferredUserKind];
+
+export const ReferredUserKind = {
+  profile: "profile",
+  template: "template",
+  deleted_template: "deleted_template",
+} as const;
+
+export interface ReferredUser {
+  username: string;
+  displayName: string;
+  signupDate: string;
+  sourceProjectSlug: string | null;
+  sourceProjectName: string | null;
+  kind: ReferredUserKind;
+  hasPaid: boolean;
+}
+
+export interface MyReferrals {
+  total: number;
+  paying: number;
+  /** Percentage of referred users who have produced at least one
+referral earning. 0 when `total` is 0. Rounded to 1 decimal.
+ */
+  conversionPct: number;
+  bySource: ReferralSourceBreakdown[];
+  users: ReferredUser[];
+}
+
 export interface UploadUrlRequest {
   /** @minLength 1 */
   name: string;

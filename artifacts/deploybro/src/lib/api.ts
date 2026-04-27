@@ -21,6 +21,9 @@ import type {
   DomainVerificationRecord,
   Earning as GeneratedEarning,
   EarningsSummary as GeneratedEarningsSummary,
+  MyReferrals as GeneratedMyReferrals,
+  ReferralSourceBreakdown as GeneratedReferralSourceBreakdown,
+  ReferredUser as GeneratedReferredUser,
   ExploreItem,
   Me,
   Project,
@@ -145,6 +148,17 @@ export function useMyEarnings() {
   return useQuery({
     queryKey: ["me", "earnings"],
     queryFn: () => request<ApiEarning[]>("/me/earnings"),
+  });
+}
+
+export type ApiMyReferrals = GeneratedMyReferrals;
+export type ApiReferralSourceBreakdown = GeneratedReferralSourceBreakdown;
+export type ApiReferredUser = GeneratedReferredUser;
+
+export function useMyReferrals() {
+  return useQuery({
+    queryKey: ["me", "referrals"],
+    queryFn: () => request<ApiMyReferrals>("/me/referrals"),
   });
 }
 

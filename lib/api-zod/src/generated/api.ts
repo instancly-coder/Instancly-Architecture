@@ -857,6 +857,48 @@ export const ListMyEarningsResponseItem = zod.object({
 export const ListMyEarningsResponse = zod.array(ListMyEarningsResponseItem);
 
 /**
+ * Lists every user that signed up via the current creator's profile or
+any of their templates, plus aggregate counts (total, paying,
+conversion %) and a breakdown by referral source. "Paying" means the
+referred user has produced at least one referral earning row.
+
+ * @summary Users the current creator has referred, with funnel stats
+ */
+export const GetMyReferralsResponse = zod.object({
+  total: zod.number(),
+  paying: zod.number(),
+  conversionPct: zod
+    .number()
+    .describe(
+      "Percentage of referred users who have produced at least one\nreferral earning. 0 when `total` is 0. Rounded to 1 decimal.\n",
+    ),
+  bySource: zod.array(
+    zod
+      .object({
+        sourceProjectSlug: zod.string().nullable(),
+        sourceProjectName: zod.string().nullable(),
+        kind: zod.enum(["profile", "template", "deleted_template"]),
+        total: zod.number(),
+        paying: zod.number(),
+      })
+      .describe(
+        'One row per referral entry-point. `sourceProjectSlug` is null when\nthe source project has been deleted OR when the signup came via the\ncreator\'s bare public profile (no template in the path). `kind`\ndisambiguates the two so the client can label \"Deleted template\"\nseparately from \"Public profile\".\n',
+      ),
+  ),
+  users: zod.array(
+    zod.object({
+      username: zod.string(),
+      displayName: zod.string(),
+      signupDate: zod.string().date(),
+      sourceProjectSlug: zod.string().nullable(),
+      sourceProjectName: zod.string().nullable(),
+      kind: zod.enum(["profile", "template", "deleted_template"]),
+      hasPaid: zod.boolean(),
+    }),
+  ),
+});
+
+/**
  * @summary AI cost broken down by model
  */
 export const ListAdminCostByModelResponseItem = zod.object({

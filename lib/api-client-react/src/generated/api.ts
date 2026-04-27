@@ -39,6 +39,7 @@ import type {
   FinalizeUploadResponse,
   HealthStatus,
   Me,
+  MyReferrals,
   Project,
   ProjectDomain,
   ProjectFile,
@@ -3397,6 +3398,86 @@ export function useListMyEarnings<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getListMyEarningsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Lists every user that signed up via the current creator's profile or
+any of their templates, plus aggregate counts (total, paying,
+conversion %) and a breakdown by referral source. "Paying" means the
+referred user has produced at least one referral earning row.
+
+ * @summary Users the current creator has referred, with funnel stats
+ */
+export const getGetMyReferralsUrl = () => {
+  return `/api/me/referrals`;
+};
+
+export const getMyReferrals = async (
+  options?: RequestInit,
+): Promise<MyReferrals> => {
+  return customFetch<MyReferrals>(getGetMyReferralsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMyReferralsQueryKey = () => {
+  return [`/api/me/referrals`] as const;
+};
+
+export const getGetMyReferralsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyReferrals>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyReferrals>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetMyReferralsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getMyReferrals>>> = ({
+    signal,
+  }) => getMyReferrals({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyReferrals>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMyReferralsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyReferrals>>
+>;
+export type GetMyReferralsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Users the current creator has referred, with funnel stats
+ */
+
+export function useGetMyReferrals<
+  TData = Awaited<ReturnType<typeof getMyReferrals>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyReferrals>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMyReferralsQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

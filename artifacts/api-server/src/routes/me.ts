@@ -17,6 +17,7 @@ import {
   CreateMyProjectResponse,
   GetMyEarningsSummaryResponse,
   ListMyEarningsResponse,
+  GetMyReferralsResponse,
 } from "@workspace/api-zod";
 import { DEFAULT_REFERRAL_COMMISSION_PCT } from "../lib/referral-commission";
 import { authConfigured, getAuthedUser } from "../middlewares/auth";
@@ -248,6 +249,125 @@ router.get(
           paidAt: r.paidAt ? r.paidAt.toISOString() : null,
         })),
       ),
+    );
+  },
+);
+
+router.get(
+  "/me/referrals",
+  async (req: Request, res: Response): Promise<void> => {
+    const user = await getMe(req);
+    if (!user) {
+      res.status(401).json({ status: "error", message: "Unauthenticated" });
+      return;
+    }
+
+    // Pull every user that signed up under this creator. The left-join on
+    // projects is by `referredViaProjectId` (the template they came in
+    // through, if any).
+    //
+    // We deliberately keep BOTH the loose `referredViaProjectId` column
+    // and the joined project columns so we can distinguish three cases
+    // when grouping:
+    //   - `referredViaProjectId IS NULL`            → "profile" signup
+    //   - `referredViaProjectId` set + join hits    → "template" signup
+    //   - `referredViaProjectId` set + join misses  → "deleted_template"
+    // (`referredViaProjectId` has no FK — see users schema.)
+    //
+    // `hasPaid` is computed via EXISTS against `referral_earnings` rather
+    // than `users.plan` so we count actual money produced by the funnel —
+    // a user could be on a paid plan via a path that didn't generate any
+    // referral credit (e.g. a comp), and we shouldn't claim that as a
+    // conversion for this creator.
+    const rows = await db
+      .select({
+        username: usersTable.username,
+        displayName: usersTable.displayName,
+        createdAt: usersTable.createdAt,
+        referredViaProjectId: usersTable.referredViaProjectId,
+        sourceProjectSlug: projectsTable.slug,
+        sourceProjectName: projectsTable.name,
+        hasPaid: sql<boolean>`exists (
+          select 1 from ${referralEarningsTable}
+          where ${referralEarningsTable.referrerUserId} = ${user.id}
+            and ${referralEarningsTable.referredUserId} = ${usersTable.id}
+        )`,
+      })
+      .from(usersTable)
+      .leftJoin(
+        projectsTable,
+        eq(projectsTable.id, usersTable.referredViaProjectId),
+      )
+      .where(eq(usersTable.referredByUserId, user.id))
+      .orderBy(desc(usersTable.createdAt));
+
+    type Kind = "profile" | "template" | "deleted_template";
+    function kindOf(r: (typeof rows)[number]): Kind {
+      if (r.referredViaProjectId === null) return "profile";
+      return r.sourceProjectSlug ? "template" : "deleted_template";
+    }
+
+    const total = rows.length;
+    const paying = rows.reduce((n, r) => n + (r.hasPaid ? 1 : 0), 0);
+    // Round to 1 decimal for stable display; 0/0 collapses to 0 (not NaN).
+    const conversionPct =
+      total === 0 ? 0 : Math.round((paying / total) * 1000) / 10;
+
+    // Group by source. Live templates are keyed by slug, "profile" signups
+    // collapse into one bucket, and every deleted-template signup lands
+    // under its own per-id bucket so we don't lose attribution if the
+    // creator later renames or restores the row. We surface them as a
+    // single "Deleted template" entry by keying on a constant, which
+    // matches the historical behaviour callers were relying on.
+    const grouped = new Map<
+      string,
+      {
+        sourceProjectSlug: string | null;
+        sourceProjectName: string | null;
+        kind: Kind;
+        total: number;
+        paying: number;
+      }
+    >();
+    for (const r of rows) {
+      const kind = kindOf(r);
+      const key =
+        kind === "template"
+          ? `template:${r.sourceProjectSlug}`
+          : kind === "deleted_template"
+            ? "deleted_template"
+            : "profile";
+      const cur = grouped.get(key) ?? {
+        sourceProjectSlug: r.sourceProjectSlug,
+        sourceProjectName: r.sourceProjectName,
+        kind,
+        total: 0,
+        paying: 0,
+      };
+      cur.total += 1;
+      if (r.hasPaid) cur.paying += 1;
+      grouped.set(key, cur);
+    }
+    // Highest-volume sources first; "Public profile" / "Deleted template"
+    // naturally sort alongside live templates by their row count.
+    const bySource = [...grouped.values()].sort((a, b) => b.total - a.total);
+
+    res.json(
+      GetMyReferralsResponse.parse({
+        total,
+        paying,
+        conversionPct,
+        bySource,
+        users: rows.map((r) => ({
+          username: r.username,
+          displayName: r.displayName,
+          signupDate: r.createdAt.toISOString().slice(0, 10),
+          sourceProjectSlug: r.sourceProjectSlug,
+          sourceProjectName: r.sourceProjectName,
+          kind: kindOf(r),
+          hasPaid: Boolean(r.hasPaid),
+        })),
+      }),
     );
   },
 );

@@ -1,12 +1,26 @@
 import { Link } from "wouter";
-import { Loader2, Coins, Clock, CheckCircle2, Percent } from "lucide-react";
+import {
+  Loader2,
+  Coins,
+  Clock,
+  CheckCircle2,
+  Percent,
+  Users,
+  TrendingUp,
+} from "lucide-react";
 import { DashboardLayout } from "@/components/dashboard-layout";
-import { useMe, useMyEarnings, useMyEarningsSummary } from "@/lib/api";
+import {
+  useMe,
+  useMyEarnings,
+  useMyEarningsSummary,
+  useMyReferrals,
+} from "@/lib/api";
 
 export default function Earnings() {
   const { data: me } = useMe();
   const { data: summary, isLoading: summaryLoading } = useMyEarningsSummary();
   const { data: earnings = [], isLoading: earningsLoading } = useMyEarnings();
+  const { data: referrals, isLoading: referralsLoading } = useMyReferrals();
 
   const username = me?.username;
 
@@ -55,6 +69,187 @@ export default function Earnings() {
             signs up within 30 days is credited as your referral.
           </p>
           <ReferralLink username={username} />
+        </div>
+
+        <div className="mb-8">
+          <h2 className="text-lg font-bold mb-1">Referrals</h2>
+          <p className="text-xs text-secondary mb-4">
+            Everyone who signed up under you, and which template (or your
+            profile) sent them. Use this to spot which template attracts
+            paying users.
+          </p>
+
+          <div className="grid grid-cols-3 gap-3 md:gap-4 mb-6">
+            <SummaryCard
+              label="Referred users"
+              value={referrals ? String(referrals.total) : "—"}
+              loading={referralsLoading}
+              icon={Users}
+            />
+            <SummaryCard
+              label="Now paying"
+              value={referrals ? String(referrals.paying) : "—"}
+              loading={referralsLoading}
+              icon={CheckCircle2}
+            />
+            <SummaryCard
+              label="Conversion rate"
+              value={
+                referrals
+                  ? `${referrals.conversionPct.toFixed(1)}%`
+                  : "—"
+              }
+              loading={referralsLoading}
+              icon={TrendingUp}
+            />
+          </div>
+
+          <h3 className="text-sm font-medium mb-3">By source</h3>
+          <div className="border border-border rounded-xl bg-surface overflow-x-auto mb-6">
+            <table className="w-full text-sm min-w-[480px]">
+              <thead>
+                <tr className="border-b border-border bg-surface-raised/50">
+                  <th className="text-left font-medium p-3 md:p-4 text-secondary">
+                    Source
+                  </th>
+                  <th className="text-right font-medium p-3 md:p-4 text-secondary">
+                    Signups
+                  </th>
+                  <th className="text-right font-medium p-3 md:p-4 text-secondary">
+                    Paying
+                  </th>
+                  <th className="text-right font-medium p-3 md:p-4 text-secondary">
+                    Conversion
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {referralsLoading ? (
+                  <tr>
+                    <td colSpan={4} className="p-6 text-center text-secondary">
+                      <Loader2 className="w-4 h-4 animate-spin inline" />
+                    </td>
+                  </tr>
+                ) : !referrals || referrals.bySource.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={4}
+                      className="p-6 text-center text-secondary text-sm"
+                    >
+                      No signups yet.
+                    </td>
+                  </tr>
+                ) : (
+                  referrals.bySource.map((s) => (
+                    <tr
+                      key={`${s.kind}:${s.sourceProjectSlug ?? ""}`}
+                      className="border-b border-border last:border-0 hover:bg-surface-raised/50 transition-colors"
+                    >
+                      <td className="p-3 md:p-4">
+                        <SourceLabel
+                          kind={s.kind}
+                          slug={s.sourceProjectSlug}
+                          name={s.sourceProjectName}
+                          ownerUsername={username}
+                        />
+                      </td>
+                      <td className="p-3 md:p-4 font-mono text-right">
+                        {s.total}
+                      </td>
+                      <td className="p-3 md:p-4 font-mono text-right">
+                        {s.paying}
+                      </td>
+                      <td className="p-3 md:p-4 font-mono text-right text-secondary">
+                        {/* Per-source conversion. Computed client-side so
+                            the API stays a single source of truth (raw
+                            counts) and the same numbers reconcile with the
+                            top-level cards. */}
+                        {s.total === 0
+                          ? "0%"
+                          : `${((s.paying / s.total) * 100).toFixed(1)}%`}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <h3 className="text-sm font-medium mb-3">Referred users</h3>
+          <div className="border border-border rounded-xl bg-surface overflow-x-auto">
+            <table className="w-full text-sm min-w-[640px]">
+              <thead>
+                <tr className="border-b border-border bg-surface-raised/50">
+                  <th className="text-left font-medium p-3 md:p-4 text-secondary">
+                    User
+                  </th>
+                  <th className="text-left font-medium p-3 md:p-4 text-secondary">
+                    Source
+                  </th>
+                  <th className="text-left font-medium p-3 md:p-4 text-secondary">
+                    Signed up
+                  </th>
+                  <th className="text-right font-medium p-3 md:p-4 text-secondary">
+                    Status
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {referralsLoading ? (
+                  <tr>
+                    <td colSpan={4} className="p-6 text-center text-secondary">
+                      <Loader2 className="w-4 h-4 animate-spin inline" />
+                    </td>
+                  </tr>
+                ) : !referrals || referrals.users.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={4}
+                      className="p-6 text-center text-secondary text-sm"
+                    >
+                      Nobody has signed up via your link yet. Share your
+                      profile or a template to get started.
+                    </td>
+                  </tr>
+                ) : (
+                  referrals.users.map((u) => (
+                    <tr
+                      key={u.username}
+                      className="border-b border-border last:border-0 hover:bg-surface-raised/50 transition-colors"
+                    >
+                      <td className="p-3 md:p-4">
+                        <Link
+                          href={`/${u.username}`}
+                          className="text-foreground hover:text-primary"
+                        >
+                          @{u.username}
+                        </Link>
+                        {u.displayName && u.displayName !== u.username && (
+                          <span className="text-secondary ml-2">
+                            {u.displayName}
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-3 md:p-4 text-secondary">
+                        <SourceLabel
+                          kind={u.kind}
+                          slug={u.sourceProjectSlug}
+                          name={u.sourceProjectName}
+                          ownerUsername={username}
+                        />
+                      </td>
+                      <td className="p-3 md:p-4 text-secondary">
+                        {u.signupDate}
+                      </td>
+                      <td className="p-3 md:p-4 text-right">
+                        <PayingBadge hasPaid={u.hasPaid} />
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         <h2 className="text-lg font-bold mb-4">Earnings history</h2>
@@ -207,6 +402,53 @@ function StatusBadge({ status }: { status: string }) {
     >
       <div className={`w-1.5 h-1.5 rounded-full ${dotClassName}`} />
       {status}
+    </span>
+  );
+}
+
+// Renders a referral source as either a link (live template), plain
+// "Public profile" text (no template attribution), or a muted
+// "Deleted template" tag (template ID was set at signup but the row is
+// now gone). Centralised so both the by-source and per-user tables
+// label things identically.
+function SourceLabel({
+  kind,
+  slug,
+  name,
+  ownerUsername,
+}: {
+  kind: "profile" | "template" | "deleted_template";
+  slug: string | null;
+  name: string | null;
+  ownerUsername: string | undefined;
+}) {
+  if (kind === "template" && slug && ownerUsername) {
+    return (
+      <Link
+        href={`/${ownerUsername}/${slug}`}
+        className="text-foreground hover:text-primary"
+      >
+        {name ?? slug}
+      </Link>
+    );
+  }
+  if (kind === "deleted_template") {
+    return <span className="text-secondary italic">Deleted template</span>;
+  }
+  return <span className="text-secondary">Public profile</span>;
+}
+
+function PayingBadge({ hasPaid }: { hasPaid: boolean }) {
+  const className = hasPaid
+    ? "text-success bg-success/10"
+    : "text-secondary bg-surface-raised";
+  const dotClassName = hasPaid ? "bg-success" : "bg-secondary";
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium ${className}`}
+    >
+      <div className={`w-1.5 h-1.5 rounded-full ${dotClassName}`} />
+      {hasPaid ? "paying" : "signed up"}
     </span>
   );
 }
