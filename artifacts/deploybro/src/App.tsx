@@ -44,16 +44,12 @@ import AdminTemplates from "@/pages/admin/templates";
 import AdminRevenue from "@/pages/admin/revenue";
 import AdminPayouts from "@/pages/admin/payouts";
 import {
-  Docs,
   Changelog,
-  Templates,
   Status,
-  Blog,
   About,
   Careers,
   Privacy,
   Terms,
-  Community,
   AcceptableUse,
   CookiePolicy,
   DPA,
@@ -95,12 +91,9 @@ function Router() {
       <Route path="/admin/templates" component={gated(AdminTemplates)} />
       <Route path="/admin/revenue" component={gated(AdminRevenue)} />
       <Route path="/admin/payouts" component={gated(AdminPayouts)} />
-      <Route path="/docs" component={Docs} />
       <Route path="/how-it-works" component={HowItWorks} />
       <Route path="/changelog" component={Changelog} />
-      <Route path="/templates" component={Templates} />
       <Route path="/status" component={Status} />
-      <Route path="/blog" component={Blog} />
       <Route path="/about" component={About} />
       <Route path="/careers" component={Careers} />
       <Route path="/privacy" component={Privacy} />
@@ -108,7 +101,6 @@ function Router() {
       <Route path="/aup" component={AcceptableUse} />
       <Route path="/cookies" component={CookiePolicy} />
       <Route path="/dpa" component={DPA} />
-      <Route path="/community" component={Community} />
       <Route path="/build/new" component={gated(BuildNew)} />
       <Route path="/:username" component={Profile} />
       <Route path="/:username/:slug" component={Project} />
