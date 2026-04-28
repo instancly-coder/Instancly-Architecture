@@ -3,6 +3,8 @@ import { Menu } from "lucide-react";
 import { BrandLogo } from "./brand-logo";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { useMe } from "@/lib/api";
+import { useMobileUserMenu } from "./mobile-user-menu";
 
 const NAV_LINKS = [
   { label: "How it works", href: "/how-it-works" },
@@ -12,6 +14,8 @@ const NAV_LINKS = [
 export function MarketingNav() {
   const [location] = useLocation();
   const [open, setOpen] = useState(false);
+  const { data: me } = useMe();
+  const { openMenu } = useMobileUserMenu();
 
   const isActive = (href: string) => {
     if (href === "/") return location === "/";
@@ -39,21 +43,42 @@ export function MarketingNav() {
       </div>
 
       <div className="flex items-center gap-2 sm:gap-3">
-        <Link
-          href="/login"
-          className="text-sm font-medium hover:text-foreground text-secondary transition-colors hidden sm:block"
-        >
-          Log in
-        </Link>
-        <Button
-          asChild
-          size="sm"
-          className="bg-primary text-primary-foreground hover:bg-primary/90 font-medium"
-        >
-          <Link href="/login">Start building</Link>
-        </Button>
+        {me ? (
+          <Button
+            asChild
+            size="sm"
+            variant="outline"
+            className="hidden sm:inline-flex"
+          >
+            <Link href="/dashboard">Dashboard</Link>
+          </Button>
+        ) : (
+          <>
+            <Link
+              href="/login"
+              className="text-sm font-medium hover:text-foreground text-secondary transition-colors hidden sm:block"
+            >
+              Log in
+            </Link>
+            <Button
+              asChild
+              size="sm"
+              className="bg-primary text-primary-foreground hover:bg-primary/90 font-medium"
+            >
+              <Link href="/login">Start building</Link>
+            </Button>
+          </>
+        )}
         <button
-          onClick={() => setOpen((v) => !v)}
+          onClick={() => {
+            // Logged-in users get the rich global drawer; logged-out users get
+            // the small inline dropdown with marketing links + login.
+            if (me) {
+              openMenu();
+            } else {
+              setOpen((v) => !v);
+            }
+          }}
           className="md:hidden w-8 h-8 rounded-md flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
           aria-label="Open menu"
         >
@@ -61,7 +86,7 @@ export function MarketingNav() {
         </button>
       </div>
 
-      {open && (
+      {open && !me && (
         <div className="md:hidden absolute top-14 left-0 right-0 bg-surface border-b border-border shadow-lg p-4 flex flex-col gap-1">
           {NAV_LINKS.map((l) => (
             <Link

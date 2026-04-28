@@ -93,10 +93,6 @@ export default function Landing() {
     return () => window.clearInterval(id);
   }, []);
 
-  useEffect(() => {
-    if (me) navigate("/dashboard");
-  }, [me, navigate]);
-
   const onPickFiles = (files: FileList | null) => {
     if (!files) return;
     const ALLOWED = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);

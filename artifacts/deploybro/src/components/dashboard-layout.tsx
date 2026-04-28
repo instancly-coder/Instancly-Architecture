@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from "react";
+import { type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard,
@@ -7,7 +7,6 @@ import {
   Settings,
   LogOut,
   Menu,
-  X,
   Coins,
 } from "lucide-react";
 import {
@@ -20,6 +19,7 @@ import {
 import { BrandLogo } from "./brand-logo";
 import { useMe } from "@/lib/api";
 import { authClient, authConfigured } from "@/auth";
+import { useMobileUserMenu } from "./mobile-user-menu";
 
 const NAV = [
   { href: "/dashboard", label: "Projects", icon: LayoutDashboard },
@@ -31,8 +31,8 @@ const NAV = [
 
 export function DashboardLayout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
-  const [open, setOpen] = useState(false);
   const { data: me } = useMe();
+  const { openMenu } = useMobileUserMenu();
   const initial = (me?.displayName?.[0] ?? me?.username?.[0] ?? "?").toUpperCase();
   const displayName = me?.displayName ?? "—";
   const username = me?.username ?? "loading";
@@ -47,44 +47,26 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background text-foreground flex">
+      {/* Mobile header — hamburger opens the global drawer */}
       <header className="md:hidden fixed top-0 inset-x-0 h-14 z-30 bg-surface border-b border-border flex items-center justify-between px-4">
         <Link href="/dashboard" className="flex items-center gap-2">
           <BrandLogo className="h-5 w-auto text-foreground" />
         </Link>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => setOpen(true)}
-            className="w-9 h-9 rounded-md flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised"
-            aria-label="Open menu"
-          >
-            <Menu className="w-5 h-5" />
-          </button>
-        </div>
+        <button
+          onClick={openMenu}
+          className="w-9 h-9 rounded-md flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised"
+          aria-label="Open menu"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
       </header>
 
-      {open && (
-        <div
-          className="md:hidden fixed inset-0 z-40 bg-black/60"
-          onClick={() => setOpen(false)}
-        />
-      )}
-
-      <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 border-r border-border bg-surface flex flex-col transition-transform duration-200 md:translate-x-0 ${
-          open ? "translate-x-0" : "-translate-x-full md:translate-x-0"
-        }`}
-      >
-        <div className="h-14 border-b border-border flex items-center justify-between px-6 gap-2">
+      {/* Desktop sidebar — always visible on md+ */}
+      <aside className="hidden md:flex fixed inset-y-0 left-0 z-40 w-64 border-r border-border bg-surface flex-col">
+        <div className="h-14 border-b border-border flex items-center px-6">
           <Link href="/dashboard" className="flex items-center gap-2">
             <BrandLogo className="h-5 w-auto text-foreground" />
           </Link>
-          <button
-            onClick={() => setOpen(false)}
-            className="md:hidden w-8 h-8 rounded-md flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised"
-            aria-label="Close menu"
-          >
-            <X className="w-4 h-4" />
-          </button>
         </div>
 
         <div className="p-4 flex-1">
@@ -96,7 +78,6 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
                 <Link
                   key={item.href}
                   href={item.href}
-                  onClick={() => setOpen(false)}
                   className={`flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
                     active
                       ? "bg-primary text-primary-foreground"

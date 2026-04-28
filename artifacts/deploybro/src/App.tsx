@@ -21,6 +21,7 @@ import { initThemeOnce } from "@/hooks/use-theme";
 import { AuthGate } from "@/components/auth-gate";
 import { SessionSync } from "@/components/session-sync";
 import { ConfigPrewarm } from "@/components/config-prewarm";
+import { MobileUserMenuProvider } from "@/components/mobile-user-menu";
 import { authClient } from "@/auth";
 import Landing from "@/pages/landing";
 import Login from "@/pages/login";
@@ -140,7 +141,9 @@ function App() {
         <ConfigPrewarm />
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "") }>
           <AuthProviderShell>
-            <Router />
+            <MobileUserMenuProvider>
+              <Router />
+            </MobileUserMenuProvider>
           </AuthProviderShell>
         </WouterRouter>
         <RadixToaster />
