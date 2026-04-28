@@ -67,6 +67,10 @@ Every HTML response served from `/api/preview/...` (see `artifacts/api-server/sr
 
 Clicking the button posts a `{ type: "deploybro:preview-error", message, where, stack, autofix: true }` message to the parent window. The builder shell (`artifacts/deploybro/src/pages/builder.tsx`) authenticates the message by checking `event.source === previewIframeRef.current.contentWindow` (defends against spoofed autofix triggers from third-party scripts), then either auto-submits a fix prompt to Claude (if the chat is idle and the input is empty) or pre-fills the input for the user to review (if streaming or if the user is mid-prompt). Dedupe is keyed on `message|location` and resets on slug change or when a new build starts so legitimate retries aren't blocked.
 
+## Landing page sections
+
+`landing.tsx` is structured as: hero (with perspective grid background, prompt composer, model picker) → "How it works" 3-step explainer → **"Built in" feature grid + stat ribbon** (bolt-inspired: 6 feature cards covering AI builder / live preview / Postgres / auth / domains / one-click publish, followed by a 3-up stat strip — "60s to live URL", "0 servers", "1-click publish") → templates carousel → final CTA. Section headlines use a bolt-style mixed-weight ribbon: `text-secondary font-light` for the structural lead-in, `text-foreground` (white) for the emphasis word(s).
+
 ## Homepage prompt → builder flow
 
 A prompt typed on the landing page carries straight through to the builder, including through login if needed.

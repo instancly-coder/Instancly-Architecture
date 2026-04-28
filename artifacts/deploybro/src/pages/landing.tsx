@@ -10,6 +10,13 @@ import {
   ListTodo,
   ChevronDown,
   X,
+  Database,
+  Lock,
+  Eye,
+  Rocket,
+  Sparkles,
+  History,
+  Zap,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
@@ -38,6 +45,26 @@ const ROTATING_NOUNS = [
   "wedding site",
   "weekend hack",
   "dream app",
+];
+
+/**
+ * Bolt-inspired feature grid. Each card has:
+ *   - icon + short title (what the feature is)
+ *   - one-sentence punchline (what it gets you)
+ *   - a chunky visual element rendered inline below the copy.
+ * Visuals are rendered ad-hoc per-card in JSX (mock UI fragments)
+ * rather than being driven by a generic data field — this lets each
+ * card pick the right shape (badge, button, list, glow) for what it
+ * sells, the same way bolt.new mixes infinity-loop, big "100" SEO
+ * dial, and a screenshot of a Publish button across its grid.
+ */
+const FEATURES = [
+  { icon: Sparkles,  title: "AI builder",        body: "Describe it in plain English. Watch Claude write real React, wired to a real database, in real time." },
+  { icon: Eye,       title: "Live preview",      body: "Every keystroke renders. No reload. No deploy step. The preview is the source of truth." },
+  { icon: Database,  title: "Postgres on tap",   body: "One click provisions a dedicated Neon branch for your project. No connection strings to copy around." },
+  { icon: Lock,      title: "Auth, built in",    body: "Google, GitHub, Apple sign-in wired up the moment you ask for it. Sessions, tokens, the lot." },
+  { icon: Globe,     title: "Custom domains",    body: "Bring your own domain. SSL is automatic. Or ship to a free deploybro.app subdomain in seconds." },
+  { icon: Rocket,    title: "One-click publish", body: "A real Vercel deployment behind a real URL. No DevOps. No yaml. No \"works on my machine.\"" },
 ];
 
 const STEPS = [
@@ -376,11 +403,12 @@ export default function Landing() {
         <section id="how" className="py-20 md:py-32 px-4 sm:px-6">
           <div className="max-w-7xl mx-auto">
             <div className="text-center max-w-2xl mx-auto mb-16 md:mb-24">
-              <h2 className="text-3xl md:text-5xl font-bold tracking-tight mb-4 text-balance">
-                <span className="block sm:inline">From \"wouldn't it be cool if…\"</span>{" "}
-                <span className="block sm:inline">
-                  to <span className="text-primary">live in production.</span>
-                </span>
+              {/* Bolt-style mixed-weight headline: muted-grey lead-in
+                  with a stark white emphasis on the verb. Reads as one
+                  ribbon at desktop, stacks at mobile. */}
+              <h2 className="text-3xl md:text-5xl font-bold tracking-tight mb-4 text-balance leading-[1.1]">
+                <span className="text-secondary font-light">From idea to </span>
+                <span className="text-foreground">live in production.</span>
               </h2>
               <p className="text-secondary text-base md:text-lg">
                 Three moves. Each one is a single sentence. No frameworks to learn.
@@ -476,6 +504,59 @@ export default function Landing() {
             </div>
           </div>
         </section>
+        {/* "Everything built in" — bolt-style feature grid. Each card
+            sells one infrastructure piece DeployBro takes off the
+            user's plate, with an inline visual that makes the value
+            tangible (badge, mock button, code, etc.) instead of just
+            a flat block of copy. */}
+        <section id="features" className="py-20 md:py-32 px-4 sm:px-6 border-t border-border bg-gradient-to-b from-background via-surface/30 to-background">
+          <div className="max-w-7xl mx-auto">
+            <div className="text-center max-w-3xl mx-auto mb-14 md:mb-20">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-border bg-surface text-xs font-mono uppercase tracking-wider text-secondary mb-5">
+                <Zap className="w-3 h-3 text-primary" /> Built in
+              </div>
+              <h2 className="text-3xl md:text-5xl font-bold tracking-tight mb-4 text-balance leading-[1.1]">
+                <span className="text-secondary font-light">Everything you need to ship. </span>
+                <span className="text-foreground">Built in.</span>
+              </h2>
+              <p className="text-secondary text-base md:text-lg">
+                Stop stitching together five SaaS products to launch one app. Database, auth, domains, deployments — wired up the moment you create a project.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
+              {FEATURES.map((f) => {
+                const Icon = f.icon;
+                return (
+                  <div key={f.title} className="group relative rounded-2xl border border-border bg-surface/60 backdrop-blur-sm p-6 md:p-7 overflow-hidden transition-all hover:border-primary/40 hover:bg-surface">
+                    <div aria-hidden className="absolute -top-20 -right-20 w-48 h-48 rounded-full bg-primary/10 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className="relative">
+                      <div className="inline-flex items-center justify-center w-11 h-11 rounded-xl bg-primary/10 border border-primary/20 mb-5">
+                        <Icon className="w-5 h-5 text-primary" />
+                      </div>
+                      <h3 className="text-lg md:text-xl font-semibold mb-2 tracking-tight">{f.title}</h3>
+                      <p className="text-secondary text-sm md:text-[15px] leading-relaxed">{f.body}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {/* Big stat ribbon — bolt's "98%" / "1000x" pattern, sized
+                so it reads as a punctuation moment between the feature
+                grid and the templates that follow. */}
+            <div className="mt-16 md:mt-20 grid grid-cols-1 md:grid-cols-3 gap-px rounded-2xl overflow-hidden border border-border bg-border">
+              {[
+                { stat: "60s", label: "From prompt to live URL" },
+                { stat: "0",   label: "Servers to manage" },
+                { stat: "1",   label: "Click to publish" },
+              ].map((s) => (
+                <div key={s.label} className="bg-surface/60 px-6 py-10 text-center">
+                  <div className="text-5xl md:text-6xl font-black tracking-tight text-foreground mb-2 [text-shadow:0_0_40px_hsl(var(--primary)/0.35)]">{s.stat}</div>
+                  <div className="text-xs md:text-sm text-secondary uppercase tracking-wider font-medium">{s.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
         <section id="templates" className="py-20 md:py-28 px-4 sm:px-6 border-t border-border">
           <div className="max-w-7xl mx-auto">
             <div className="flex items-end justify-between mb-10 gap-4 flex-wrap">
@@ -538,7 +619,10 @@ export default function Landing() {
         </section>
         <section className="py-24 md:py-32 px-4 sm:px-6 border-t border-border">
           <div className="max-w-7xl mx-auto text-center">
-            <h2 className="text-4xl md:text-5xl font-bold mb-6 tracking-tight">Ready to build?</h2>
+            <h2 className="text-4xl md:text-6xl font-black mb-6 tracking-tight leading-[1.05]">
+              <span className="text-secondary font-light">Ready to </span>
+              <span className="text-foreground">build something real?</span>
+            </h2>
             <p className="text-lg text-secondary mb-10 max-w-xl mx-auto">
               Free to start. No credit card. No "schedule a demo" nonsense.
             </p>
