@@ -68,6 +68,7 @@ export function Shell({
   children,
   prose = false,
   headerActions,
+  headerExtra,
 }: {
   eyebrow?: string;
   title: string;
@@ -75,6 +76,10 @@ export function Shell({
   children: ReactNode;
   prose?: boolean;
   headerActions?: ReactNode;
+  // Optional content rendered inside the page header, below the
+  // intro paragraph and above the body. Used by /explore to plant
+  // a hero search bar with an autocomplete dropdown.
+  headerExtra?: ReactNode;
 }) {
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
@@ -105,6 +110,7 @@ export function Shell({
                   <div className="shrink-0">{headerActions}</div>
                 )}
               </div>
+              {headerExtra && <div className="mt-6">{headerExtra}</div>}
             </header>
             <div className={prose ? "max-w-3xl" : ""}>{children}</div>
           </div>

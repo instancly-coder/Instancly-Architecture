@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import { Search, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { useTemplates, useMe, type ApiTemplateItem } from "@/lib/api";
@@ -22,15 +22,18 @@ import { Shell } from "@/pages/info";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { PROJECT_CATEGORIES } from "@/lib/categories";
 
-// Single public-facing browse surface. Replaces the previous separate
-// `/templates` and `/explore` routes — both are now consolidated here
-// at `/explore`. Lists the curated, admin-featured templates returned
-// by `GET /api/templates` and lets the visitor narrow with a search
-// box, category filter, and sort.
+// Single public-facing browse surface. Lists curated, admin-featured
+// templates with three browsing surfaces stacked top-to-bottom:
+//   1. Hero: title + a prominent search input with an inline dropdown
+//      that surfaces matching templates as the visitor types.
+//   2. Featured carousel: top-cloned spotlights, sits between the
+//      hero and the browse grid so the hero stays uncluttered.
+//   3. Browse grid with category + sort filters (search has been
+//      promoted to the hero so it doesn't appear here twice).
 //
-// Visual layout mirrors the four-up grid on `landing.tsx` (same card
-// chrome, same `aspect-[16/10]` thumbnail, same `screenshotUrl ??
-// coverImageUrl` resolution, same letter fallback).
+// State for the search query lives at the page level so the hero
+// dropdown and the grid stay in sync — typing in the hero also
+// narrows the grid below.
 
 type SortKey = "recent" | "popular" | "name";
 
@@ -40,9 +43,13 @@ const SORT_LABELS: Record<SortKey, string> = {
   name: "A → Z",
 };
 
-// How many of the top-cloned templates feed the hero carousel. Five
-// gives a strong "best of" feel without paginating offscreen on
-// desktop where two cards are visible at a time.
+// How many rows the hero search dropdown shows at most. Eight keeps
+// the popover within roughly a viewport-half on mobile while still
+// offering enough variety for a typical search.
+const HERO_DROPDOWN_LIMIT = 8;
+
+// How many of the top-cloned templates feed the spotlight carousel.
+// Five gives a strong "best of" feel without paginating offscreen.
 const FEATURED_CAROUSEL_COUNT = 5;
 
 function TemplateSkeletonCard() {
@@ -80,8 +87,6 @@ function applyFilters(
   } else if (sort === "name") {
     out = [...out].sort((a, b) => a.name.localeCompare(b.name));
   } else {
-    // "recent" — server orders by clones, so we have to sort by
-    // `createdAt` ourselves to make "Newest" mean what it says.
     out = [...out].sort(
       (a, b) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
@@ -91,9 +96,153 @@ function applyFilters(
   return out;
 }
 
-// Big-format hero card used inside the featured carousel. Wider
-// thumbnail and richer metadata than the grid card so the carousel
-// feels distinct from the grid below.
+// Returns matching templates for the hero dropdown. Identical needle
+// logic to `applyFilters` so the dropdown and the grid agree about
+// what "matches" means for a given query.
+function heroMatches(
+  templates: ApiTemplateItem[],
+  q: string,
+): ApiTemplateItem[] {
+  const needle = q.trim().toLowerCase();
+  if (!needle) return [];
+  return templates
+    .filter(
+      (t) =>
+        t.name.toLowerCase().includes(needle) ||
+        (t.description ?? "").toLowerCase().includes(needle) ||
+        t.author.toLowerCase().includes(needle),
+    )
+    .slice(0, HERO_DROPDOWN_LIMIT);
+}
+
+// Hero search: a wide input with an autocomplete dropdown that
+// renders below it whenever the visitor has typed something AND
+// there's at least one matching template. Click-outside, Escape,
+// and a row click all dismiss the popover.
+function HeroSearch({
+  value,
+  onChange,
+  templates,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  templates: ApiTemplateItem[];
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  const matches = useMemo(() => heroMatches(templates, value), [templates, value]);
+  const showDropdown = open && value.trim().length > 0;
+
+  // Click-outside dismissal. Bound only while open so we're not
+  // listening on every render.
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (!containerRef.current?.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  return (
+    <div ref={containerRef} className="relative w-full max-w-2xl">
+      <div className="relative">
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-secondary pointer-events-none" />
+        <Input
+          value={value}
+          onChange={(e) => {
+            onChange(e.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setOpen(false);
+          }}
+          placeholder="Search templates by name, description, or author"
+          aria-label="Search templates"
+          aria-expanded={showDropdown}
+          aria-autocomplete="list"
+          className="pl-12 pr-10 h-12 sm:h-14 text-base rounded-xl"
+        />
+        {value && (
+          <button
+            type="button"
+            onClick={() => {
+              onChange("");
+              setOpen(false);
+            }}
+            aria-label="Clear search"
+            className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-secondary hover:text-foreground hover:bg-surface-raised"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
+      {showDropdown && (
+        <div
+          role="listbox"
+          className="absolute z-50 left-0 right-0 mt-2 rounded-xl border border-border bg-surface shadow-xl overflow-hidden"
+        >
+          <div className="px-3 pt-2.5 pb-1 text-[11px] uppercase tracking-wider text-secondary">
+            {matches.length === 0
+              ? "No matches"
+              : `${matches.length} match${matches.length === 1 ? "" : "es"}`}
+          </div>
+          {matches.length > 0 && (
+            <ul className="max-h-[26rem] overflow-y-auto py-1">
+              {matches.map((t) => {
+                const img = t.screenshotUrl ?? t.coverImageUrl;
+                return (
+                  <li key={t.id}>
+                    <Link
+                      href={`/${t.author}/${t.slug}`}
+                      onClick={() => setOpen(false)}
+                      role="option"
+                      aria-label={`Open ${t.name} by ${t.author}`}
+                      className="flex items-center gap-3 px-3 py-2 hover:bg-surface-raised focus:bg-surface-raised outline-none"
+                    >
+                      <div className="w-10 h-10 rounded-lg overflow-hidden bg-surface-raised border border-border shrink-0">
+                        {img ? (
+                          <img
+                            src={img}
+                            alt=""
+                            loading="lazy"
+                            className="w-full h-full object-cover object-top"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-secondary font-mono text-sm">
+                            {t.name.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-medium truncate">
+                          {t.name}
+                        </div>
+                        <div className="text-xs text-secondary truncate">
+                          by @{t.author} · {t.category ?? "Other"}
+                        </div>
+                      </div>
+                      <span className="text-[11px] text-secondary shrink-0 hidden sm:inline">
+                        {t.clones} clones
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Big-format hero card used inside the featured carousel.
 function FeaturedCard({ t }: { t: ApiTemplateItem }) {
   const img = t.screenshotUrl ?? t.coverImageUrl;
   return (
@@ -145,8 +294,6 @@ function FeaturedCard({ t }: { t: ApiTemplateItem }) {
 }
 
 function FeaturedCarousel({ templates }: { templates: ApiTemplateItem[] }) {
-  // Top by clones — that's the most defensible "featured" signal we
-  // can compute client-side without a separate flag.
   const featured = useMemo(
     () =>
       [...templates]
@@ -155,8 +302,6 @@ function FeaturedCarousel({ templates }: { templates: ApiTemplateItem[] }) {
     [templates],
   );
 
-  // Embla API + chevron state. We track selected/canScroll so the
-  // arrow buttons can disable themselves at the ends.
   const [api, setApi] = useState<CarouselApi | null>(null);
   const [canPrev, setCanPrev] = useState(false);
   const [canNext, setCanNext] = useState(false);
@@ -219,10 +364,7 @@ function FeaturedCarousel({ templates }: { templates: ApiTemplateItem[] }) {
       >
         <CarouselContent>
           {featured.map((t) => (
-            <CarouselItem
-              key={t.id}
-              className="basis-full md:basis-1/2"
-            >
+            <CarouselItem key={t.id} className="basis-full md:basis-1/2">
               <FeaturedCard t={t} />
             </CarouselItem>
           ))}
@@ -232,16 +374,22 @@ function FeaturedCarousel({ templates }: { templates: ApiTemplateItem[] }) {
   );
 }
 
-function ExploreGrid() {
-  const { data: templates = [], isLoading } = useTemplates();
-  const [q, setQ] = useState("");
+// Browse panel: featured carousel + category/sort filters + grid.
+// Receives the search query from the hero so the grid stays synced.
+function ExploreBrowse({
+  templates,
+  isLoading,
+  q,
+  setQ,
+}: {
+  templates: ApiTemplateItem[];
+  isLoading: boolean;
+  q: string;
+  setQ: (v: string) => void;
+}) {
   const [category, setCategory] = useState<string>("all");
   const [sort, setSort] = useState<SortKey>("recent");
 
-  // Derive the category dropdown from the static list union'd with
-  // any extra values present in the data — that way an admin who
-  // adds a new bucket on the server doesn't have to ship a frontend
-  // change before it's selectable.
   const categories = useMemo(() => {
     const set = new Set<string>(PROJECT_CATEGORIES);
     for (const t of templates) {
@@ -262,64 +410,42 @@ function ExploreGrid() {
       <FeaturedCarousel templates={templates} />
 
       {/*
-        Mobile layout: search on row 1 (full width), the two selects
-        share row 2 side-by-side via grid-cols-2 so they don't stack
-        vertically. Desktop collapses everything onto one row.
+        Filter row — search lives in the hero now, so this row only
+        carries category + sort. Side-by-side via grid-cols-2 on
+        mobile so they don't stack vertically.
       */}
-      <div className="mb-6 flex flex-col sm:flex-row gap-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary pointer-events-none" />
-          <Input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search templates"
-            className="pl-9"
-            aria-label="Search templates"
-          />
-          {q && (
-            <button
-              type="button"
-              onClick={() => setQ("")}
-              aria-label="Clear search"
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-secondary hover:text-foreground hover:bg-surface-raised"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
-        <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-2">
-          <Select value={category} onValueChange={setCategory}>
-            <SelectTrigger
-              className="w-full sm:w-44"
-              aria-label="Filter by category"
-            >
-              <SelectValue placeholder="All categories" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All categories</SelectItem>
-              {categories.map((c) => (
-                <SelectItem key={c} value={c}>
-                  {c}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={sort} onValueChange={(v) => setSort(v as SortKey)}>
-            <SelectTrigger
-              className="w-full sm:w-40"
-              aria-label="Sort templates"
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {(Object.keys(SORT_LABELS) as SortKey[]).map((key) => (
-                <SelectItem key={key} value={key}>
-                  {SORT_LABELS[key]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+      <div className="mb-6 grid grid-cols-2 gap-2 sm:flex sm:justify-end sm:gap-2">
+        <Select value={category} onValueChange={setCategory}>
+          <SelectTrigger
+            className="w-full sm:w-44"
+            aria-label="Filter by category"
+          >
+            <SelectValue placeholder="All categories" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All categories</SelectItem>
+            {categories.map((c) => (
+              <SelectItem key={c} value={c}>
+                {c}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={sort} onValueChange={(v) => setSort(v as SortKey)}>
+          <SelectTrigger
+            className="w-full sm:w-40"
+            aria-label="Sort templates"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {(Object.keys(SORT_LABELS) as SortKey[]).map((key) => (
+              <SelectItem key={key} value={key}>
+                {SORT_LABELS[key]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {isLoading ? (
@@ -403,23 +529,35 @@ export default function Explore() {
   // anonymous visitors get the marketing Shell for SEO + a sign-up CTA
   // in the footer.
   const { data: me } = useMe();
+  const { data: templates = [], isLoading } = useTemplates();
+  const [q, setQ] = useState("");
   const isAuthed = !!me?.username;
+
+  const heroSearch = (
+    <HeroSearch value={q} onChange={setQ} templates={templates} />
+  );
+  const browse = (
+    <ExploreBrowse
+      templates={templates}
+      isLoading={isLoading}
+      q={q}
+      setQ={setQ}
+    />
+  );
 
   if (isAuthed) {
     return (
       <DashboardLayout>
         <div className="px-4 md:px-8 py-6 md:py-8">
-          <div className="mb-6">
-            <div className="text-xs uppercase tracking-wider text-secondary mb-1">
-              Explore
-            </div>
-            <h1 className="text-2xl md:text-3xl font-bold">Featured templates</h1>
-            <p className="text-sm text-secondary mt-1 max-w-2xl">
+          <div className="mb-8">
+            <h1 className="text-2xl md:text-3xl font-bold">Explore</h1>
+            <p className="text-sm text-secondary mt-1 mb-5 max-w-2xl">
               Hand-picked starting points. Clone any template into your
               dashboard, then customise with the AI builder.
             </p>
+            {heroSearch}
           </div>
-          <ExploreGrid />
+          {browse}
         </div>
       </DashboardLayout>
     );
@@ -427,11 +565,11 @@ export default function Explore() {
 
   return (
     <Shell
-      eyebrow="Explore"
-      title="Featured templates"
+      title="Explore"
       intro="Hand-picked starting points. Clone any template into your dashboard, then customise with the AI builder."
+      headerExtra={heroSearch}
     >
-      <ExploreGrid />
+      {browse}
     </Shell>
   );
 }
