@@ -197,11 +197,20 @@ router.get("/me/projects", async (req: Request, res: Response): Promise<void> =>
     .from(projectsTable)
     .where(eq(projectsTable.userId, user.id))
     .orderBy(desc(projectsTable.lastBuiltAt));
+  // ownerUsername is required by ProjectListItem (added in commit
+  // bd20133 "Add owner username and screenshot URL to project
+  // details") but the SQL projection above doesn't carry it. Since
+  // we already filter by user.id, every row in this list belongs to
+  // the authed user — so we can just stamp the username from the
+  // session rather than joining usersTable. Without this stamp the
+  // Zod parse below throws and the dashboard silently shows the
+  // empty state to people who actually have projects.
   const data = ListMyProjectsResponse.parse(
     rows.map((r) => ({
       ...r,
       lastBuiltAt: r.lastBuiltAt.toISOString(),
       buildsCount: Number(r.buildsCount),
+      ownerUsername: user.username,
     })),
   );
   res.json(data);
@@ -825,10 +834,14 @@ router.patch("/me/projects/:slug", async (req: Request, res: Response): Promise<
     res.status(404).json({ status: "error", message: "Project not found" });
     return;
   }
+  // Same ownerUsername fill-in as GET /me/projects — the projection
+  // doesn't carry the username, but the row is by definition owned
+  // by the authed user since we filter on `userId`.
   const data = RenameMyProjectResponse.parse({
     ...updated,
     lastBuiltAt: updated.lastBuiltAt.toISOString(),
     buildsCount: 0,
+    ownerUsername: user.username,
   });
   res.json(data);
 });
