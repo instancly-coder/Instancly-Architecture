@@ -2638,7 +2638,9 @@ function PreviewPane({
 // Shared "device" backdrop used for every non-iframe state so the empty
 // and building screens share one consistent branded surface (subtle
 // radial glow on top of the dark builder canvas) instead of dropping
-// the user onto a stark white card.
+// the user onto a stark white card. The faint grid texture overlay
+// was removed per design feedback so the canvas reads as a clean
+// gradient surface.
 function PreviewPaneShell({ children }: { children: React.ReactNode }) {
   return (
     <div
@@ -2648,16 +2650,6 @@ function PreviewPaneShell({ children }: { children: React.ReactNode }) {
           "radial-gradient(120% 80% at 50% 0%, rgba(59,130,246,0.12) 0%, rgba(15,15,18,0) 60%), linear-gradient(180deg, #0b0b0f 0%, #0e0f14 100%)",
       }}
     >
-      {/* Faint grid texture so the empty surface still feels like "a canvas" */}
-      <div
-        aria-hidden
-        className="absolute inset-0 opacity-[0.06] pointer-events-none"
-        style={{
-          backgroundImage:
-            "linear-gradient(rgba(255,255,255,0.6) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.6) 1px, transparent 1px)",
-          backgroundSize: "32px 32px",
-        }}
-      />
       <div className="relative flex-1 flex flex-col">{children}</div>
     </div>
   );
@@ -2681,14 +2673,6 @@ function PreviewEmptyState() {
         <div className="text-lg font-semibold text-foreground">
           Your preview will appear here
         </div>
-        <div className="text-sm text-secondary">
-          Describe what you want to build in the chat on the left and DeployBro
-          will generate a live preview right here.
-        </div>
-      </div>
-      <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-tertiary">
-        <Sparkles className="w-3 h-3" />
-        Ready when you are
       </div>
     </div>
   );
