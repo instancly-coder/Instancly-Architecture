@@ -187,19 +187,27 @@ export default function Landing() {
       <MarketingNav />
       <main className="flex-1">
         <section className="relative overflow-hidden">
+          {/* Background-only stack: kept on -z-10 so the hero content
+              paints over it. Holds the soft top halo + the faint flat
+              grid on the upper half. */}
           <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
             {/* Soft top glow — keeps the hero's primary-tinted halo */}
             <div className="absolute inset-0 bg-[radial-gradient(60%_50%_at_50%_0%,hsl(var(--primary)/0.18)_0%,transparent_70%)]" />
-            {/* Faint flat grid in the upper portion — same pattern as
-                before, just trimmed to the top half so it doesn't
-                fight with the perspective grid below. */}
+            {/* Faint flat grid in the upper portion — trimmed so it
+                doesn't fight with the perspective grid below. */}
             <div className="absolute inset-x-0 top-0 h-1/2 opacity-[0.18] dark:opacity-[0.12]" style={{ backgroundImage: "linear-gradient(to right, hsl(var(--border)) 1px, transparent 1px), linear-gradient(to bottom, hsl(var(--border)) 1px, transparent 1px)", backgroundSize: "56px 56px", maskImage: "radial-gradient(ellipse at top, black 30%, transparent 70%)", WebkitMaskImage: "radial-gradient(ellipse at top, black 30%, transparent 70%)" }} />
-            {/* Receding perspective grid — anchors the bottom of the hero. */}
-            <div className="perspective-grid" />
-            {/* Horizon glow where the perspective grid meets the fade. */}
-            <div className="absolute inset-x-0 bottom-[20%] h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-            <div className="absolute left-1/2 -translate-x-1/2 bottom-[18%] h-24 w-3/4 bg-[radial-gradient(ellipse_at_center,hsl(var(--primary)/0.18),transparent_70%)] blur-xl" />
           </div>
+          {/* Perspective grid — lives outside the -z-10 wrapper so it
+              can't be hidden behind any opaque ancestor background. The
+              `pointer-events-none` on the wrapper class keeps it from
+              swallowing clicks on the hero's interactive elements. */}
+          <div aria-hidden className="perspective-grid">
+            <div className="perspective-grid__plane" />
+          </div>
+          {/* Horizon highlight: thin glowing line + soft halo right at
+              the spot where the perspective grid meets the fade. */}
+          <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-[360px] h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
+          <div aria-hidden className="pointer-events-none absolute left-1/2 -translate-x-1/2 -translate-y-1/2 bottom-[360px] h-32 w-2/3 bg-[radial-gradient(ellipse_at_center,hsl(var(--primary)/0.22),transparent_70%)] blur-2xl" />
           <div className="relative z-10 flex justify-center pt-10 pb-4">
             <Link href="https://deploybro.com/explore" className="glass-pill group inline-flex items-center gap-2 px-5 py-2 rounded-full text-xs font-medium text-foreground/90 transition-transform hover:-translate-y-px">
               Introducing DeployBro v2

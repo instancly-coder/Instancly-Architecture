@@ -340,47 +340,90 @@
 }
 
 /* ────────────────────────────────────────────────────────────────
- * Perspective grid — receding floor that anchors the hero.
- *
- * Two stacked linear-gradients draw the vertical and horizontal
- * lines, then a 3D rotateX tilts the whole plane so it appears
- * to recede toward the horizon. A radial mask + bottom-aligned
- * gradient fade out the far edge so the grid dissolves into the
- * background instead of cutting off in a hard line. The slow
- * vertical scroll on the gradient gives a subtle "moving toward
- * the horizon" feel without being distracting.
+ * Perspective grid — receding "synthwave floor" that anchors the
+ * hero. Implementation notes:
+ *   - A wrapper div carves out the visible area at the bottom of
+ *     the hero (explicit pixel height, no percentage games).
+ *   - The inner `.perspective-grid__plane` is the actual grid: it
+ *     uses two `repeating-linear-gradient`s (one for the vertical
+ *     lines, one for the horizontal lines) — these render more
+ *     consistently across browsers than the `linear-gradient`
+ *     1px-stop trick and don't depend on background-size aligning
+ *     perfectly with the rotated geometry.
+ *   - The 3D `rotateX` tilts the plane so it foreshortens toward
+ *     the horizon. `transform-origin: 50% 100%` keeps the close
+ *     edge anchored at the bottom of the wrapper.
+ *   - A linear-gradient mask fades the top of the plane (the far
+ *     end) into transparency so the grid dissolves into the
+ *     background instead of cutting off.
+ *   - `perspective-grid-scroll` slowly translates the gradient's
+ *     background-position to give a subtle "moving floor" feel.
+ *     Honoured by `prefers-reduced-motion` opt-out.
  * ──────────────────────────────────────────────────────────── */
 @keyframes perspective-grid-scroll {
   from { background-position: 0 0, 0 0; }
-  to   { background-position: 0 80px, 0 80px; }
+  to   { background-position: 0 80px, 80px 0; }
 }
 .perspective-grid {
   position: absolute;
-  left: 50%;
-  bottom: -5%;
-  width: 250%;
-  height: 60%;
-  transform: translateX(-50%) perspective(800px) rotateX(70deg);
-  transform-origin: center bottom;
-  background-image:
-    linear-gradient(to right, hsl(var(--primary) / 0.85) 2px, transparent 2px),
-    linear-gradient(to bottom, hsl(var(--primary) / 0.85) 2px, transparent 2px);
-  background-size: 80px 80px, 80px 80px;
-  /* Fade to transparent at the horizon (top of the rotated plane) so
-     the grid recedes naturally instead of cutting off in a hard line. */
-  mask-image: linear-gradient(to top, black 0%, black 20%, transparent 95%);
-  -webkit-mask-image: linear-gradient(to top, black 0%, black 20%, transparent 95%);
-  animation: perspective-grid-scroll 14s linear infinite;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 360px;
   pointer-events: none;
+  perspective: 600px;
+  perspective-origin: 50% 0%;
+  overflow: hidden;
+  /* Fade the far end (top of the wrapper, where the grid recedes
+     into the distance) to transparent. */
+  mask-image: linear-gradient(to bottom, transparent 0%, black 35%, black 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 35%, black 100%);
+}
+.perspective-grid__plane {
+  position: absolute;
+  left: -50%;
+  right: -50%;
+  bottom: 0;
+  height: 200%;
+  transform-origin: 50% 100%;
+  transform: rotateX(60deg);
+  background-image:
+    repeating-linear-gradient(
+      to right,
+      hsl(215 100% 65% / 0.6) 0,
+      hsl(215 100% 65% / 0.6) 1px,
+      transparent 1px,
+      transparent 80px
+    ),
+    repeating-linear-gradient(
+      to bottom,
+      hsl(215 100% 65% / 0.6) 0,
+      hsl(215 100% 65% / 0.6) 1px,
+      transparent 1px,
+      transparent 80px
+    );
+  animation: perspective-grid-scroll 12s linear infinite;
   will-change: background-position;
 }
-:root:not(.dark) .perspective-grid {
+:root:not(.dark) .perspective-grid__plane {
   background-image:
-    linear-gradient(to right, hsl(var(--primary) / 0.32) 1px, transparent 1px),
-    linear-gradient(to bottom, hsl(var(--primary) / 0.32) 1px, transparent 1px);
+    repeating-linear-gradient(
+      to right,
+      hsl(215 100% 50% / 0.35) 0,
+      hsl(215 100% 50% / 0.35) 1px,
+      transparent 1px,
+      transparent 80px
+    ),
+    repeating-linear-gradient(
+      to bottom,
+      hsl(215 100% 50% / 0.35) 0,
+      hsl(215 100% 50% / 0.35) 1px,
+      transparent 1px,
+      transparent 80px
+    );
 }
 @media (prefers-reduced-motion: reduce) {
-  .perspective-grid {
+  .perspective-grid__plane {
     animation: none;
   }
 }
