@@ -84,6 +84,14 @@ export default function Project() {
 
           <div className="space-y-4 mb-8">
             <div>
+              <div className="text-xs text-secondary mb-1">Category</div>
+              <div className="text-sm font-medium">
+                {project.category && project.category.length > 0
+                  ? project.category
+                  : "Other"}
+              </div>
+            </div>
+            <div>
               <div className="text-xs text-secondary mb-1">Framework</div>
               <div className="text-sm font-medium">{project.framework}</div>
             </div>

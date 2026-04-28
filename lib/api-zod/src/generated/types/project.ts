@@ -13,6 +13,7 @@ export interface Project {
   slug: string;
   description: string;
   framework: string;
+  category: string;
   status: string;
   isPublic: boolean;
   isFeaturedTemplate: boolean;

@@ -501,7 +501,7 @@ export default function Landing() {
                         so `object-cover object-top` paints the page header
                         full-width with no side cropping. */}
                     <div className="aspect-[16/10] bg-gradient-to-br from-primary/20 via-surface-raised to-background relative overflow-hidden">
-                      <div className="absolute top-2 right-2 px-2 py-0.5 rounded bg-primary text-primary-foreground text-[10px] font-mono uppercase z-10">{t.framework}</div>
+                      <div className="absolute top-2 right-2 px-2 py-0.5 rounded bg-primary text-primary-foreground text-[10px] font-mono uppercase z-10">{t.category ?? "Other"}</div>
                       {(t.screenshotUrl ?? t.coverImageUrl) ? (
                         <img
                           src={(t.screenshotUrl ?? t.coverImageUrl)!}

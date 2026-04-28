@@ -82,6 +82,7 @@ router.get("/templates", async (_req, res) => {
       slug: projectsTable.slug,
       description: projectsTable.description,
       framework: projectsTable.framework,
+      category: projectsTable.category,
       features: projectsTable.features,
       coverImageUrl: projectsTable.coverImageUrl,
       screenshotUrl: projectsTable.screenshotUrl,

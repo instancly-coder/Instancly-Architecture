@@ -13,6 +13,7 @@ export interface UpdateProjectBody {
   name?: string;
   description?: string;
   framework?: string;
+  category?: string;
   isPublic?: boolean;
   features?: string[];
   sections?: string[];

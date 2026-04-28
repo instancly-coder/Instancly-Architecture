@@ -1328,6 +1328,7 @@ components:
         slug: { type: string }
         description: { type: string }
         framework: { type: string }
+        category: { type: string }
         status: { type: string }
         isPublic: { type: boolean }
         isFeaturedTemplate: { type: boolean }
@@ -1364,6 +1365,7 @@ components:
         - slug
         - description
         - framework
+        - category
         - status
         - isPublic
         - isFeaturedTemplate
@@ -1385,6 +1387,7 @@ components:
         name: { type: string }
         description: { type: string }
         framework: { type: string }
+        category: { type: string }
         isPublic: { type: boolean }
         features:
           type: array
@@ -1506,6 +1509,7 @@ components:
         slug: { type: string }
         description: { type: string }
         framework: { type: string }
+        category: { type: string }
         features:
           type: array
           items: { type: string }
@@ -1527,6 +1531,7 @@ components:
         - slug
         - description
         - framework
+        - category
         - features
         - coverImageUrl
         - screenshotUrl

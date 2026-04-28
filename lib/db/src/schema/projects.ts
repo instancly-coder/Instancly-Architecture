@@ -21,6 +21,14 @@ export const projectsTable = pgTable(
     slug: text("slug").notNull(),
     description: text("description").default("").notNull(),
     framework: text("framework").default("React").notNull(),
+    // Use-case category surfaced on the public /explore page (SaaS,
+    // Services, Real Estate, Landing Page, etc). This is what visitors
+    // filter and browse by — distinct from `framework` (the tech stack)
+    // which we still keep for the builder/marketing copy. Owners pick
+    // it in the publish-details dialog. Defaults to "Other" so any
+    // project that hasn't been re-published since this column landed
+    // still shows up under a sensible bucket.
+    category: text("category").default("Other").notNull(),
     status: text("status").default("live").notNull(),
     isPublic: boolean("is_public").default(true).notNull(),
     // Admin-curated flag — only featured projects appear on the public

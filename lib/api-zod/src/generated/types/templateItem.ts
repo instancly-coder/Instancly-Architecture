@@ -15,6 +15,7 @@ export interface TemplateItem {
   slug: string;
   description: string;
   framework: string;
+  category: string;
   features: string[];
   coverImageUrl: string | null;
   screenshotUrl: string | null;

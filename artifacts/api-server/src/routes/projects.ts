@@ -62,6 +62,7 @@ router.get("/projects/:username/:slug", async (req: Request, res: Response): Pro
       slug: project.slug,
       description: project.description,
       framework: project.framework,
+      category: project.category,
       status: project.status,
       isPublic: project.isPublic,
       isFeaturedTemplate: project.isFeaturedTemplate,
@@ -128,6 +129,14 @@ router.patch(
     if (typeof body.framework === "string") {
       updates.framework = body.framework.slice(0, 60);
     }
+    if (typeof body.category === "string") {
+      // Trim and cap — the dropdown picks from a known list but we
+      // don't enforce that server-side so users can keep older values
+      // if the list ever changes. Empty string falls back to "Other"
+      // so the column always renders something on the explore page.
+      const v = body.category.trim().slice(0, 60);
+      updates.category = v.length > 0 ? v : "Other";
+    }
     if (typeof body.isPublic === "boolean") {
       updates.isPublic = body.isPublic;
     }
@@ -188,6 +197,7 @@ router.patch(
         slug: p.slug,
         description: p.description,
         framework: p.framework,
+        category: p.category,
         status: p.status,
         isPublic: p.isPublic,
         isFeaturedTemplate: p.isFeaturedTemplate,

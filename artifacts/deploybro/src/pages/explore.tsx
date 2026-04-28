@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
-import { Search, X } from "lucide-react";
+import { Search, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { useTemplates, useMe, type ApiTemplateItem } from "@/lib/api";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
@@ -12,14 +12,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Carousel,
+  CarouselApi,
+  CarouselContent,
+  CarouselItem,
+} from "@/components/ui/carousel";
 import { Shell } from "@/pages/info";
 import { DashboardLayout } from "@/components/dashboard-layout";
+import { PROJECT_CATEGORIES } from "@/lib/categories";
 
 // Single public-facing browse surface. Replaces the previous separate
 // `/templates` and `/explore` routes — both are now consolidated here
 // at `/explore`. Lists the curated, admin-featured templates returned
 // by `GET /api/templates` and lets the visitor narrow with a search
-// box, framework filter, and sort.
+// box, category filter, and sort.
 //
 // Visual layout mirrors the four-up grid on `landing.tsx` (same card
 // chrome, same `aspect-[16/10]` thumbnail, same `screenshotUrl ??
@@ -32,6 +39,11 @@ const SORT_LABELS: Record<SortKey, string> = {
   popular: "Most clones",
   name: "A → Z",
 };
+
+// How many of the top-cloned templates feed the hero carousel. Five
+// gives a strong "best of" feel without paginating offscreen on
+// desktop where two cards are visible at a time.
+const FEATURED_CAROUSEL_COUNT = 5;
 
 function TemplateSkeletonCard() {
   return (
@@ -49,12 +61,12 @@ function TemplateSkeletonCard() {
 function applyFilters(
   templates: ApiTemplateItem[],
   q: string,
-  framework: string,
+  category: string,
   sort: SortKey,
 ): ApiTemplateItem[] {
   const needle = q.trim().toLowerCase();
   let out = templates.filter((t) => {
-    if (framework !== "all" && t.framework !== framework) return false;
+    if (category !== "all" && (t.category ?? "Other") !== category) return false;
     if (!needle) return true;
     return (
       t.name.toLowerCase().includes(needle) ||
@@ -79,29 +91,181 @@ function applyFilters(
   return out;
 }
 
+// Big-format hero card used inside the featured carousel. Wider
+// thumbnail and richer metadata than the grid card so the carousel
+// feels distinct from the grid below.
+function FeaturedCard({ t }: { t: ApiTemplateItem }) {
+  const img = t.screenshotUrl ?? t.coverImageUrl;
+  return (
+    <Link
+      href={`/${t.author}/${t.slug}`}
+      aria-label={`Open featured template ${t.name} by ${t.author}`}
+      className="group block rounded-2xl border border-border bg-surface hover-elevate overflow-hidden h-full"
+    >
+      <div className="grid sm:grid-cols-[1.2fr_1fr] h-full">
+        <div className="aspect-[16/10] sm:aspect-auto bg-gradient-to-br from-primary/20 via-surface-raised to-background relative overflow-hidden">
+          {img ? (
+            <img
+              src={img}
+              alt={t.name}
+              loading="lazy"
+              className="absolute inset-0 w-full h-full object-cover object-top transition-transform group-hover:scale-[1.02]"
+            />
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center bg-surface-raised">
+              <div className="w-20 h-20 rounded-2xl bg-border flex items-center justify-center text-secondary font-mono text-4xl">
+                {t.name.charAt(0).toUpperCase()}
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="p-5 sm:p-6 flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-0.5 rounded bg-primary text-primary-foreground text-[10px] font-mono uppercase">
+              Featured
+            </span>
+            <span className="px-2 py-0.5 rounded bg-surface-raised border border-border text-[10px] font-mono uppercase text-secondary">
+              {t.category ?? "Other"}
+            </span>
+          </div>
+          <h3 className="text-lg sm:text-xl font-semibold group-hover:text-primary transition-colors line-clamp-2">
+            {t.name}
+          </h3>
+          <p className="text-sm text-secondary line-clamp-3">
+            {t.description || "—"}
+          </p>
+          <div className="mt-auto flex items-center justify-between text-xs text-secondary pt-2">
+            <span className="truncate">by @{t.author}</span>
+            <span>{t.clones} clones</span>
+          </div>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function FeaturedCarousel({ templates }: { templates: ApiTemplateItem[] }) {
+  // Top by clones — that's the most defensible "featured" signal we
+  // can compute client-side without a separate flag.
+  const featured = useMemo(
+    () =>
+      [...templates]
+        .sort((a, b) => b.clones - a.clones)
+        .slice(0, FEATURED_CAROUSEL_COUNT),
+    [templates],
+  );
+
+  // Embla API + chevron state. We track selected/canScroll so the
+  // arrow buttons can disable themselves at the ends.
+  const [api, setApi] = useState<CarouselApi | null>(null);
+  const [canPrev, setCanPrev] = useState(false);
+  const [canNext, setCanNext] = useState(false);
+
+  useEffect(() => {
+    if (!api) return;
+    const update = () => {
+      setCanPrev(api.canScrollPrev());
+      setCanNext(api.canScrollNext());
+    };
+    update();
+    api.on("select", update);
+    api.on("reInit", update);
+    return () => {
+      api.off("select", update);
+      api.off("reInit", update);
+    };
+  }, [api]);
+
+  if (featured.length === 0) return null;
+
+  return (
+    <div className="mb-8">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <div className="text-xs uppercase tracking-wider text-secondary">
+            Spotlight
+          </div>
+          <h2 className="text-lg font-semibold">Featured this week</h2>
+        </div>
+        <div className="flex gap-1.5">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={() => api?.scrollPrev()}
+            disabled={!canPrev}
+            aria-label="Previous featured template"
+            className="h-8 w-8"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={() => api?.scrollNext()}
+            disabled={!canNext}
+            aria-label="Next featured template"
+            className="h-8 w-8"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+        </div>
+      </div>
+      <Carousel
+        setApi={setApi}
+        opts={{ align: "start", loop: false }}
+        className="w-full"
+      >
+        <CarouselContent>
+          {featured.map((t) => (
+            <CarouselItem
+              key={t.id}
+              className="basis-full md:basis-1/2"
+            >
+              <FeaturedCard t={t} />
+            </CarouselItem>
+          ))}
+        </CarouselContent>
+      </Carousel>
+    </div>
+  );
+}
+
 function ExploreGrid() {
   const { data: templates = [], isLoading } = useTemplates();
   const [q, setQ] = useState("");
-  const [framework, setFramework] = useState<string>("all");
+  const [category, setCategory] = useState<string>("all");
   const [sort, setSort] = useState<SortKey>("recent");
 
-  // Build the framework dropdown from the data so we don't hard-code a
-  // list that drifts whenever the curated set adds a new stack.
-  const frameworks = useMemo(() => {
-    const set = new Set<string>();
-    for (const t of templates) set.add(t.framework);
-    return Array.from(set).sort();
+  // Derive the category dropdown from the static list union'd with
+  // any extra values present in the data — that way an admin who
+  // adds a new bucket on the server doesn't have to ship a frontend
+  // change before it's selectable.
+  const categories = useMemo(() => {
+    const set = new Set<string>(PROJECT_CATEGORIES);
+    for (const t of templates) {
+      if (t.category) set.add(t.category);
+    }
+    return Array.from(set);
   }, [templates]);
 
   const filtered = useMemo(
-    () => applyFilters(templates, q, framework, sort),
-    [templates, q, framework, sort],
+    () => applyFilters(templates, q, category, sort),
+    [templates, q, category, sort],
   );
 
-  const hasActiveFilters = q.length > 0 || framework !== "all" || sort !== "recent";
+  const hasActiveFilters = q.length > 0 || category !== "all" || sort !== "recent";
 
   return (
     <>
+      <FeaturedCarousel templates={templates} />
+
+      {/*
+        Mobile layout: search on row 1 (full width), the two selects
+        share row 2 side-by-side via grid-cols-2 so they don't stack
+        vertically. Desktop collapses everything onto one row.
+      */}
       <div className="mb-6 flex flex-col sm:flex-row gap-2">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary pointer-events-none" />
@@ -123,31 +287,39 @@ function ExploreGrid() {
             </button>
           )}
         </div>
-        <Select value={framework} onValueChange={setFramework}>
-          <SelectTrigger className="w-full sm:w-44" aria-label="Filter by framework">
-            <SelectValue placeholder="All frameworks" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All frameworks</SelectItem>
-            {frameworks.map((f) => (
-              <SelectItem key={f} value={f}>
-                {f}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={sort} onValueChange={(v) => setSort(v as SortKey)}>
-          <SelectTrigger className="w-full sm:w-40" aria-label="Sort templates">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {(Object.keys(SORT_LABELS) as SortKey[]).map((key) => (
-              <SelectItem key={key} value={key}>
-                {SORT_LABELS[key]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-2">
+          <Select value={category} onValueChange={setCategory}>
+            <SelectTrigger
+              className="w-full sm:w-44"
+              aria-label="Filter by category"
+            >
+              <SelectValue placeholder="All categories" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All categories</SelectItem>
+              {categories.map((c) => (
+                <SelectItem key={c} value={c}>
+                  {c}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={sort} onValueChange={(v) => setSort(v as SortKey)}>
+            <SelectTrigger
+              className="w-full sm:w-40"
+              aria-label="Sort templates"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(Object.keys(SORT_LABELS) as SortKey[]).map((key) => (
+                <SelectItem key={key} value={key}>
+                  {SORT_LABELS[key]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {isLoading ? (
@@ -169,7 +341,7 @@ function ExploreGrid() {
                   size="sm"
                   onClick={() => {
                     setQ("");
-                    setFramework("all");
+                    setCategory("all");
                     setSort("recent");
                   }}
                 >
@@ -190,7 +362,7 @@ function ExploreGrid() {
             >
               <div className="aspect-[16/10] bg-gradient-to-br from-primary/20 via-surface-raised to-background relative overflow-hidden">
                 <div className="absolute top-2 right-2 px-2 py-0.5 rounded bg-primary text-primary-foreground text-[10px] font-mono uppercase z-10">
-                  {t.framework}
+                  {t.category ?? "Other"}
                 </div>
                 {(t.screenshotUrl ?? t.coverImageUrl) ? (
                   <img

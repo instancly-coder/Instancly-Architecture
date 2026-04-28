@@ -14,10 +14,23 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   useUpdateProject,
   useProject,
   type ApiProjectListItem,
 } from "@/lib/api";
+import { PROJECT_CATEGORIES } from "@/lib/categories";
+
+// Default category for projects whose API response predates the
+// `category` column. Matches the server-side default so the picker
+// always shows a real option even when the field is empty.
+const DEFAULT_CATEGORY = "Other";
 
 // Per-row chip editor used for both "Key features" and "Included
 // sections". Keeps a controlled draft input + a button that promotes it
@@ -139,6 +152,7 @@ export function PublishDetailsDialog({
 
   const [name, setName] = useState(project.name);
   const [description, setDescription] = useState(project.description ?? "");
+  const [category, setCategory] = useState<string>(DEFAULT_CATEGORY);
   const [features, setFeatures] = useState<string[]>([]);
   const [sections, setSections] = useState<string[]>([]);
   const [setup, setSetup] = useState("");
@@ -163,6 +177,7 @@ export function PublishDetailsDialog({
       // GET lands.
       setName(project.name);
       setDescription(project.description ?? "");
+      setCategory(DEFAULT_CATEGORY);
       setFeatures([]);
       setSections([]);
       setSetup("");
@@ -173,6 +188,7 @@ export function PublishDetailsDialog({
     hydratedFromDetailRef.current = true;
     setName(detail.name);
     setDescription(detail.description ?? "");
+    setCategory(detail.category && detail.category.length > 0 ? detail.category : DEFAULT_CATEGORY);
     setFeatures(detail.features ?? []);
     setSections(detail.sections ?? []);
     setSetup(detail.setup ?? "");
@@ -188,6 +204,7 @@ export function PublishDetailsDialog({
       {
         name: trimmedName,
         description: description.trim(),
+        category,
         features,
         sections,
         setup,
@@ -231,6 +248,25 @@ export function PublishDetailsDialog({
               maxLength={80}
               placeholder="e.g. SaaS landing page"
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="pd-category">Category</Label>
+            <Select value={category} onValueChange={setCategory}>
+              <SelectTrigger id="pd-category" aria-label="Project category">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PROJECT_CATEGORIES.map((c) => (
+                  <SelectItem key={c} value={c}>
+                    {c}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="text-[11px] text-secondary">
+              How visitors will browse this on /explore.
+            </div>
           </div>
 
           <div className="space-y-2">
