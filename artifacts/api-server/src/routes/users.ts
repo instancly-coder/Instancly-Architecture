@@ -1,11 +1,12 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq, sql, desc } from "drizzle-orm";
+import { eq, and, sql, desc } from "drizzle-orm";
 import { db, usersTable, projectsTable } from "@workspace/db";
 import {
   GetUserResponse,
   ListUserProjectsResponse,
 } from "@workspace/api-zod";
 import { setReferralCookieIfAbsent } from "../lib/referral-attribution";
+import { getAuthedUser } from "../middlewares/auth";
 
 const router: IRouter = Router();
 
@@ -57,6 +58,15 @@ router.get("/users/:username/projects", async (req: Request, res: Response): Pro
     return;
   }
 
+  // Privacy: only the profile owner sees their private projects. Everyone
+  // else gets the public-only subset, even if their UI was hiding the
+  // private rows on its own. Server is the source of truth here.
+  const me = getAuthedUser(req);
+  const isOwner = !!me && me.id === user.id;
+  const visibilityFilter = isOwner
+    ? eq(projectsTable.userId, user.id)
+    : and(eq(projectsTable.userId, user.id), eq(projectsTable.isPublic, true));
+
   const rows = await db
     .select({
       id: projectsTable.id,
@@ -75,7 +85,7 @@ router.get("/users/:username/projects", async (req: Request, res: Response): Pro
       buildsCount: sql<number>`(select count(*) from builds where builds.project_id = ${projectsTable.id})`,
     })
     .from(projectsTable)
-    .where(eq(projectsTable.userId, user.id))
+    .where(visibilityFilter)
     .orderBy(desc(projectsTable.lastBuiltAt));
 
   res.json(
