@@ -257,26 +257,21 @@ function stripIncompleteFileBlocks(text: string): string {
 
 // Renders a chat message string, swapping our [[FILE_DONE:path]] /
 // [[FILE_PENDING:path]] markers for full conversational lines like
-// "Creating app.jsx..." / "Created app.jsx" — the AI's prose stays
-// inline, but each file event becomes its own row with an icon so the
-// chat reads like live narration of the build instead of a checklist.
+// "Creating app.jsx..." / "Created app.jsx" — prose renders inline; all
+// file events are aggregated into a single collapsible drawer so the chat
+// stays readable. In collapsed mode the drawer shows the currently-active
+// file path and a running count. Expand to see every file.
 // Also accepts the legacy server format `_(updated **path**)_` /
 // `_(writing path…)_` so historical builds render with the new look too.
 function FileNoticeText({ text }: { text: string }) {
-  // Normalize legacy markers up front so we have a single split below.
-  // Also normalize CRLF so blank-line paragraph splitting is robust
-  // across server/client newline styles.
+  const [filesOpen, setFilesOpen] = useState(false);
+
+  // Normalize legacy markers + CRLF up front.
   const normalized = text
     .replace(/\r\n?/g, "\n")
     .replace(/_\(updated \*\*([^*]+)\*\*\)_/g, "[[FILE_DONE:$1]]")
     .replace(/_\(writing ([^)]+?)…\)_/g, "[[FILE_PENDING:$1]]");
 
-  // Split on whole marker tokens, keeping the markers as their own
-  // entries. We then walk the tokens and produce a flat list of
-  // typed blocks: paragraphs of prose + the two kinds of file rows.
-  // Splitting prose on blank lines lets us render each paragraph
-  // as its own <p> so the wrapper's space-y gives consistent
-  // paragraph rhythm without leaving file rows stranded.
   type Block =
     | { kind: "para"; text: string }
     | { kind: "file_done"; path: string }
@@ -286,22 +281,10 @@ function FileNoticeText({ text }: { text: string }) {
   const blocks: Block[] = [];
   for (const tok of tokens) {
     const done = tok.match(/^\[\[FILE_DONE:(.+)\]\]$/);
-    if (done) {
-      blocks.push({ kind: "file_done", path: done[1] });
-      continue;
-    }
+    if (done) { blocks.push({ kind: "file_done", path: done[1] }); continue; }
     const pending = tok.match(/^\[\[FILE_PENDING:(.+)\]\]$/);
-    if (pending) {
-      blocks.push({ kind: "file_pending", path: pending[1] });
-      continue;
-    }
+    if (pending) { blocks.push({ kind: "file_pending", path: pending[1] }); continue; }
     if (!tok) continue;
-    // Split prose on blank lines into paragraphs. Single newlines
-    // inside a paragraph are preserved via whitespace-pre-wrap so
-    // intentional line breaks (e.g. a short list) still show.
-    // Drop chunks that are pure whitespace (spaces/tabs/newlines)
-    // so leading/trailing pad between markers doesn't render as an
-    // empty paragraph row.
     const paras = tok
       .split(/\n[ \t]*\n+/)
       .map((p) => p.replace(/^\n+|\n+$/g, ""))
@@ -311,44 +294,89 @@ function FileNoticeText({ text }: { text: string }) {
 
   if (blocks.length === 0) return null;
 
+  const proseBlocks = blocks.filter((b) => b.kind === "para");
+  const fileBlocks = blocks.filter((b) => b.kind !== "para") as Array<
+    { kind: "file_done"; path: string } | { kind: "file_pending"; path: string }
+  >;
+
+  // The currently-in-flight file (last pending), if any.
+  const pendingFile = [...fileBlocks].reverse().find((b) => b.kind === "file_pending");
+  const doneCount = fileBlocks.filter((b) => b.kind === "file_done").length;
+  const totalCount = fileBlocks.length;
+
+  // Collapsed summary label
+  const summaryLabel = pendingFile
+    ? pendingFile.path
+    : doneCount === 1
+    ? fileBlocks[0]?.path ?? "1 file"
+    : `${doneCount} file${doneCount !== 1 ? "s" : ""} created`;
+
   return (
     <div className="space-y-2">
-      {blocks.map((b, i) => {
-        if (b.kind === "file_done") {
-          return (
-            <div
-              key={i}
-              className="flex items-center gap-2 text-[12px] leading-snug text-secondary/90"
-            >
-              <FileCheck className="w-3.5 h-3.5 shrink-0 text-emerald-500" />
-              <span>
-                Created{" "}
-                <span className="font-mono text-foreground/90">{b.path}</span>
-              </span>
-            </div>
-          );
-        }
-        if (b.kind === "file_pending") {
-          return (
-            <div
-              key={i}
-              className="flex items-center gap-2 text-[12px] leading-snug text-secondary/90"
-            >
+      {/* Prose paragraphs render as normal */}
+      {proseBlocks.map((b, i) => (
+        <p key={i} className="whitespace-pre-wrap leading-relaxed">
+          {b.text}
+        </p>
+      ))}
+
+      {/* Collapsible file drawer */}
+      {fileBlocks.length > 0 && (
+        <div className="rounded-lg border border-border/60 bg-muted/20 overflow-hidden text-[12px]">
+          {/* Summary row — always visible, acts as toggle */}
+          <button
+            type="button"
+            onClick={() => setFilesOpen((v) => !v)}
+            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted/40 transition-colors text-left"
+          >
+            {pendingFile ? (
               <FilePen className="w-3.5 h-3.5 shrink-0 text-primary animate-pulse" />
-              <span>
-                Creating{" "}
-                <span className="font-mono text-foreground/90">{b.path}</span>
-                <span className="text-muted-foreground">…</span>
+            ) : (
+              <FileCheck className="w-3.5 h-3.5 shrink-0 text-emerald-500" />
+            )}
+            <span className="flex-1 min-w-0">
+              {pendingFile ? (
+                <>
+                  <span className="text-muted-foreground">Creating </span>
+                  <span className="font-mono text-foreground/90 truncate">{summaryLabel}</span>
+                  <span className="text-muted-foreground">…</span>
+                </>
+              ) : (
+                <span className="text-foreground/80">{summaryLabel}</span>
+              )}
+            </span>
+            {/* File count badge */}
+            {totalCount > 1 && (
+              <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground tabular-nums">
+                {doneCount}/{totalCount}
               </span>
+            )}
+            <ChevronDown
+              className={`w-3.5 h-3.5 shrink-0 text-muted-foreground transition-transform duration-150 ${filesOpen ? "rotate-180" : ""}`}
+            />
+          </button>
+
+          {/* Expanded file list */}
+          {filesOpen && (
+            <div className="border-t border-border/40 px-3 py-2 space-y-1.5">
+              {fileBlocks.map((b, i) =>
+                b.kind === "file_done" ? (
+                  <div key={i} className="flex items-center gap-2 text-secondary/90">
+                    <FileCheck className="w-3 h-3 shrink-0 text-emerald-500" />
+                    <span className="font-mono text-foreground/80">{b.path}</span>
+                  </div>
+                ) : (
+                  <div key={i} className="flex items-center gap-2 text-secondary/90">
+                    <FilePen className="w-3 h-3 shrink-0 text-primary animate-pulse" />
+                    <span className="font-mono text-foreground/80">{b.path}</span>
+                    <span className="text-muted-foreground">…</span>
+                  </div>
+                )
+              )}
             </div>
-          );
-        }
-        return (
-          <p key={i} className="whitespace-pre-wrap leading-relaxed">
-            {b.text}
-          </p>
-        );
-      })}
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -192,6 +192,7 @@ export const ListMyProjectsResponseItem = zod.object({
   lastBuiltAt: zod.string().datetime({}),
   createdAt: zod.string().datetime({}).optional(),
   buildsCount: zod.number(),
+  ownerUsername: zod.string(),
 });
 export const ListMyProjectsResponse = zod.array(ListMyProjectsResponseItem);
 
@@ -237,6 +238,7 @@ export const RenameMyProjectResponse = zod.object({
   lastBuiltAt: zod.string().datetime({}),
   createdAt: zod.string().datetime({}).optional(),
   buildsCount: zod.number(),
+  ownerUsername: zod.string(),
 });
 
 /**
@@ -304,6 +306,7 @@ export const ListUserProjectsResponseItem = zod.object({
   lastBuiltAt: zod.string().datetime({}),
   createdAt: zod.string().datetime({}).optional(),
   buildsCount: zod.number(),
+  ownerUsername: zod.string(),
 });
 export const ListUserProjectsResponse = zod.array(ListUserProjectsResponseItem);
 
@@ -370,6 +373,7 @@ export const UpdateProjectResponse = zod.object({
   isFeaturedTemplate: zod.boolean(),
   features: zod.array(zod.string()),
   coverImageUrl: zod.string().nullable(),
+  screenshotUrl: zod.string().nullable(),
   clones: zod.number(),
   createdAt: zod.string().datetime({}),
   lastBuiltAt: zod.string().datetime({}),
@@ -805,18 +809,6 @@ export const ListTemplatesResponseItem = zod
   })
   .describe("A public, admin-featured template surfaced on \/templates.");
 export const ListTemplatesResponse = zod.array(ListTemplatesResponseItem);
-
-/**
- * @summary Retrigger a screenshot capture for a published project
- */
-export const CaptureProjectScreenshotParams = zod.object({
-  username: zod.string(),
-  slug: zod.string(),
-});
-
-export const CaptureProjectScreenshotResponse = zod.object({
-  screenshotUrl: zod.string().nullable(),
-});
 
 /**
  * @summary All public projects, with featured status, for admin curation

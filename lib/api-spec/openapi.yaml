@@ -1290,6 +1290,7 @@ components:
           type: string
           format: date-time
         buildsCount: { type: integer }
+        ownerUsername: { type: string }
       required:
         - id
         - name
@@ -1304,6 +1305,7 @@ components:
         - screenshotUrl
         - lastBuiltAt
         - buildsCount
+        - ownerUsername
     ProjectOwner:
       type: object
       properties:
@@ -1659,6 +1661,14 @@ components:
         alreadyRunning: { type: boolean }
       required:
         - deploymentId
+    CaptureProjectScreenshotResponse:
+      type: object
+      properties:
+        screenshotUrl:
+          type: string
+          nullable: true
+      required:
+        - screenshotUrl
     PublishStatus:
       type: object
       properties:

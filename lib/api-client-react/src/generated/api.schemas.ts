@@ -141,9 +141,11 @@ export interface ProjectListItem {
   isFeaturedTemplate: boolean;
   clones: number;
   coverImageUrl: string | null;
+  screenshotUrl: string | null;
   lastBuiltAt: string;
   createdAt?: string;
   buildsCount: number;
+  ownerUsername: string;
 }
 
 export interface ProjectOwner {
@@ -164,6 +166,7 @@ export interface Project {
   isFeaturedTemplate: boolean;
   features: string[];
   coverImageUrl: string | null;
+  screenshotUrl: string | null;
   clones: number;
   createdAt: string;
   lastBuiltAt: string;
@@ -231,6 +234,7 @@ export interface ExploreItem {
   features: string[];
   clones: number;
   coverImageUrl: string | null;
+  screenshotUrl: string | null;
   lastBuiltAt: string;
   author: string;
   authorDisplayName: string;
@@ -247,6 +251,7 @@ export interface TemplateItem {
   framework: string;
   features: string[];
   coverImageUrl: string | null;
+  screenshotUrl: string | null;
   clones: number;
   author: string;
   authorDisplayName: string;
@@ -340,6 +345,10 @@ export interface Deployment {
 export interface PublishResponse {
   deploymentId: string;
   alreadyRunning?: boolean;
+}
+
+export interface CaptureProjectScreenshotResponse {
+  screenshotUrl: string | null;
 }
 
 export interface PublishStatus {

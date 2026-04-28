@@ -1,6 +1,12 @@
 // Schemas (zod values, used by server handlers for response validation).
 export * from "./generated/api";
 
+// Hand-maintained schemas for endpoints not yet wired into the OpenAPI spec.
+import * as zod from "zod";
+export const CaptureProjectScreenshotResponse = zod.object({
+  screenshotUrl: zod.string().nullable(),
+});
+
 // Inferred TypeScript types (used by frontend for type-safe response shapes).
 // Three names collide with zod schemas exported above
 // (`UpdateMeBody`, `DeleteProjectFileResponse`, `UploadProjectFileBody`):

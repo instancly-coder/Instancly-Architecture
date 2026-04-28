@@ -21,4 +21,5 @@ export interface ProjectListItem {
   lastBuiltAt: string;
   createdAt?: string;
   buildsCount: number;
+  ownerUsername: string;
 }

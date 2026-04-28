@@ -17,6 +17,7 @@ export * from "./adminTemplateItem";
 export * from "./adminUser";
 export * from "./appConfig";
 export * from "./build";
+export * from "./captureProjectScreenshotResponse";
 export * from "./completeOnboardingBody";
 export * from "./completeOnboardingBodyPlan";
 export * from "./completeOnboardingBodyRole";

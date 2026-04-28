@@ -432,6 +432,7 @@ ${usps}
 8. Use the Google Fonts you specified — load them via <link rel="preconnect"> in <head>.
 9. At least one section must use a dark/tinted background for contrast rhythm.
 10. Mobile-first. Every section must be fully responsive with appropriate breakpoints.
+11. **CRITICAL — no fetch() calls, no API routes, no server code.** This is a 100% static site. Every contact form must use a \`mailto:\` link. Do not call \`fetch()\`, \`axios\`, \`XMLHttpRequest\`, or any external API. Do not invent backend endpoints that don't exist. Any HTTP request to a non-existent URL will cause an UNHANDLED REJECTION error in the preview. Simulate data with hardcoded JavaScript arrays.
 ${verticalBlock}
 Ship a polished, complete site from header to footer. This brief is your creative contract.`;
 }
