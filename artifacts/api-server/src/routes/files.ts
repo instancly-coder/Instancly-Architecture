@@ -341,6 +341,33 @@ router.get(
         res.status(200).type("html").send(emptyHtml());
         return;
       }
+      // For missing .jsx/.js files: return a stub that defines a no-op
+      // component instead of 404. When the AI references a file in
+      // index.html but forgets to create it, a 404 causes the script
+      // loader to throw "HTTP 404" which crashes the entire preview with
+      // "UNHANDLED REJECTION". A no-op stub lets the page load gracefully —
+      // the component renders nothing and the rest of the UI works.
+      if (path.endsWith(".jsx") || path.endsWith(".js")) {
+        // Derive a component name from the filename (PascalCase basename
+        // without extension). Falls back to "MissingComponent".
+        const basename = path.split("/").pop()!.replace(/\.[^.]+$/, "");
+        const compName =
+          /^[A-Z][A-Za-z0-9]*$/.test(basename) ? basename : "MissingComponent";
+        const stub = [
+          `// [DeployBro] File not found: ${path}`,
+          `// The AI listed this in index.html but did not create it.`,
+          `// Returning an empty component so the rest of the page still loads.`,
+          `function ${compName}() { return null; }`,
+        ].join("\n");
+        res.status(200).type("application/javascript").send(stub);
+        return;
+      }
+      // For missing .css files return an empty stylesheet so the browser
+      // doesn't report a failed resource load.
+      if (path.endsWith(".css")) {
+        res.status(200).type("text/css").send(`/* [DeployBro] File not found: ${path} */`);
+        return;
+      }
       res.status(404).type("text/plain").send("Not found");
       return;
     }
