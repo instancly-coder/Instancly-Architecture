@@ -347,7 +347,7 @@ function FileNoticeText({ text }: { text: string }) {
             </span>
             {/* File count badge */}
             {totalCount > 1 && (
-              <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground tabular-nums">
+              <span className="shrink-0 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-primary tabular-nums">
                 {doneCount}/{totalCount}
               </span>
             )}
@@ -517,9 +517,9 @@ function BuilderTabStrip({
         return (
           <div
             key={key}
-            className={`group h-8 ${compact ? "pl-2 pr-1" : "pl-3 pr-1"} rounded-md text-sm flex items-center gap-2 whitespace-nowrap transition-colors border ${
+            className={`group h-8 ${compact ? "pl-2 pr-1" : "pl-3 pr-1"} rounded-md text-sm flex items-center gap-2 whitespace-nowrap transition-colors border-2 ${
               active
-                ? "bg-primary/15 text-primary border-primary"
+                ? "bg-primary/10 text-primary border-primary"
                 : "text-secondary hover:text-foreground hover:bg-surface-raised border-transparent"
             }`}
           >
