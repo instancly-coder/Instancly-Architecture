@@ -15,5 +15,7 @@ export interface UpdateProjectBody {
   framework?: string;
   isPublic?: boolean;
   features?: string[];
+  sections?: string[];
+  setup?: string;
   coverImageUrl?: string | null;
 }

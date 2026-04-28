@@ -17,6 +17,8 @@ export interface Project {
   isPublic: boolean;
   isFeaturedTemplate: boolean;
   features: string[];
+  sections: string[];
+  setup: string;
   coverImageUrl: string | null;
   screenshotUrl: string | null;
   clones: number;

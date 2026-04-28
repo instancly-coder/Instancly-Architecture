@@ -1,5 +1,14 @@
 import { Link, useParams } from "wouter";
-import { Copy, ExternalLink, FolderTree, FileCode2, LayoutTemplate } from "lucide-react";
+import {
+  Copy,
+  ExternalLink,
+  FolderTree,
+  FileCode2,
+  LayoutTemplate,
+  Check,
+  ListTree,
+  Terminal,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useProject } from "@/lib/api";
 import { toast } from "sonner";
@@ -99,6 +108,57 @@ export default function Project() {
               </Link>
             </div>
           </div>
+
+          {/* Author-supplied "Key features" — populated from the publish
+              details dialog. Hidden when empty so existing public
+              projects without the new metadata still render cleanly. */}
+          {project.features.length > 0 && (
+            <div className="mb-6">
+              <h3 className="text-sm font-bold mb-3 flex items-center gap-2">
+                <Check className="w-4 h-4 text-primary" /> Key features
+              </h3>
+              <ul className="space-y-1.5">
+                {project.features.map((f, i) => (
+                  <li
+                    key={`${f}-${i}`}
+                    className="text-sm flex items-start gap-2"
+                  >
+                    <Check className="w-3.5 h-3.5 text-primary mt-0.5 shrink-0" />
+                    <span>{f}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {project.sections.length > 0 && (
+            <div className="mb-6">
+              <h3 className="text-sm font-bold mb-3 flex items-center gap-2">
+                <ListTree className="w-4 h-4 text-secondary" /> Included sections
+              </h3>
+              <div className="flex flex-wrap gap-1.5">
+                {project.sections.map((s, i) => (
+                  <span
+                    key={`${s}-${i}`}
+                    className="text-xs px-2 py-1 rounded-full bg-background border border-border"
+                  >
+                    {s}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {project.setup.trim().length > 0 && (
+            <div className="mb-6">
+              <h3 className="text-sm font-bold mb-3 flex items-center gap-2">
+                <Terminal className="w-4 h-4 text-secondary" /> Setup
+              </h3>
+              <pre className="text-xs font-mono whitespace-pre-wrap break-words bg-background border border-border rounded p-3 text-secondary">
+                {project.setup}
+              </pre>
+            </div>
+          )}
 
           <div className="mt-auto hidden lg:block">
             <h3 className="text-sm font-bold mb-3 flex items-center gap-2">

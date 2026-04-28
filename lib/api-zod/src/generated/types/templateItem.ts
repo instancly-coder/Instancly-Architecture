@@ -21,4 +21,5 @@ export interface TemplateItem {
   clones: number;
   author: string;
   authorDisplayName: string;
+  createdAt: string;
 }

@@ -328,6 +328,8 @@ export const GetProjectResponse = zod.object({
   isPublic: zod.boolean(),
   isFeaturedTemplate: zod.boolean(),
   features: zod.array(zod.string()),
+  sections: zod.array(zod.string()),
+  setup: zod.string(),
   coverImageUrl: zod.string().nullable(),
   screenshotUrl: zod.string().nullable(),
   clones: zod.number(),
@@ -358,6 +360,8 @@ export const UpdateProjectBody = zod
     framework: zod.string().optional(),
     isPublic: zod.boolean().optional(),
     features: zod.array(zod.string()).optional(),
+    sections: zod.array(zod.string()).optional(),
+    setup: zod.string().optional(),
     coverImageUrl: zod.string().nullish(),
   })
   .describe("Patch any subset of project listing\/visibility fields.");
@@ -372,6 +376,8 @@ export const UpdateProjectResponse = zod.object({
   isPublic: zod.boolean(),
   isFeaturedTemplate: zod.boolean(),
   features: zod.array(zod.string()),
+  sections: zod.array(zod.string()),
+  setup: zod.string(),
   coverImageUrl: zod.string().nullable(),
   screenshotUrl: zod.string().nullable(),
   clones: zod.number(),
@@ -806,6 +812,7 @@ export const ListTemplatesResponseItem = zod
     clones: zod.number(),
     author: zod.string(),
     authorDisplayName: zod.string(),
+    createdAt: zod.string().datetime({}),
   })
   .describe("A public, admin-featured template surfaced on \/templates.");
 export const ListTemplatesResponse = zod.array(ListTemplatesResponseItem);

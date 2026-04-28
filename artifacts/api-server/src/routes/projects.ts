@@ -66,6 +66,8 @@ router.get("/projects/:username/:slug", async (req: Request, res: Response): Pro
       isPublic: project.isPublic,
       isFeaturedTemplate: project.isFeaturedTemplate,
       features: project.features ?? [],
+      sections: project.sections ?? [],
+      setup: project.setup ?? "",
       coverImageUrl: project.coverImageUrl,
       screenshotUrl: project.screenshotUrl,
       clones: project.clones,
@@ -136,6 +138,19 @@ router.patch(
         .filter((f) => f.length > 0)
         .slice(0, 12);
     }
+    if (Array.isArray(body.sections)) {
+      updates.sections = (body.sections as unknown[])
+        .filter((s): s is string => typeof s === "string")
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0)
+        .slice(0, 24);
+    }
+    if (typeof body.setup === "string") {
+      // 4 KB cap so the public page never has to render a wall of text;
+      // the schema allows more but the dialog enforces this on the
+      // client too.
+      updates.setup = body.setup.slice(0, 4000);
+    }
     if (typeof body.coverImageUrl === "string" || body.coverImageUrl === null) {
       const v =
         typeof body.coverImageUrl === "string"
@@ -177,6 +192,8 @@ router.patch(
         isPublic: p.isPublic,
         isFeaturedTemplate: p.isFeaturedTemplate,
         features: p.features ?? [],
+        sections: p.sections ?? [],
+        setup: p.setup ?? "",
         coverImageUrl: p.coverImageUrl,
         screenshotUrl: p.screenshotUrl,
         clones: p.clones,

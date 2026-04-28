@@ -88,6 +88,7 @@ router.get("/templates", async (_req, res) => {
       clones: projectsTable.clones,
       author: usersTable.username,
       authorDisplayName: usersTable.displayName,
+      createdAt: projectsTable.createdAt,
     })
     .from(projectsTable)
     .innerJoin(usersTable, eq(usersTable.id, projectsTable.userId))
@@ -105,6 +106,7 @@ router.get("/templates", async (_req, res) => {
       ...r,
       features: r.features ?? [],
       screenshotUrl: r.screenshotUrl ?? null,
+      createdAt: r.createdAt.toISOString(),
     })),
   );
 });

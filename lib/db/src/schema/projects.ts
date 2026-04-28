@@ -31,6 +31,15 @@ export const projectsTable = pgTable(
     // card and the dedicated template page. Stored as a Postgres text[]
     // for cheap server-side filtering later if needed.
     features: text("features").array().default(sql`'{}'::text[]`).notNull(),
+    // Free-form list of "what's inside" — the screens / pages / modules
+    // that ship with the template. Distinct from `features` so the
+    // public page can render them under separate headings ("Key
+    // features" vs "Included sections"). Stored as text[] for
+    // consistency with `features`.
+    sections: text("sections").array().default(sql`'{}'::text[]`).notNull(),
+    // Setup / quickstart instructions shown on the public template
+    // page. Plain text for now — rendered with whitespace preserved.
+    setup: text("setup").default("").notNull(),
     // Hosted image URL used as the card thumbnail on /templates and
     // /explore. Nullable — falls back to the first-letter avatar.
     coverImageUrl: text("cover_image_url"),

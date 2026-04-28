@@ -1334,6 +1334,10 @@ components:
         features:
           type: array
           items: { type: string }
+        sections:
+          type: array
+          items: { type: string }
+        setup: { type: string }
         coverImageUrl:
           type: string
           nullable: true
@@ -1364,6 +1368,8 @@ components:
         - isPublic
         - isFeaturedTemplate
         - features
+        - sections
+        - setup
         - coverImageUrl
         - screenshotUrl
         - clones
@@ -1383,6 +1389,10 @@ components:
         features:
           type: array
           items: { type: string }
+        sections:
+          type: array
+          items: { type: string }
+        setup: { type: string }
         coverImageUrl:
           type: string
           nullable: true
@@ -1508,6 +1518,9 @@ components:
         clones: { type: integer }
         author: { type: string }
         authorDisplayName: { type: string }
+        createdAt:
+          type: string
+          format: date-time
       required:
         - id
         - name
@@ -1520,6 +1533,7 @@ components:
         - clones
         - author
         - authorDisplayName
+        - createdAt
     AdminTemplateItem:
       type: object
       description: Admin curation row — every public project, featured or not.

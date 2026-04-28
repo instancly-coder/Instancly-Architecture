@@ -165,6 +165,8 @@ export interface Project {
   isPublic: boolean;
   isFeaturedTemplate: boolean;
   features: string[];
+  sections: string[];
+  setup: string;
   coverImageUrl: string | null;
   screenshotUrl: string | null;
   clones: number;
@@ -184,6 +186,8 @@ export interface UpdateProjectBody {
   framework?: string;
   isPublic?: boolean;
   features?: string[];
+  sections?: string[];
+  setup?: string;
   coverImageUrl?: string | null;
 }
 
@@ -255,6 +259,7 @@ export interface TemplateItem {
   clones: number;
   author: string;
   authorDisplayName: string;
+  createdAt: string;
 }
 
 /**

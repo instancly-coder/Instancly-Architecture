@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { Link, useParams } from "wouter";
-import { Calendar, Globe, Lock, Loader2 } from "lucide-react";
+import { Calendar, Globe, Lock, Loader2, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import {
   useUser,
@@ -11,6 +12,7 @@ import {
 import { MarketingNav } from "@/components/marketing-nav";
 import { MarketingFooter } from "@/components/marketing-footer";
 import { Button } from "@/components/ui/button";
+import { PublishDetailsDialog } from "@/components/publish-details-dialog";
 
 function formatJoined(iso: string | undefined): string {
   if (!iso) return "";
@@ -28,7 +30,7 @@ function timeAgo(iso: string): string {
   return `${d}d ago`;
 }
 
-function VisibilityToggle({
+function OwnerProjectActions({
   username,
   project,
 }: {
@@ -36,43 +38,95 @@ function VisibilityToggle({
   project: ApiProjectListItem;
 }) {
   const update = useUpdateProject(username, project.slug);
-  const next = !project.isPublic;
-  const label = next ? "Publish" : "Make private";
-  const Icon = next ? Globe : Lock;
+  // The "publish" path opens the details dialog so the user can fill in
+  // a title / about / features / sections / setup before the project
+  // becomes visible publicly. The "make private" and "edit details"
+  // paths don't need that confirmation step.
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+
+  const stop = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  if (project.isPublic) {
+    return (
+      <>
+        <div className="flex gap-1.5">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={update.isPending}
+            onClick={(e) => {
+              stop(e);
+              setEditOpen(true);
+            }}
+          >
+            <Pencil className="w-3.5 h-3.5" />
+            Edit details
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={update.isPending}
+            onClick={(e) => {
+              stop(e);
+              update.mutate(
+                { isPublic: false },
+                {
+                  onSuccess: () =>
+                    toast.success(`Made ${project.name} private`),
+                  onError: (err) =>
+                    toast.error(
+                      err instanceof Error ? err.message : "Update failed",
+                    ),
+                },
+              );
+            }}
+          >
+            {update.isPending ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Lock className="w-3.5 h-3.5" />
+            )}
+            Make private
+          </Button>
+        </div>
+        <PublishDetailsDialog
+          open={editOpen}
+          onOpenChange={setEditOpen}
+          username={username}
+          project={project}
+        />
+      </>
+    );
+  }
 
   return (
-    <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      disabled={update.isPending}
-      onClick={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        update.mutate(
-          { isPublic: next },
-          {
-            onSuccess: () =>
-              toast.success(
-                next
-                  ? `Published ${project.name}`
-                  : `Made ${project.name} private`,
-              ),
-            onError: (err) =>
-              toast.error(
-                err instanceof Error ? err.message : "Update failed",
-              ),
-          },
-        );
-      }}
-    >
-      {update.isPending ? (
-        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-      ) : (
-        <Icon className="w-3.5 h-3.5" />
-      )}
-      {label}
-    </Button>
+    <>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={(e) => {
+          stop(e);
+          setPublishOpen(true);
+        }}
+      >
+        <Globe className="w-3.5 h-3.5" />
+        Publish
+      </Button>
+      <PublishDetailsDialog
+        open={publishOpen}
+        onOpenChange={setPublishOpen}
+        username={username}
+        project={project}
+        publishOnSave
+      />
+    </>
   );
 }
 
@@ -126,7 +180,7 @@ function ProjectCard({
       </Link>
       {isOwner && (
         <div className="mt-3 pt-3 border-t border-border/50 flex justify-end">
-          <VisibilityToggle username={username} project={project} />
+          <OwnerProjectActions username={username} project={project} />
         </div>
       )}
     </div>
