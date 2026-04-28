@@ -10,9 +10,7 @@ import {
   ListTodo,
   ChevronDown,
   X,
-  Database,
   Lock,
-  Eye,
   Rocket,
   Sparkles,
   History,
@@ -49,7 +47,7 @@ const ROTATING_NOUNS = [
 
 /**
  * Bolt-inspired feature grid. Each card has:
- *   - small icon + short title at the top
+ *   - a title (size varies per card — see `titleSize`)
  *   - one-sentence punchline below
  *   - a chunky hero visual element occupying the bottom half.
  *
@@ -64,13 +62,20 @@ const ROTATING_NOUNS = [
  * `key` selects the visual in the renderer below. Keep it stable
  * if you add new entries — the renderer's switch matches on it.
  */
-const FEATURES: { key: string; icon: typeof Sparkles; title: string; body: string }[] = [
-  { key: "ai",       icon: Sparkles,  title: "AI builder",        body: "Describe it in plain English. Watch Claude write real React, wired to a real database, in real time." },
-  { key: "preview",  icon: Eye,       title: "Live preview",      body: "Every keystroke renders. No reload. No deploy step. The preview is the source of truth." },
-  { key: "db",       icon: Database,  title: "Postgres on tap",   body: "One click provisions a dedicated Neon branch for your project. No connection strings to copy around." },
-  { key: "auth",     icon: Lock,      title: "Auth, built in",    body: "Google, GitHub, Apple sign-in wired up the moment you ask for it. Sessions, tokens, the lot." },
-  { key: "domains",  icon: Globe,     title: "Custom domains",    body: "Bring your own domain. SSL is automatic. Or ship to a free deploybro.app subdomain in seconds." },
-  { key: "publish",  icon: Rocket,    title: "One-click publish", body: "A real Vercel deployment behind a real URL. No DevOps. No yaml. No \"works on my machine.\"" },
+/**
+ * `titleSize` varies across cards to create a visual rhythm in the
+ * grid — the two flagship features (AI builder, One-click publish)
+ * get the largest treatment, Postgres sits one tier down, the rest
+ * stay compact. Pure tailwind classes so dark/light theming and
+ * responsive scaling keep working.
+ */
+const FEATURES: { key: string; title: string; body: string; titleSize: string }[] = [
+  { key: "ai",       title: "AI builder",        titleSize: "text-2xl md:text-3xl",   body: "Describe it in plain English. Watch Claude write real React, wired to a real database, in real time." },
+  { key: "preview",  title: "Live preview",      titleSize: "text-lg md:text-xl",     body: "Every keystroke renders. No reload. No deploy step. The preview is the source of truth." },
+  { key: "db",       title: "Postgres on tap",   titleSize: "text-xl md:text-2xl",    body: "One click provisions a dedicated Neon branch for your project. No connection strings to copy around." },
+  { key: "auth",     title: "Auth, built in",    titleSize: "text-lg md:text-xl",     body: "Google, GitHub, Apple sign-in wired up the moment you ask for it. Sessions, tokens, the lot." },
+  { key: "domains",  title: "Custom domains",    titleSize: "text-xl md:text-2xl",    body: "Bring your own domain. SSL is automatic. Or ship to a free deploybro.app subdomain in seconds." },
+  { key: "publish",  title: "One-click publish", titleSize: "text-2xl md:text-3xl",   body: "A real Vercel deployment behind a real URL. No DevOps. No yaml. No \"works on my machine.\"" },
 ];
 
 /**
@@ -738,32 +743,26 @@ export default function Landing() {
                 has room to breathe — bolt's cards do the same. The
                 copy block sits in the top half (relative), the visual
                 is absolutely positioned to the bottom inside the
-                card's `overflow-hidden` clip. */}
+                card's `overflow-hidden` clip. Titles intentionally
+                vary in size across cards (see `titleSize` in
+                `FEATURES`) to create rhythm in the grid. */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
-              {FEATURES.map((f) => {
-                const Icon = f.icon;
-                return (
-                  <div
-                    key={f.key}
-                    className="group relative rounded-2xl border border-border bg-surface/60 backdrop-blur-sm p-6 md:p-7 overflow-hidden transition-all hover:border-primary/40 hover:bg-surface min-h-[22rem] md:min-h-[24rem]"
-                  >
-                    <div aria-hidden className="absolute -top-20 -right-20 w-48 h-48 rounded-full bg-primary/10 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity" />
-                    <div className="relative">
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-primary/10 border border-primary/20 shrink-0">
-                          <Icon className="w-4 h-4 text-primary" />
-                        </div>
-                        <h3 className="text-lg md:text-xl font-semibold tracking-tight">{f.title}</h3>
-                      </div>
-                      <p className="text-secondary text-sm leading-relaxed">{f.body}</p>
-                    </div>
-                    <FeatureVisual k={f.key} />
-                    {/* Soft fade so the visual blends into the card
-                        bottom edge instead of getting clipped hard. */}
-                    <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-surface/80 to-transparent" />
+              {FEATURES.map((f) => (
+                <div
+                  key={f.key}
+                  className="group relative rounded-2xl border border-border bg-surface/60 backdrop-blur-sm p-6 md:p-7 overflow-hidden transition-all hover:border-primary/40 hover:bg-surface min-h-[22rem] md:min-h-[24rem]"
+                >
+                  <div aria-hidden className="absolute -top-20 -right-20 w-48 h-48 rounded-full bg-primary/10 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <div className="relative">
+                    <h3 className={`${f.titleSize} font-semibold tracking-tight mb-2 leading-tight`}>{f.title}</h3>
+                    <p className="text-secondary text-sm leading-relaxed">{f.body}</p>
                   </div>
-                );
-              })}
+                  <FeatureVisual k={f.key} />
+                  {/* Soft fade so the visual blends into the card
+                      bottom edge instead of getting clipped hard. */}
+                  <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-surface/80 to-transparent" />
+                </div>
+              ))}
             </div>
             {/* Big stat ribbon — bolt's "98%" / "1000x" pattern, sized
                 so it reads as a punctuation moment between the feature
