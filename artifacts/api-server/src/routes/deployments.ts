@@ -340,25 +340,57 @@ export async function runPublishPipeline(args: {
     // provider's round-trip. Non-fatal: a failure is logged but never
     // surfaces to the user or affects the deployment record.
     //
-    // We screenshot the PUBLIC preview URL (`/api/preview/...`) rather
-    // than the Vercel `live_url` because user Vercel projects can be
-    // marked private/protected — in that case the screenshot service
-    // hits a Vercel auth wall and we'd persist a "Sign in to Vercel"
-    // image. The preview endpoint serves the same files anonymously,
-    // so the resulting card image always reflects the real app.
-    const siteUrl = (process.env.SITE_URL ?? "https://deploybro.app").replace(/\/+$/, "");
-    const previewUrl = `${siteUrl}/api/preview/${encodeURIComponent(username)}/${encodeURIComponent(slug)}/`;
-    captureScreenshot(previewUrl)
-      .then((screenshotUrl) => {
+    // Capture order:
+    //   1. The deployment's live Vercel URL (`finalUrl`) — this is the
+    //      canonical published site and matches the manual retrigger
+    //      endpoint below, so cards reflect what the visitor actually sees.
+    //   2. Fallback to the public preview endpoint (`/api/preview/...`)
+    //      ONLY if step 1 fails — handles user projects that are marked
+    //      private/protected on Vercel (the screenshot service would hit a
+    //      Vercel auth wall and persist a "Sign in to Vercel" image). The
+    //      preview endpoint serves the same files anonymously, so the
+    //      resulting card image always reflects the real app.
+    const siteUrl = (process.env.SITE_URL ?? "https://deploybro.app").replace(
+      /\/+$/,
+      "",
+    );
+    const previewFallbackUrl = `${siteUrl}/api/preview/${encodeURIComponent(
+      username,
+    )}/${encodeURIComponent(slug)}/`;
+    (async () => {
+      try {
+        let screenshotUrl: string | null = null;
+        // Step 1: try the live Vercel URL (canonical published site).
+        // `finalUrl` is theoretically nullable in upstream typing but in
+        // practice we only reach this branch after polling Vercel to READY,
+        // so it should always be set — guard defensively anyway.
+        if (finalUrl) {
+          try {
+            screenshotUrl = await captureScreenshot(finalUrl);
+          } catch (liveErr) {
+            logger.warn(
+              { err: liveErr, projectId, finalUrl },
+              "Live-URL screenshot capture failed; falling back to preview URL",
+            );
+          }
+        }
+        // Step 2: fall back to the public preview endpoint if step 1 returned
+        // null OR threw OR finalUrl was unexpectedly empty.
+        if (!screenshotUrl) {
+          screenshotUrl = await captureScreenshot(previewFallbackUrl);
+        }
         if (!screenshotUrl) return;
-        return db
+        await db
           .update(projectsTable)
           .set({ screenshotUrl })
           .where(eq(projectsTable.id, projectId));
-      })
-      .catch((err) => {
-        logger.warn({ err, projectId }, "Background screenshot capture failed (non-fatal)");
-      });
+      } catch (err) {
+        logger.warn(
+          { err, projectId },
+          "Background screenshot capture failed (non-fatal)",
+        );
+      }
+    })();
   } catch (err) {
     logger.error({ err, deploymentId }, "Publish pipeline failed");
     await setStatus("failed", {
