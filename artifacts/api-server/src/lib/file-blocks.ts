@@ -295,35 +295,33 @@ export function stripRequestSecretDirectives(text: string): string {
     .replace(/\n[ \t]*\n[ \t]*\n/g, "\n\n");
 }
 
-// Defends the dev preview against the most common second-build regression:
-// the AI introduces a NEW `.jsx` file (a component or page) but forgets to
-// re-emit `index.html` with a matching `<script type="text/babel" src="…">`
-// tag. The previously-stored index.html then loads, the new file is never
-// fetched, references like `<NewThing />` resolve to `undefined`, and React
-// throws "Element type is invalid" from inside the AI-generated `App`
-// component — leaving the user with a blank red overlay on a flow that
-// worked fine on the first build.
+// Defends the dev preview against two related blank-page scenarios:
 //
-// We scan the served HTML for existing `<script type="text/babel" src="…">`
-// tags, then for any `.jsx` files in the project that aren't already
-// referenced we inject auto-discovered tags in canonical load order
-// (`hooks/*` first, then `components/*`, then `pages/*`, with anything
-// uncategorised in the middle), placed immediately BEFORE the existing
-// `app.jsx` script tag (or before `</body>` if no app.jsx tag exists).
+// Scenario A — second-build regression: the AI introduces a NEW `.jsx` file
+// (a component or page) but forgets to re-emit `index.html` with a matching
+// `<script type="text/babel" src="…">` tag. The previously-stored index.html
+// loads, the new file is never fetched, references like `<NewThing />`
+// resolve to `undefined`, and React throws "Element type is invalid".
 //
-// Three things this deliberately does NOT do:
-//   1. Touch projects that don't already use `<script type="text/babel">`
-//      anywhere — those are static HTML / vanilla JS sites and injecting
-//      babel script tags would break them.
-//   2. Auto-inject `app.jsx` itself. If app.jsx is missing, the AI broke
-//      something more fundamental and the error overlay should surface it.
-//   3. Affect the published Vercel build — this is purely a dev-preview
-//      mutation. The publish payload builder reads source files unchanged.
+// Scenario B — first-build omission: the AI generates one or more `.jsx`
+// files but forgets to include ANY `<script type="text/babel" src="…">` tags
+// in `index.html` at all (usually for small single-file apps that the AI
+// thought could live entirely in the HTML). The CDN scripts load fine, but
+// nothing ever mounts React, so the page shows blank.
+//
+// For Scenario A: scan for `.jsx` files not already referenced and inject
+// them before the existing `app.jsx` tag.
+// For Scenario B: when there are zero babel src tags AND the HTML loads the
+// React CDN (a reliable signal this is a React project), inject ALL `.jsx`
+// files in canonical order before `</body>`.
+//
+// Does NOT affect the published Vercel build — this is purely a dev-preview
+// mutation. The publish payload builder reads source files unchanged.
 export function injectOrphanScripts(
   html: string,
   allJsxPaths: string[],
 ): string {
-  // Find every `<script type="text/babel" src="…">` tag currently in the
+  // Collect every `<script type="text/babel" src="…">` tag already in the
   // HTML. Both `type` and `src` may appear in either order; the regex
   // tolerates that plus single/double quotes and stray whitespace.
   const SCRIPT_RE =
@@ -335,20 +333,46 @@ export function injectOrphanScripts(
     re.lastIndex = 0;
     let m: RegExpExecArray | null;
     while ((m = re.exec(html)) !== null) {
-      // Strip leading "./" or "/" so the comparison matches the canonical
-      // stored path (the parser sanitises these on the way in).
       referenced.add(m[1].trim().replace(/^\.?\/+/, ""));
     }
   };
   collect(SCRIPT_RE);
   collect(SCRIPT_RE_REVERSE);
 
-  // No babel script tags at all → static HTML / non-React project. Bail.
-  if (referenced.size === 0) return html;
+  // ── Scenario B: no babel src tags at all ─────────────────────────────
+  // If the HTML has no babel script tags but DOES have .jsx files and loads
+  // the React CDN (reliable signal it's a React project), inject every .jsx
+  // file in canonical load order before </body>. This recovers from the AI
+  // generating files but forgetting to wire them into index.html.
+  if (referenced.size === 0) {
+    if (allJsxPaths.length === 0) return html;
+    // Require the React CDN to be present so we don't touch static or
+    // vanilla-JS sites that happen to have a stray .jsx file uploaded.
+    const hasReactCdn =
+      /unpkg\.com\/react@|cdn\.tailwindcss\.com/.test(html);
+    if (!hasReactCdn) return html;
 
-  // Bucket orphans by canonical load order. `app.jsx` (or any nested
-  // `*/app.jsx`) is intentionally excluded — if it's missing, the AI
-  // failed in a different way and we want the error overlay to fire.
+    const sorted = sortJsxForPreview(allJsxPaths);
+    const tags = sorted
+      .map(
+        (p) =>
+          `<script type="text/babel" data-presets="react" data-deploybro-auto src="${p}"></script>`,
+      )
+      .join("\n  ");
+    const block =
+      `\n  <!-- deploybro: injected ${sorted.length} missing script tag${
+        sorted.length === 1 ? "" : "s"
+      } the AI forgot to add to index.html -->\n  ${tags}\n  `;
+    if (/<\/body>/i.test(html)) {
+      return html.replace(/<\/body>/i, `${block}</body>`);
+    }
+    return html + block;
+  }
+
+  // ── Scenario A: some babel src tags exist but some files are orphaned ─
+  // `app.jsx` is intentionally excluded from orphan injection — if it's
+  // missing from the HTML that's a more fundamental AI failure and the
+  // error overlay should surface it.
   const isAppEntry = (p: string): boolean =>
     p === "app.jsx" || /(^|\/)app\.jsx$/i.test(p);
   const orphans = allJsxPaths.filter(
@@ -360,7 +384,7 @@ export function injectOrphanScripts(
     if (p.startsWith("hooks/")) return 1;
     if (p.startsWith("components/")) return 2;
     if (p.startsWith("pages/")) return 3;
-    return 2; // unknown-folder files behave most like components
+    return 2;
   };
   orphans.sort((a, b) => {
     const ba = bucketOf(a);
@@ -369,9 +393,6 @@ export function injectOrphanScripts(
     return a.localeCompare(b);
   });
 
-  // Build the injection block. The `data-deploybro-auto` attribute makes
-  // it obvious in the rendered DOM that we filled in a missing tag, which
-  // is useful when debugging "wait, where did THIS script come from?".
   const tags = orphans
     .map(
       (p) =>
@@ -385,12 +406,6 @@ export function injectOrphanScripts(
 
   // Inject right BEFORE the existing `app.jsx` script tag so the canonical
   // load order is preserved (hooks → components → pages → app.jsx LAST).
-  // If no `app.jsx` script tag exists in this HTML we deliberately bail
-  // and return the original — without an anchor we have no safe place to
-  // insert that's guaranteed to keep the right load order, and silently
-  // adding scripts to a project the AI didn't bootstrap as a multi-file
-  // React app would mask the real failure rather than fix it. The error
-  // overlay surfaces whatever crash happens next so the user sees it.
   const APP_TAG_RE =
     /<script\b[^>]*\btype\s*=\s*["']text\/babel["'][^>]*\bsrc\s*=\s*["'](?:\.\/?|\/)?app\.jsx["'][^>]*>\s*<\/script>/i;
   const APP_TAG_RE_REVERSE =
@@ -398,6 +413,26 @@ export function injectOrphanScripts(
   const appMatch = html.match(APP_TAG_RE) ?? html.match(APP_TAG_RE_REVERSE);
   if (!appMatch || typeof appMatch.index !== "number") return html;
   return html.slice(0, appMatch.index) + block + html.slice(appMatch.index);
+}
+
+// Sort .jsx file paths into canonical preview load order:
+// hooks/ → components/ → pages/ → everything else → app.jsx last.
+function sortJsxForPreview(paths: string[]): string[] {
+  const isAppEntry = (p: string) =>
+    p === "app.jsx" || /(^|\/)app\.jsx$/i.test(p);
+  const bucketOf = (p: string): number => {
+    if (p.startsWith("hooks/")) return 1;
+    if (p.startsWith("components/")) return 2;
+    if (p.startsWith("pages/")) return 3;
+    if (isAppEntry(p)) return 5;
+    return 2;
+  };
+  return [...paths].sort((a, b) => {
+    const ba = bucketOf(a);
+    const bb = bucketOf(b);
+    if (ba !== bb) return ba - bb;
+    return a.localeCompare(b);
+  });
 }
 
 export function contentTypeFor(path: string): string {
