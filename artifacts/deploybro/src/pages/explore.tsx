@@ -56,10 +56,8 @@ function TemplateSkeletonCard() {
   return (
     <div className="rounded-xl border border-border bg-surface overflow-hidden flex flex-col">
       <Skeleton className="aspect-[16/10] rounded-none" />
-      <div className="p-4 flex-1 flex flex-col gap-3">
+      <div className="p-3 sm:p-4">
         <Skeleton className="h-4 w-2/3" />
-        <Skeleton className="h-3 w-full" />
-        <Skeleton className="h-3 w-4/5" />
       </div>
     </div>
   );
@@ -449,7 +447,7 @@ function ExploreBrowse({
       </div>
 
       {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
             <TemplateSkeletonCard key={i} />
           ))}
@@ -478,7 +476,7 @@ function ExploreBrowse({
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           {filtered.map((t) => (
             <Link
               key={t.id}
@@ -505,15 +503,16 @@ function ExploreBrowse({
                   </div>
                 )}
               </div>
-              <div className="p-4 flex-1 flex flex-col gap-2">
-                <h3 className="font-medium group-hover:text-primary transition-colors truncate">
+              {/*
+                Card meta row was trimmed per design feedback to just
+                the template title — description, author, and clones
+                count were removed so the grid reads as a clean visual
+                wall of screenshots.
+              */}
+              <div className="p-3 sm:p-4">
+                <h3 className="text-sm font-medium group-hover:text-primary transition-colors truncate">
                   {t.name}
                 </h3>
-                <p className="text-xs text-secondary line-clamp-2">{t.description || "—"}</p>
-                <div className="mt-auto pt-2 flex items-center justify-between text-[11px] text-secondary">
-                  <span className="truncate">by @{t.author}</span>
-                  <span>{t.clones} clones</span>
-                </div>
               </div>
             </Link>
           ))}
