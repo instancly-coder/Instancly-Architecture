@@ -677,6 +677,14 @@ export function useDeploymentStatus(
         qc.invalidateQueries({
           queryKey: ["projects", username, slug, "publish-status"],
         });
+        // Also refresh the dashboard / public-profile project lists so
+        // the project card's "live" dot can flip from amber to green
+        // (or to red on failure) immediately when the user navigates
+        // back, instead of waiting for the next stale-time refetch.
+        qc.invalidateQueries({ queryKey: ["me", "projects"] });
+        qc.invalidateQueries({
+          queryKey: ["users", username, "projects"],
+        });
       }
       return data;
     },

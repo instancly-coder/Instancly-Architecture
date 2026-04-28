@@ -610,7 +610,8 @@ export default function Builder() {
   const { data: me } = useMe();
   const { data: project } = useProject(username, slug);
   const { data: myProjects = [] } = useMyProjects();
-  const { data: apiBuilds = [] } = useProjectBuilds(username, slug);
+  const { data: apiBuilds = [], isLoading: isBuildsLoading } =
+    useProjectBuilds(username, slug);
   const queryClient = useQueryClient();
   const pastBuilds = apiBuilds.map(toPastBuild);
 
@@ -1646,6 +1647,7 @@ export default function Builder() {
             openBuildId={openBuildId}
             setOpenBuildId={setOpenBuildId}
             pastBuilds={pastBuilds}
+            isHistoryLoading={isBuildsLoading}
             selectedModel={selectedModel}
             setSelectedModel={setSelectedModel}
             planMode={planMode}
@@ -1840,6 +1842,7 @@ export default function Builder() {
           openBuildId={openBuildId}
           setOpenBuildId={setOpenBuildId}
           pastBuilds={pastBuilds}
+          isHistoryLoading={isBuildsLoading}
           selectedModel={selectedModel}
           setSelectedModel={setSelectedModel}
           planMode={planMode}
@@ -1902,6 +1905,7 @@ function ChatPanel({
   openBuildId,
   setOpenBuildId,
   pastBuilds,
+  isHistoryLoading,
   selectedModel,
   setSelectedModel,
   planMode,
@@ -1930,6 +1934,13 @@ function ChatPanel({
   openBuildId: string | null;
   setOpenBuildId: (id: string | null) => void;
   pastBuilds: PastBuild[];
+  // True while the GET /builds query is in flight on initial mount.
+  // Without this, navigating into a project (or refreshing) briefly
+  // shows the "Tell the AI what to build" empty state before the
+  // history arrives, which the user perceives as the chat thread
+  // disappearing whenever they click back in. We use it to suppress
+  // the empty-state copy until we actually know the thread is empty.
+  isHistoryLoading: boolean;
   selectedModel: string;
   setSelectedModel: (v: string) => void;
   planMode: boolean;
@@ -2227,11 +2238,19 @@ function ChatPanel({
           </div>
         )}
 
-        {!isStreaming && !currentPhase && pastBuilds.length === 0 && (
-          <div className="text-xs text-secondary text-center py-8">
-            Tell the AI what to build. Watch the work happen live.
-          </div>
-        )}
+        {/* Empty state — only after we've actually confirmed the
+            history is empty. Showing this while the first /builds
+            fetch is still in flight made the chat appear to flash
+            blank every time the user clicked back into a project,
+            which read like the conversation had been lost. */}
+        {!isStreaming &&
+          !currentPhase &&
+          !isHistoryLoading &&
+          pastBuilds.length === 0 && (
+            <div className="text-xs text-secondary text-center py-8">
+              Tell the AI what to build. Watch the work happen live.
+            </div>
+          )}
       </div>
 
       <div className="p-3 border-t border-border bg-surface shrink-0">

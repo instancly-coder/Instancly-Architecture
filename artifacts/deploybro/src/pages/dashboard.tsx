@@ -1,6 +1,6 @@
 import { Link } from "wouter";
 import { useState } from "react";
-import { Plus, MoreVertical, AlertTriangle, Loader2, Globe, Lock } from "lucide-react";
+import { Plus, MoreVertical, Loader2, Globe, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -46,7 +46,6 @@ export default function Dashboard() {
   const [, navigate] = useLocation();
 
   const balance = me?.balance ?? 0;
-  const hasLowBalance = balance < 20.0;
 
   // One-tap create: skip the modal, mint a project with an
   // auto-numbered "Untitled project N" name (the server slug-suffixes
@@ -74,26 +73,6 @@ export default function Dashboard() {
 
   return (
     <DashboardLayout>
-      {hasLowBalance && (
-        <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 md:px-8 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div className="flex items-start sm:items-center gap-2 text-amber-500 text-sm font-medium">
-            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 sm:mt-0" />
-            <span>
-              Your balance is running low (${balance.toFixed(2)}). Top up to ensure continuous service.
-            </span>
-          </div>
-          <Link href="/dashboard/billing">
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-8 border-amber-500/30 text-amber-500 hover:bg-amber-500/10 w-fit"
-            >
-              Top up
-            </Button>
-          </Link>
-        </div>
-      )}
-
       <header className="px-4 md:px-8 py-5 md:h-20 md:py-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border">
         <h1 className="text-xl md:text-2xl font-bold tracking-tight">
           Hey, {me?.username ?? "..."}
@@ -254,15 +233,30 @@ function ProjectCard({ project, ownerUsername }: { project: ApiProjectListItem; 
         <div className="flex items-start justify-between mb-2">
           <h3 className="font-bold truncate pr-2">{project.name}</h3>
           <div className="flex items-center gap-2 relative z-20">
+            {/* Project "live" dot. We key off `publishStatus` rather
+                than the `status` column — every newly-created project
+                defaults to status="live" before it has actually been
+                deployed, which made the dot misleadingly green. The
+                Vercel publish pipeline is the only thing that flips
+                `publishStatus` to "live", so this is the honest signal
+                of "your URL is up". */}
             <div
               className={`status-dot ${
-                project.status === "live"
+                project.publishStatus === "live"
                   ? ""
-                  : project.status === "error"
+                  : project.publishStatus === "failed"
                   ? "red"
                   : "amber"
               }`}
-              title={project.status}
+              title={
+                project.publishStatus === "live"
+                  ? "Published"
+                  : project.publishStatus === "failed"
+                  ? "Publish failed"
+                  : project.publishStatus === "none"
+                  ? "Not published yet"
+                  : `Publishing… (${project.publishStatus})`
+              }
             />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

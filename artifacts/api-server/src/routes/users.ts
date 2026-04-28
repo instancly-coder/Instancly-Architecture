@@ -75,6 +75,10 @@ router.get("/users/:username/projects", async (req: Request, res: Response): Pro
       description: projectsTable.description,
       framework: projectsTable.framework,
       status: projectsTable.status,
+      // See comment in routes/me.ts — `publishStatus` is what tells the
+      // dashboard / public profile whether Vercel has actually deployed
+      // the project, so the green dot only lights up post-publish.
+      publishStatus: projectsTable.publishStatus,
       isPublic: projectsTable.isPublic,
       isFeaturedTemplate: projectsTable.isFeaturedTemplate,
       clones: projectsTable.clones,

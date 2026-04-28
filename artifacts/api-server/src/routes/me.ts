@@ -186,6 +186,12 @@ router.get("/me/projects", async (req: Request, res: Response): Promise<void> =>
       description: projectsTable.description,
       framework: projectsTable.framework,
       status: projectsTable.status,
+      // Vercel publish state ("none" | "validating" | ... | "live" |
+      // "failed"). The dashboard project card uses this to decide
+      // whether the green dot is warranted; `status` alone defaults to
+      // "live" for every newly-created project even before publish, so
+      // it can't tell us whether Vercel has actually deployed anything.
+      publishStatus: projectsTable.publishStatus,
       isPublic: projectsTable.isPublic,
       isFeaturedTemplate: projectsTable.isFeaturedTemplate,
       clones: projectsTable.clones,

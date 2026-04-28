@@ -1274,6 +1274,13 @@ components:
         description: { type: string }
         framework: { type: string }
         status: { type: string }
+        # Vercel publish state. "none" = never published, "live" = a
+        # successful Vercel deployment is currently the latest, "failed"
+        # = the latest deployment failed, otherwise it's a transient
+        # in-flight stage (validating / creating_project / deploying /
+        # polling). The dashboard project card uses this — not `status`
+        # — to decide whether the green "live" dot is warranted.
+        publishStatus: { type: string }
         isPublic: { type: boolean }
         isFeaturedTemplate: { type: boolean }
         clones: { type: integer }
@@ -1298,6 +1305,7 @@ components:
         - description
         - framework
         - status
+        - publishStatus
         - isPublic
         - isFeaturedTemplate
         - clones

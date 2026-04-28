@@ -13,6 +13,7 @@ export interface ProjectListItem {
   description: string;
   framework: string;
   status: string;
+  publishStatus: string;
   isPublic: boolean;
   isFeaturedTemplate: boolean;
   clones: number;
