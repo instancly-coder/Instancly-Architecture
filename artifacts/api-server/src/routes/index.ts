@@ -20,7 +20,17 @@ const router: IRouter = Router();
 router.use(healthRouter);
 router.use(configRouter);
 router.use(authRouter);
-router.use(dbRouter);
+// /api/db/* exposes connection-string host, Postgres version, and
+// per-table row counts / sizes. Useful for an internal "DB inspector"
+// admin panel, lethal if scraped from the open internet (it tells an
+// attacker exactly what they're up against and which tables to target).
+// Gate behind the admin allow-list — same as /api/admin/*.
+//
+// dbRouter declares its routes with relative paths ("/ping", "/info"),
+// so mounting it under the "/db" prefix gives us /api/db/ping etc.
+// dbRouter ALSO has its own router-level `requireAdmin` for
+// belt-and-braces — see comment in routes/db.ts.
+router.use("/db", dbRouter);
 router.use(usersRouter);
 router.use(projectsRouter);
 router.use(exploreRouter);

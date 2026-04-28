@@ -34,6 +34,7 @@ import {
   buildBriefPrompt,
 } from "../lib/prompt-enhancer";
 import { requireAuth, getAuthedUser } from "../middlewares/auth";
+import { aiLimiter } from "../middlewares/rate-limits";
 import { provisionAppDatabase, parentProjectId } from "../lib/neon";
 import { encryptSecret, decryptSecret } from "../lib/secret-cipher";
 import { logger } from "../lib/logger";
@@ -296,6 +297,13 @@ async function fetchUrlForRedesign(rawUrl: string): Promise<{
 
 router.post(
   "/ai/build/:username/:slug",
+  // aiLimiter is keyed by user id (with IP fallback) so a logged-in
+  // abuser can't dodge the cap by rotating IPs, and a NAT'd office
+  // full of legitimate users isn't collectively rate-limited under
+  // one shared egress IP. Each AI build is a real Anthropic spend
+  // (Sonnet/Opus tokens are not cheap), so this is the most
+  // cost-sensitive surface in the app.
+  aiLimiter,
   requireAuth,
   async (req: Request, res: Response): Promise<void> => {
     const username = String(req.params.username);

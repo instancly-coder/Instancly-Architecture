@@ -2,8 +2,17 @@ import { Router, type IRouter } from "express";
 import { desc, eq, ilike, or, sql, and } from "drizzle-orm";
 import { db, projectsTable, usersTable } from "@workspace/db";
 import { ExploreResponse } from "@workspace/api-zod";
+import { publicReadLimiter } from "../middlewares/rate-limits";
 
 const router: IRouter = Router();
+
+// Both /explore and /templates are public unauthenticated read endpoints,
+// which makes them the most attractive scraping target on the API. The
+// publicReadLimiter is sized to be invisible to a real human browsing
+// the gallery (60 req/min/IP) but lethal to anyone iterating through
+// pages programmatically.
+router.use("/explore", publicReadLimiter);
+router.use("/templates", publicReadLimiter);
 
 router.get("/explore", async (req, res) => {
   const q = (req.query.q as string | undefined)?.trim();

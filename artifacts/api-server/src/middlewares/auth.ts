@@ -21,6 +21,33 @@ if (JWKS_URL) {
   }
 }
 
+// Production boot guard. The dev bypass below ("everyone is the demo
+// user when JWKS isn't configured") is convenient locally but would be
+// catastrophic if it ever activated in a production deployment — every
+// incoming request would be silently authenticated as `demo@deploybro.local`
+// and gain access to that user's data.
+//
+// The previous gate was `NODE_ENV !== 'production' && !jwks`, which
+// failed CLOSED in prod (no auth at all if misconfigured) but failed
+// OPEN if someone set NODE_ENV by mistake. Refusing to boot is the
+// only safe behavior: a missing JWKS in production is always a
+// misconfiguration, never an intentional state.
+if (process.env.NODE_ENV === "production" && !jwks) {
+  logger.fatal(
+    {
+      hasJwksUrl: Boolean(JWKS_URL),
+      hasIssuer: Boolean(ISSUER),
+    },
+    "AUTH_JWKS_URL is required in production. Refusing to boot — without JWKS the dev bypass would silently sign every request in as the demo user.",
+  );
+  // Throw rather than process.exit so the wrapping process manager
+  // (and our own logger flush) can see the cause. index.ts has no
+  // catch around the import, so this terminates the process.
+  throw new Error(
+    "AUTH_JWKS_URL is required in production but is missing or invalid",
+  );
+}
+
 /**
  * Decide whether a JWT's `iss` claim is one we accept.
  *

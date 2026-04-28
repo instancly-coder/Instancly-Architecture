@@ -1,4 +1,4 @@
-import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
+import { Router, type IRouter, type Request, type Response } from "express";
 import { desc, eq, sql } from "drizzle-orm";
 import {
   db,
@@ -8,7 +8,13 @@ import {
   transactionsTable,
   payoutsTable,
 } from "@workspace/db";
-import { authConfigured, getAuthedUser } from "../middlewares/auth";
+import { getAuthedUser } from "../middlewares/auth";
+import {
+  ADMIN_USERNAMES,
+  DEV_ADMIN_ALLOWED,
+  isAdminUser,
+  requireAdmin,
+} from "../middlewares/admin";
 import {
   GetAdminMeResponse,
   GetAdminStatsResponse,
@@ -32,28 +38,10 @@ import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
-const ADMIN_USERNAMES = (process.env.ADMIN_USERNAMES ?? "")
-  .split(",")
-  .map((s) => s.trim().toLowerCase())
-  .filter(Boolean);
-
-const DEV_ADMIN_ALLOWED =
-  process.env.NODE_ENV !== "production" && !authConfigured;
-
-// In dev (no auth configured at all and not production) we permit admin access for the demo
-async function requireAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
-  if (DEV_ADMIN_ALLOWED) return next();
-  const user = getAuthedUser(req);
-  if (!user) {
-    res.status(401).json({ status: "error", message: "Unauthenticated" });
-    return;
-  }
-  if (ADMIN_USERNAMES.length === 0 || !ADMIN_USERNAMES.includes(user.username.toLowerCase())) {
-    res.status(403).json({ status: "error", message: "Forbidden" });
-    return;
-  }
-  next();
-}
+// `requireAdmin`, `ADMIN_USERNAMES`, `DEV_ADMIN_ALLOWED`, and
+// `isAdminUser` were moved to `middlewares/admin.ts` so the same gate
+// can be reused by `/api/db/*` (mounted in routes/index.ts) without
+// import cycles. The semantics are unchanged.
 
 router.get("/admin/me", async (req: Request, res: Response): Promise<void> => {
   if (DEV_ADMIN_ALLOWED) {
@@ -61,10 +49,7 @@ router.get("/admin/me", async (req: Request, res: Response): Promise<void> => {
     return;
   }
   const user = getAuthedUser(req);
-  const isAdmin =
-    !!user &&
-    ADMIN_USERNAMES.length > 0 &&
-    ADMIN_USERNAMES.includes(user.username.toLowerCase());
+  const isAdmin = !!user && isAdminUser(user.username);
   res.json(GetAdminMeResponse.parse({ isAdmin, configured: true }));
 });
 

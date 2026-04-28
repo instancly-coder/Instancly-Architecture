@@ -1,10 +1,21 @@
 import { Router, type IRouter } from "express";
 import { sql } from "drizzle-orm";
 import { db } from "@workspace/db";
+import { requireAdmin } from "../middlewares/admin";
 
 const router: IRouter = Router();
 
-router.get("/db/ping", async (_req, res) => {
+// Router-level admin gate. Because this router is mounted at the
+// "/db" prefix in routes/index.ts AND its own paths are relative
+// ("/ping", "/info", "/tables"), the gate cleanly covers everything
+// in this file no matter what new path is added later. The previous
+// shape (paths starting with "/db/" + parent-side `router.use("/db",
+// requireAdmin)`) had the right effect but coupled the gate to a
+// specific prefix string. Keeping the gate co-located with the
+// routes it protects is the more obvious home for it.
+router.use(requireAdmin);
+
+router.get("/ping", async (_req, res) => {
   try {
     const result = await db.execute(
       sql`select 1 as ok, now() as now, current_database() as database, version() as version`,
@@ -19,7 +30,7 @@ router.get("/db/ping", async (_req, res) => {
   }
 });
 
-router.get("/db/info", async (_req, res) => {
+router.get("/info", async (_req, res) => {
   try {
     const conn =
       process.env.NEON_DATABASE_URL ?? process.env.DATABASE_URL ?? "";
@@ -57,7 +68,7 @@ router.get("/db/info", async (_req, res) => {
   }
 });
 
-router.get("/db/tables", async (_req, res) => {
+router.get("/tables", async (_req, res) => {
   try {
     const result = await db.execute(sql`
       select
