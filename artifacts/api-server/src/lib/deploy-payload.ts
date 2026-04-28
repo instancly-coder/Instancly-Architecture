@@ -157,24 +157,74 @@ function encodeForVercel(file: ProjectFileLite): {
   return { data: toBase64FromUtf8(file.content), rawBytes };
 }
 
-// True for AI-generated CDN-style projects: an `index.html` + at least
-// one `.jsx`/`.tsx` file, with no `package.json`. These are emitted by
-// the AI builder and need to be wrapped in a Vite project before
-// shipping to Vercel for a proper bundle.
+// Extract the code from inline (no src=) <script type="text/babel"> blocks.
+// These are the AI's "all-in-one-file" output style: JSX components AND
+// the ReactDOM.createRoot().render() mount call all live inside index.html
+// instead of separate .jsx files. Vite can't compile inline script blocks
+// directly, so at publish time we lift them out into a synthetic .jsx file
+// that gets merged into the user bundle exactly like a normal .jsx file.
+function extractInlineBabelCode(html: string): string[] {
+  const scripts: string[] = [];
+  // Match every <script … type="text/babel" …> … </script> block.
+  const ALL_BABEL_RE =
+    /<script\b([^>]*\btype=["']text\/babel["'][^>]*)>([\s\S]*?)<\/script>/gi;
+  let m;
+  while ((m = ALL_BABEL_RE.exec(html)) !== null) {
+    const attrs = m[1];
+    const code = m[2].trim();
+    // Skip external references (<script type="text/babel" src="…">);
+    // those are handled by isCdnReactProject / jsxBodies collection.
+    if (!/\bsrc\s*=/.test(attrs) && code) {
+      scripts.push(code);
+    }
+  }
+  return scripts;
+}
+
+// Pull the raw HTML string out of a ProjectFileLite (handles base64 rows).
+function getIndexHtmlContent(files: ProjectFileLite[]): string {
+  const f = files.find((x) => x.path === "index.html");
+  if (!f) return "";
+  return f.encoding === "base64"
+    ? Buffer.from(f.content, "base64").toString("utf8")
+    : f.content;
+}
+
+// True for AI-generated CDN-style projects that should go through the Vite
+// bundling path. Two shapes are detected:
+//
+//   a) index.html + one or more .jsx/.tsx files + no package.json
+//      (the "multi-file" CDN pattern the AI usually produces)
+//
+//   b) index.html with all JSX code in inline <script type="text/babel">
+//      blocks + no package.json
+//      (the "single-file" pattern the AI sometimes produces for small apps)
+//
+// Both shapes need the Vite transform; the only difference is that shape (b)
+// has to have its inline code extracted before the bundle is assembled.
 function isCdnReactProject(files: ProjectFileLite[]): boolean {
   const hasIndexHtml = files.some((f) => f.path === "index.html");
   const hasPackage = files.some((f) => f.path === "package.json");
   const hasJsx = files.some((f) => /\.(jsx|tsx)$/.test(f.path));
-  return hasIndexHtml && !hasPackage && hasJsx;
+
+  if (!hasIndexHtml || hasPackage) return false;
+  if (hasJsx) return true; // shape (a)
+
+  // shape (b): all code inline in the HTML
+  return extractInlineBabelCode(getIndexHtmlContent(files)).length > 0;
 }
 
-// True for pure static sites — HTML/CSS/JS only, no JSX, no package.json.
-// Shipped as-is with the build step disabled.
+// True for pure static sites — HTML/CSS/JS only, no JSX, no package.json,
+// AND no inline Babel scripts. Shipped as-is with the build step disabled.
+// This path is intentionally narrow: anything with React/JSX code goes
+// through the Vite bundling path so it gets a proper production build.
 function isStaticOnly(files: ProjectFileLite[]): boolean {
   const hasIndexHtml = files.some((f) => f.path === "index.html");
   const hasPackage = files.some((f) => f.path === "package.json");
   const hasJsx = files.some((f) => /\.(jsx|tsx)$/.test(f.path));
-  return hasIndexHtml && !hasPackage && !hasJsx;
+  if (!hasIndexHtml || hasPackage || hasJsx) return false;
+  // Also check for inline Babel scripts — those sites need Vite too.
+  return extractInlineBabelCode(getIndexHtmlContent(files)).length === 0;
 }
 
 // Pick the order in which user .jsx files should be concatenated for
@@ -184,13 +234,14 @@ function isStaticOnly(files: ProjectFileLite[]): boolean {
 // into one bundle, dependents must come AFTER their dependencies. The
 // AI's typical entry file is `app.jsx` / `main.jsx` / `index.jsx` and
 // it's responsible for actually mounting React, so we always put those
-// last. Everything else is sorted alphabetically as a stable, easy-to-
-// reason-about default. Multi-file projects with non-trivial inter-
-// dependencies might still need the AI to be more explicit, but this
-// covers the >90% case of "components folder + app.jsx".
+// last. Synthetic inline-extracted files (_inline-*.jsx) also go last
+// because they typically contain both component definitions AND the
+// ReactDOM.createRoot().render() call. Everything else is sorted
+// alphabetically as a stable, easy-to-reason-about default.
 function orderJsxFilesForConcat(jsxPaths: string[]): string[] {
   const isEntry = (p: string) =>
-    /(^|\/)(app|main|index)\.(jsx|tsx)$/i.test(p);
+    /(^|\/)(app|main|index)\.(jsx|tsx)$/i.test(p) ||
+    /^_inline-\d+\.jsx$/.test(p); // synthetic inline-extracted files
   const others = jsxPaths.filter((p) => !isEntry(p)).sort();
   const entries = jsxPaths.filter(isEntry).sort();
   return [...others, ...entries];
@@ -394,6 +445,18 @@ function transformCdnReactToVite(
     // ships as-is so the bundle and the rest of the page can reference
     // them via relative URLs the same way the dev preview does.
     out.push(f);
+  }
+
+  // Lift out any inline <script type="text/babel"> blocks from index.html.
+  // The AI sometimes puts all component definitions AND the mount call
+  // directly in the HTML rather than in separate .jsx files. The HTML
+  // transform below (transformIndexHtmlForVite) will strip those script
+  // tags, so we must capture the code here before it disappears.
+  // Each inline block becomes a synthetic `_inline-N.jsx` file that gets
+  // merged into user-bundle.jsx just like a real .jsx file.
+  const inlineCodes = extractInlineBabelCode(originalIndexHtml);
+  for (let i = 0; i < inlineCodes.length; i++) {
+    jsxBodies.push({ path: `_inline-${i}.jsx`, content: inlineCodes[i] });
   }
 
   // Rebuild index.html with CDN React/Babel scripts stripped and the
