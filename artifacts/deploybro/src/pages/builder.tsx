@@ -621,6 +621,8 @@ export default function Builder() {
   const liveUrl = `https://${slug}.deploybro.app`;
   const [urlValue, setUrlValue] = useState(liveUrl);
   const [iframeKey, setIframeKey] = useState(0);
+  // URL bar is hidden on mobile by default; the 3-dots menu lets users toggle it on.
+  const [showUrlBar, setShowUrlBar] = useState(false);
 
   useEffect(() => {
     setUrlValue(liveUrl);
@@ -1614,6 +1616,10 @@ export default function Builder() {
               <DropdownMenuItem>Rules Book</DropdownMenuItem>
               <DropdownMenuItem>Integrations</DropdownMenuItem>
               <DropdownMenuItem>Share link</DropdownMenuItem>
+              <DropdownMenuSeparator className="bg-border" />
+              <DropdownMenuItem onClick={() => setShowUrlBar((v) => !v)}>
+                {showUrlBar ? "Hide URL bar" : "Show URL bar"}
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -1678,9 +1684,9 @@ export default function Builder() {
             className="md:hidden h-11 border-b border-border bg-surface flex items-center px-2 gap-1 overflow-x-auto shrink-0"
           />
 
-          {/* Live URL bar (preview only) */}
+          {/* Live URL bar (preview only) — hidden on mobile by default, toggleable via 3-dots menu */}
           {activeTab === "preview" && (
-            <div className="h-10 border-b border-border bg-surface grid grid-cols-[auto_1fr_auto] items-center gap-1 px-2 shrink-0">
+            <div className={`h-10 border-b border-border bg-surface grid-cols-[auto_1fr_auto] items-center gap-1 px-2 shrink-0 ${showUrlBar ? "grid" : "hidden md:grid"}`}>
               {/* Left: nav controls */}
               <div className="flex items-center gap-0.5">
                 <button
