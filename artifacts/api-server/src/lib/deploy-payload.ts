@@ -231,16 +231,23 @@ function isStaticOnly(files: ProjectFileLite[]): boolean {
 // the build. The AI's CDN-style code shares globals across files (a
 // `function TaskList() {}` in `components/TaskList.jsx` becomes a
 // global the way classic `<script>` tags work), so when we merge them
-// into one bundle, dependents must come AFTER their dependencies. The
-// AI's typical entry file is `app.jsx` / `main.jsx` / `index.jsx` and
-// it's responsible for actually mounting React, so we always put those
-// last. Synthetic inline-extracted files (_inline-*.jsx) also go last
-// because they typically contain both component definitions AND the
-// ReactDOM.createRoot().render() call. Everything else is sorted
+// into one bundle, dependents must come AFTER their dependencies.
+//
+// Mount entries — files that call `ReactDOM.createRoot(...).render(<App />)`
+// — must come LAST so they execute after every component definition is in
+// scope. Two conventions exist:
+//   • New layout: `app/layout.jsx` (Next.js-inspired, sets up routes +
+//     mounts React).
+//   • Legacy: `app.jsx` / `main.jsx` / `index.jsx` at the project root.
+//
+// Synthetic inline-extracted files (`_inline-*.jsx`) also go last because
+// they typically contain both component definitions AND the
+// `ReactDOM.createRoot().render()` call. Everything else is sorted
 // alphabetically as a stable, easy-to-reason-about default.
 function orderJsxFilesForConcat(jsxPaths: string[]): string[] {
   const isEntry = (p: string) =>
     /(^|\/)(app|main|index)\.(jsx|tsx)$/i.test(p) ||
+    /(^|\/)app\/layout\.(jsx|tsx)$/i.test(p) || // new layout convention
     /^_inline-\d+\.jsx$/.test(p); // synthetic inline-extracted files
   const others = jsxPaths.filter((p) => !isEntry(p)).sort();
   const entries = jsxPaths.filter(isEntry).sort();

@@ -346,11 +346,14 @@ export function injectOrphanScripts(
   // generating files but forgetting to wire them into index.html.
   if (referenced.size === 0) {
     if (allJsxPaths.length === 0) return html;
-    // Require the React CDN to be present so we don't touch static or
-    // vanilla-JS sites that happen to have a stray .jsx file uploaded.
-    const hasReactCdn =
-      /unpkg\.com\/react@|cdn\.tailwindcss\.com/.test(html);
-    if (!hasReactCdn) return html;
+    // Require a React/Babel CDN to be present so we don't touch static or
+    // vanilla-JS sites (e.g. a Tailwind-only landing page) that happen to
+    // have a stray .jsx file uploaded.
+    const hasReactRuntime =
+      /\b(?:unpkg\.com|esm\.sh|cdn\.jsdelivr\.net\/npm)\/react(?:-dom)?@/.test(
+        html,
+      ) || /@babel\/standalone/.test(html);
+    if (!hasReactRuntime) return html;
 
     const sorted = sortJsxForPreview(allJsxPaths);
     const tags = sorted
@@ -370,25 +373,18 @@ export function injectOrphanScripts(
   }
 
   // ── Scenario A: some babel src tags exist but some files are orphaned ─
-  // `app.jsx` is intentionally excluded from orphan injection — if it's
-  // missing from the HTML that's a more fundamental AI failure and the
-  // error overlay should surface it.
-  const isAppEntry = (p: string): boolean =>
-    p === "app.jsx" || /(^|\/)app\.jsx$/i.test(p);
+  // The mount entry (`app/layout.jsx` in the new layout, or legacy `app.jsx`)
+  // is intentionally excluded from orphan injection — if it's missing from
+  // the HTML that's a more fundamental AI failure and the error overlay
+  // should surface it.
   const orphans = allJsxPaths.filter(
-    (p) => !referenced.has(p) && !isAppEntry(p),
+    (p) => !referenced.has(p) && !isMountEntry(p),
   );
   if (orphans.length === 0) return html;
 
-  const bucketOf = (p: string): number => {
-    if (p.startsWith("hooks/")) return 1;
-    if (p.startsWith("components/")) return 2;
-    if (p.startsWith("pages/")) return 3;
-    return 2;
-  };
   orphans.sort((a, b) => {
-    const ba = bucketOf(a);
-    const bb = bucketOf(b);
+    const ba = previewBucketOf(a);
+    const bb = previewBucketOf(b);
     if (ba !== bb) return ba - bb;
     return a.localeCompare(b);
   });
@@ -404,32 +400,57 @@ export function injectOrphanScripts(
       orphans.length === 1 ? "" : "s"
     } the AI forgot to re-emit in index.html -->\n  ${tags}\n  `;
 
-  // Inject right BEFORE the existing `app.jsx` script tag so the canonical
-  // load order is preserved (hooks → components → pages → app.jsx LAST).
-  const APP_TAG_RE =
+  // Inject right BEFORE the mount entry script tag so the canonical
+  // load order is preserved (hooks → lib → components → app/<route>/page →
+  // app/layout LAST). The mount entry is `app/layout.jsx` in the new layout
+  // or `app.jsx` in legacy projects — try both.
+  const APP_TAG_RE_NEW =
+    /<script\b[^>]*\btype\s*=\s*["']text\/babel["'][^>]*\bsrc\s*=\s*["'](?:\.\/?|\/)?app\/layout\.jsx["'][^>]*>\s*<\/script>/i;
+  const APP_TAG_RE_NEW_REVERSE =
+    /<script\b[^>]*\bsrc\s*=\s*["'](?:\.\/?|\/)?app\/layout\.jsx["'][^>]*\btype\s*=\s*["']text\/babel["'][^>]*>\s*<\/script>/i;
+  const APP_TAG_RE_LEGACY =
     /<script\b[^>]*\btype\s*=\s*["']text\/babel["'][^>]*\bsrc\s*=\s*["'](?:\.\/?|\/)?app\.jsx["'][^>]*>\s*<\/script>/i;
-  const APP_TAG_RE_REVERSE =
+  const APP_TAG_RE_LEGACY_REVERSE =
     /<script\b[^>]*\bsrc\s*=\s*["'](?:\.\/?|\/)?app\.jsx["'][^>]*\btype\s*=\s*["']text\/babel["'][^>]*>\s*<\/script>/i;
-  const appMatch = html.match(APP_TAG_RE) ?? html.match(APP_TAG_RE_REVERSE);
+  const appMatch =
+    html.match(APP_TAG_RE_NEW) ??
+    html.match(APP_TAG_RE_NEW_REVERSE) ??
+    html.match(APP_TAG_RE_LEGACY) ??
+    html.match(APP_TAG_RE_LEGACY_REVERSE);
   if (!appMatch || typeof appMatch.index !== "number") return html;
   return html.slice(0, appMatch.index) + block + html.slice(appMatch.index);
 }
 
+// Identify the React-mount entry file. Either `app/layout.jsx` (new
+// Next.js-style layout) or `app.jsx` (legacy convention). Both call
+// `ReactDOM.createRoot(...).render(<App />)` and must be loaded last.
+function isMountEntry(p: string): boolean {
+  return (
+    p === "app.jsx" ||
+    /(^|\/)app\.jsx$/i.test(p) ||
+    /(^|\/)app\/layout\.jsx$/i.test(p)
+  );
+}
+
+// Bucket assignment for preview load order. Lower bucket = loaded earlier.
+function previewBucketOf(p: string): number {
+  if (p.startsWith("hooks/")) return 1;
+  if (p.startsWith("lib/")) return 2;
+  if (p.startsWith("components/")) return 3;
+  if (p.startsWith("pages/")) return 4; // legacy pages/ folder
+  // Page files in the new layout: app/<route>/page.jsx, including app/page.jsx.
+  if (/^app(\/[^/]+)*\/page\.jsx$/i.test(p)) return 4;
+  if (isMountEntry(p)) return 5;
+  return 3; // unknown-folder files behave most like components
+}
+
 // Sort .jsx file paths into canonical preview load order:
-// hooks/ → components/ → pages/ → everything else → app.jsx last.
+// hooks → lib → components → pages → app/<route>/page → app/layout (or
+// legacy app.jsx) last.
 function sortJsxForPreview(paths: string[]): string[] {
-  const isAppEntry = (p: string) =>
-    p === "app.jsx" || /(^|\/)app\.jsx$/i.test(p);
-  const bucketOf = (p: string): number => {
-    if (p.startsWith("hooks/")) return 1;
-    if (p.startsWith("components/")) return 2;
-    if (p.startsWith("pages/")) return 3;
-    if (isAppEntry(p)) return 5;
-    return 2;
-  };
   return [...paths].sort((a, b) => {
-    const ba = bucketOf(a);
-    const bb = bucketOf(b);
+    const ba = previewBucketOf(a);
+    const bb = previewBucketOf(b);
     if (ba !== bb) return ba - bb;
     return a.localeCompare(b);
   });

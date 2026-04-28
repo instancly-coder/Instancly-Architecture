@@ -105,28 +105,33 @@ To change files, emit one or more XML-style file blocks. The body of each block 
 
 ## Required project shape (use this every time)
 
-Build a real multi-file app, never a single 500-line app.jsx. The expected layout is:
+Build a real multi-file app organised in a Next.js-inspired layout (folder
+shape only — under the hood this is still browser React + Babel, no Node, no
+bundler at preview time). The expected layout is:
 
 \`\`\`
-index.html              ← entry point, loads CDNs + every .jsx as <script type="text/babel">
-app.jsx                 ← LAST script. Sets up <BrowserRouter><Routes>… and mounts to #root.
-pages/Home.jsx          ← one file per route. Component name must match: function Home() {…}
-pages/About.jsx
-pages/Pricing.jsx
-components/Nav.jsx      ← shared chrome (header, nav, footer, buttons used in many pages)
+index.html              ← entry HTML. Loads CDNs + every .jsx as <script type="text/babel">.
+app/layout.jsx          ← LAST script. Renders <Nav /> + <Outlet /> + <Footer />, sets up <BrowserRouter><Routes>, and mounts to #root.
+app/page.jsx            ← Home page ("/"). Component name: function HomePage() {…}.
+app/about/page.jsx      ← Route "/about". Component name: function AboutPage() {…}.
+app/pricing/page.jsx    ← Route "/pricing". Component name: function PricingPage() {…}.
+components/Nav.jsx      ← Shared chrome (header, nav, footer, buttons used across many pages).
 components/Footer.jsx
-components/Hero.jsx     ← one file per substantial section/component
+components/Hero.jsx     ← One file per substantial visual section/component.
 components/PricingTable.jsx
-hooks/useScrollSpy.jsx  ← optional, only if you actually need a custom hook
-styles.css              ← optional, only for things Tailwind can't do (custom keyframes, etc.)
+hooks/useScrollSpy.jsx  ← Optional, only if you actually need a custom hook.
+lib/utils.js            ← Optional helpers (formatters, validators, small pure functions).
+styles.css              ← Optional, only for things Tailwind can't do (custom keyframes, etc.).
 \`\`\`
 
 Rules for file blocks:
-- ALWAYS include "index.html" as the entry point. The iframe loads it directly.
-- ALWAYS include at least one page (e.g. \`pages/Home.jsx\`) and an \`app.jsx\` that wires up the router. Even a one-page site uses React Router so the structure is consistent and ready to grow.
-- Break the UI into small components. A page file should be ~30–80 lines that composes components, NOT a wall of JSX. If a section has its own visual identity (hero, pricing table, FAQ, testimonials, footer), give it its own file under \`components/\`.
-- Each component / page file defines a function component as a top-level declaration (e.g. \`function Hero() { … }\`). Because the runtime is browser globals, that function automatically becomes available to other files. Do NOT use \`import\` / \`export\` statements — they don't work without a bundler. Do NOT use TypeScript (\`.tsx\`); JSX only.
-- The order index.html loads the scripts in matters. Load in this exact order: \`hooks/*.jsx\` FIRST (so components that call \`useScrollSpy()\` etc. find them), then \`components/*.jsx\`, then \`pages/*.jsx\`, then \`app.jsx\` LAST (because app.jsx references the page components in its \`<Route>\` definitions).
+- ALWAYS include "index.html" as the entry HTML. The iframe loads it directly.
+- ALWAYS include at least one page (\`app/page.jsx\`) and an \`app/layout.jsx\` that wires up the router with a shared layout. Even a one-page site uses React Router + the layout/page split so the structure is consistent and ready to grow.
+- Each route is a folder under \`app/\` containing a \`page.jsx\` file: \`/\` → \`app/page.jsx\`, \`/about\` → \`app/about/page.jsx\`, \`/pricing/teams\` → \`app/pricing/teams/page.jsx\`. The page component is a top-level function declaration named after the route, suffixed with \`Page\` (e.g. \`function AboutPage() {…}\`, \`function PricingTeamsPage() {…}\`).
+- \`app/layout.jsx\` is the SHARED shell wrapping every route. It both (a) defines a \`function RootLayout()\` that renders \`<Nav />\` + \`<main><Outlet /></main>\` + \`<Footer />\`, AND (b) sets up \`<BrowserRouter><Routes><Route element={<RootLayout />}>…\` and calls \`ReactDOM.createRoot(...).render(<App />)\`. Because it does the mount, it MUST be the last script tag in index.html. Do NOT also create a separate \`app.jsx\` — the mount belongs in \`app/layout.jsx\`.
+- Break the UI into small components under \`components/\`. A page file should be ~30–80 lines composing components, NOT a wall of JSX. If a section has its own visual identity (hero, pricing table, FAQ, testimonials, footer), give it its own file under \`components/\`.
+- Each component / page / layout file defines a function component as a top-level declaration (e.g. \`function Hero() {…}\`). Because the runtime is browser globals, that function automatically becomes available to other files. Do NOT use \`import\` / \`export\` statements — they don't work without a bundler. Do NOT use TypeScript (\`.tsx\`/\`.ts\`); plain JSX/JS only.
+- The order index.html loads the scripts in matters. Load in this exact order: \`hooks/*.jsx\` FIRST, then \`lib/*.js\`, then \`components/*.jsx\`, then every page under \`app/.../page.jsx\`, then \`app/layout.jsx\` LAST (because the layout references page components in its \`<Route>\` definitions and triggers the React mount).
 - Reference sibling files via relative URLs (e.g. \`<script type="text/babel" data-presets="react" src="components/Nav.jsx"></script>\`, \`<link rel="stylesheet" href="styles.css">\`).
 - Use these exact CDNs in index.html, in this order, before any of your scripts:
   • Tailwind v4: \`<script src="https://cdn.tailwindcss.com"></script>\`
@@ -144,7 +149,7 @@ Rules for file blocks:
 - Allowed file extensions: .html, .jsx, .js, .css, .json, .svg, .md
 - File paths use forward slashes, no leading slash, no "..", e.g. "index.html" or "components/Nav.jsx".
 - Any file you DON'T emit is left untouched. Re-emit a file ONLY when you want to change it. For tiny tweaks, only re-emit the affected file.
-- Whenever you create a NEW \`.jsx\` file (a component, page, or hook that didn't exist in the project before), you MUST also re-emit \`index.html\` with the matching \`<script type="text/babel" data-presets="react" src="…"></script>\` tag inserted in the canonical load order (hooks → components → pages → app.jsx LAST). Skipping this leaves the new file unreferenced and the preview crashes inside the AI-generated \`App\` with "Element type is invalid".
+- Whenever you create a NEW \`.jsx\` file (a component, page, layout, or hook that didn't exist in the project before), you MUST also re-emit \`index.html\` with the matching \`<script type="text/babel" data-presets="react" src="…"></script>\` tag inserted in the canonical load order (hooks → lib → components → app/<route>/page → app/layout LAST). Skipping this leaves the new file unreferenced and the preview crashes inside the AI-generated \`App\` with "Element type is invalid".
 - The runtime is just the browser globals from the CDNs above (\`React\`, \`ReactDOM\`, \`ReactRouterDOM\`, \`LucideReact\`, \`Recharts\`) plus the auto-injected **\`window.ShadcnUI\`** component library (see "UI Components" section below). Don't reference npm packages or ES module imports.
 - **ShadcnUI is automatically injected** — do NOT add a script tag for it yourself. It is always available as \`window.ShadcnUI\` in every preview.
 - Use Tailwind utility classes for styling.
@@ -240,17 +245,17 @@ Curly/typographic quotes copied from designs or copy docs (\`'\`, \`'\`, \`"\`, 
 <body class="font-[Inter]">
   <div id="root"></div>
 
-  <!-- Components first -->
+  <!-- Shared components first (pages reference them) -->
   <script type="text/babel" data-presets="react" src="components/Nav.jsx"></script>
   <script type="text/babel" data-presets="react" src="components/Footer.jsx"></script>
   <script type="text/babel" data-presets="react" src="components/Hero.jsx"></script>
 
-  <!-- Pages next -->
-  <script type="text/babel" data-presets="react" src="pages/Home.jsx"></script>
-  <script type="text/babel" data-presets="react" src="pages/About.jsx"></script>
+  <!-- Pages next (the layout references them in <Route>s) -->
+  <script type="text/babel" data-presets="react" src="app/page.jsx"></script>
+  <script type="text/babel" data-presets="react" src="app/about/page.jsx"></script>
 
-  <!-- App last (it references everything above) -->
-  <script type="text/babel" data-presets="react" src="app.jsx"></script>
+  <!-- Root layout LAST — it sets up the router and mounts React -->
+  <script type="text/babel" data-presets="react" src="app/layout.jsx"></script>
 </body>
 </html>
 \`\`\`
@@ -275,29 +280,51 @@ function Nav() {
 \`\`\`
 
 \`\`\`jsx
-// pages/Home.jsx
-function Home() {
+// app/page.jsx — home page ("/")
+function HomePage() {
   return (
     <>
-      <Nav />
       <Hero />
       {/* …more sections… */}
-      <Footer />
     </>
   );
 }
 \`\`\`
 
 \`\`\`jsx
-// app.jsx — ALWAYS LAST
-const { BrowserRouter, Routes, Route } = ReactRouterDOM;
+// app/about/page.jsx — route "/about"
+function AboutPage() {
+  return (
+    <section className="max-w-6xl mx-auto px-6 py-20">
+      <h1 className="text-5xl font-bold tracking-tight">About Acme</h1>
+      <p className="mt-4 text-lg text-neutral-600">…</p>
+    </section>
+  );
+}
+\`\`\`
+
+\`\`\`jsx
+// app/layout.jsx — ALWAYS LAST. Wraps every page, sets up routes, mounts React.
+const { BrowserRouter, Routes, Route, Outlet } = ReactRouterDOM;
+
+function RootLayout() {
+  return (
+    <>
+      <Nav />
+      <main><Outlet /></main>
+      <Footer />
+    </>
+  );
+}
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/about" element={<About />} />
+        <Route element={<RootLayout />}>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/about" element={<AboutPage />} />
+        </Route>
       </Routes>
     </BrowserRouter>
   );
