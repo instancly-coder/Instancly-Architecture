@@ -374,12 +374,12 @@
   perspective: 600px;
   perspective-origin: 50% 0%;
   overflow: hidden;
-  /* Fade the far end (top of the wrapper, where the grid recedes
-     into the distance) to transparent. The long ramp from 0% → 75%
-     keeps the grid soft for most of its height and only fully opaque
-     near the bottom edge, so it dissolves gracefully into the page. */
-  mask-image: linear-gradient(to bottom, transparent 0%, transparent 25%, black 75%, black 100%);
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, transparent 25%, black 75%, black 100%);
+  /* Fade both ends to transparent — the top so the grid dissolves
+     into the horizon, the bottom so the closest rows soften into the
+     page edge instead of cutting off in a hard line. Peak opacity sits
+     in the middle band where the grid reads most clearly. */
+  mask-image: linear-gradient(to bottom, transparent 0%, black 55%, black 80%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 55%, black 80%, transparent 100%);
 }
 .perspective-grid__plane {
   position: absolute;
