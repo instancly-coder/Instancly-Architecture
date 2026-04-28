@@ -339,6 +339,52 @@
   }
 }
 
+/* ────────────────────────────────────────────────────────────────
+ * Perspective grid — receding floor that anchors the hero.
+ *
+ * Two stacked linear-gradients draw the vertical and horizontal
+ * lines, then a 3D rotateX tilts the whole plane so it appears
+ * to recede toward the horizon. A radial mask + bottom-aligned
+ * gradient fade out the far edge so the grid dissolves into the
+ * background instead of cutting off in a hard line. The slow
+ * vertical scroll on the gradient gives a subtle "moving toward
+ * the horizon" feel without being distracting.
+ * ──────────────────────────────────────────────────────────── */
+@keyframes perspective-grid-scroll {
+  from { background-position: 0 0, 0 0; }
+  to   { background-position: 0 80px, 0 80px; }
+}
+.perspective-grid {
+  position: absolute;
+  left: 50%;
+  bottom: -5%;
+  width: 250%;
+  height: 60%;
+  transform: translateX(-50%) perspective(800px) rotateX(70deg);
+  transform-origin: center bottom;
+  background-image:
+    linear-gradient(to right, hsl(var(--primary) / 0.85) 2px, transparent 2px),
+    linear-gradient(to bottom, hsl(var(--primary) / 0.85) 2px, transparent 2px);
+  background-size: 80px 80px, 80px 80px;
+  /* Fade to transparent at the horizon (top of the rotated plane) so
+     the grid recedes naturally instead of cutting off in a hard line. */
+  mask-image: linear-gradient(to top, black 0%, black 20%, transparent 95%);
+  -webkit-mask-image: linear-gradient(to top, black 0%, black 20%, transparent 95%);
+  animation: perspective-grid-scroll 14s linear infinite;
+  pointer-events: none;
+  will-change: background-position;
+}
+:root:not(.dark) .perspective-grid {
+  background-image:
+    linear-gradient(to right, hsl(var(--primary) / 0.32) 1px, transparent 1px),
+    linear-gradient(to bottom, hsl(var(--primary) / 0.32) 1px, transparent 1px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .perspective-grid {
+    animation: none;
+  }
+}
+
 .status-dot {
   width: 6px;
   height: 6px;
