@@ -485,7 +485,7 @@ export default function Landing() {
                   Remix something proven. These are pulled from the live template library.
                 </p>
               </div>
-              <Link href="/templates" className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:opacity-80">
+              <Link href="/explore" className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:opacity-80">
                 View all <ArrowRight className="w-4 h-4" />
               </Link>
             </div>

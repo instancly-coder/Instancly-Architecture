@@ -50,7 +50,7 @@ export default function Project() {
 
       <div className="border-b border-border bg-surface/50 px-4 sm:px-6 py-2 flex items-center justify-between gap-2 flex-wrap">
         <Link
-          href="/templates"
+          href="/explore"
           className="inline-flex items-center gap-1.5 text-sm text-secondary hover:text-foreground transition-colors"
         >
           <LayoutTemplate className="w-4 h-4" /> Templates

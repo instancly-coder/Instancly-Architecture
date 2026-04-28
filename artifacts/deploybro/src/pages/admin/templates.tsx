@@ -37,8 +37,8 @@ export default function AdminTemplates() {
         onSuccess: () =>
           toast.success(
             next
-              ? `Featured ${row.name} on /templates`
-              : `Removed ${row.name} from /templates`,
+              ? `Featured ${row.name} on /explore`
+              : `Removed ${row.name} from /explore`,
           ),
         onError: (err) =>
           toast.error(err instanceof Error ? err.message : "Update failed"),
@@ -54,8 +54,8 @@ export default function AdminTemplates() {
             <h1 className="text-2xl font-bold tracking-tight">Templates</h1>
             <p className="text-sm text-secondary mt-1">
               Curate which public projects appear on{" "}
-              <Link href="/templates" className="text-primary hover:underline">
-                /templates
+              <Link href="/explore" className="text-primary hover:underline">
+                /explore
               </Link>
               . {featuredCount} of {rows.length} currently featured.
             </p>
@@ -150,7 +150,7 @@ export default function AdminTemplates() {
 
         <div className="mt-6 flex justify-end">
           <Button asChild variant="outline" size="sm" className="border-border">
-            <Link href="/templates">Open public /templates →</Link>
+            <Link href="/explore">Open public /explore →</Link>
           </Button>
         </div>
       </main>

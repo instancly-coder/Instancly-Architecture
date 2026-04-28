@@ -3,6 +3,7 @@ import {
   Route,
   Router as WouterRouter,
   Link as WouterLink,
+  Redirect,
   useLocation,
 } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -33,7 +34,6 @@ import Billing from "@/pages/dashboard/billing";
 import Earnings from "@/pages/dashboard/earnings";
 import Settings from "@/pages/dashboard/settings";
 import Explore from "@/pages/explore";
-import Templates from "@/pages/templates";
 import Profile from "@/pages/profile";
 import Project from "@/pages/project";
 import Builder from "@/pages/builder";
@@ -86,7 +86,13 @@ function Router() {
       <Route path="/dashboard/earnings" component={gated(Earnings)} />
       <Route path="/dashboard/settings" component={gated(Settings)} />
       <Route path="/explore" component={Explore} />
-      <Route path="/templates" component={Templates} />
+      {/* Legacy: `/templates` was consolidated into `/explore`. Keep a
+          permanent client-side redirect so old bookmarks and inbound
+          links still resolve, and so the path doesn't get captured by
+          the catch-all `/:username` profile route below. */}
+      <Route path="/templates">
+        <Redirect to="/explore" />
+      </Route>
       <Route path="/pricing" component={Pricing} />
       <Route path="/admin" component={gated(Admin)} />
       <Route path="/admin/models" component={gated(AdminModels)} />

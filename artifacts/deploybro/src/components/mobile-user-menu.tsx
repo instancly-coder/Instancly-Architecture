@@ -13,8 +13,7 @@ import {
   Search,
   Home,
   LayoutGrid,
-  Star,
-  Clock,
+  Compass,
   Folder,
   BookOpen,
   Tag,
@@ -58,10 +57,9 @@ type NavItem = {
 };
 
 const PRIMARY: NavItem[] = [
-  { href: "/dashboard", label: "Home", icon: Home },
+  { href: "/", label: "Home", icon: Home },
   { href: "/dashboard", label: "Projects", icon: LayoutGrid },
-  { href: "/explore", label: "Explore", icon: Star },
-  { href: "/templates", label: "Templates", icon: Clock },
+  { href: "/explore", label: "Explore", icon: Compass },
 ];
 
 const SECONDARY: NavItem[] = [
