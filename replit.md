@@ -69,7 +69,7 @@ Clicking the button posts a `{ type: "deploybro:preview-error", message, where, 
 
 ## Landing page sections
 
-`landing.tsx` is structured as: hero (with perspective grid background, prompt composer, model picker) → "How it works" 3-step explainer → **"Built in" feature grid + stat ribbon** (bolt-inspired: 6 feature cards covering AI builder / live preview / Postgres / auth / domains / one-click publish, followed by a 3-up stat strip — "60s to live URL", "0 servers", "1-click publish") → templates carousel → final CTA. Section headlines use a bolt-style mixed-weight ribbon: `text-secondary font-light` for the structural lead-in, `text-foreground` (white) for the emphasis word(s).
+`landing.tsx` is structured as: hero (with perspective grid background, prompt composer, model picker) → "How it works" 3-step explainer → templates carousel → final CTA. Section headlines use a bolt-style mixed-weight ribbon: `text-secondary font-light` for the structural lead-in, `text-foreground` (white) for the emphasis word(s).
 
 ## Homepage prompt → builder flow
 
