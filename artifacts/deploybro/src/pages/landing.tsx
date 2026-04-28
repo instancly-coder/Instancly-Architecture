@@ -49,23 +49,167 @@ const ROTATING_NOUNS = [
 
 /**
  * Bolt-inspired feature grid. Each card has:
- *   - icon + short title (what the feature is)
- *   - one-sentence punchline (what it gets you)
- *   - a chunky visual element rendered inline below the copy.
- * Visuals are rendered ad-hoc per-card in JSX (mock UI fragments)
- * rather than being driven by a generic data field — this lets each
- * card pick the right shape (badge, button, list, glow) for what it
- * sells, the same way bolt.new mixes infinity-loop, big "100" SEO
- * dial, and a screenshot of a Publish button across its grid.
+ *   - small icon + short title at the top
+ *   - one-sentence punchline below
+ *   - a chunky hero visual element occupying the bottom half.
+ *
+ * The visual is the focal point — bolt's grid mixes a 3D infinity
+ * loop, a big "100" SEO dial, a glowing padlock, and a chunky
+ * "Publish" button. We do the same here with pure CSS + SVG (no
+ * image assets, no new deps), each visual hand-tuned to its
+ * feature: chat-composer mock for the AI builder, live-preview
+ * browser frame, layered DB stack, glowing padlock with light
+ * rays, URL chip with LIVE badge, gradient Publish button.
+ *
+ * `key` selects the visual in the renderer below. Keep it stable
+ * if you add new entries — the renderer's switch matches on it.
  */
-const FEATURES = [
-  { icon: Sparkles,  title: "AI builder",        body: "Describe it in plain English. Watch Claude write real React, wired to a real database, in real time." },
-  { icon: Eye,       title: "Live preview",      body: "Every keystroke renders. No reload. No deploy step. The preview is the source of truth." },
-  { icon: Database,  title: "Postgres on tap",   body: "One click provisions a dedicated Neon branch for your project. No connection strings to copy around." },
-  { icon: Lock,      title: "Auth, built in",    body: "Google, GitHub, Apple sign-in wired up the moment you ask for it. Sessions, tokens, the lot." },
-  { icon: Globe,     title: "Custom domains",    body: "Bring your own domain. SSL is automatic. Or ship to a free deploybro.app subdomain in seconds." },
-  { icon: Rocket,    title: "One-click publish", body: "A real Vercel deployment behind a real URL. No DevOps. No yaml. No \"works on my machine.\"" },
+const FEATURES: { key: string; icon: typeof Sparkles; title: string; body: string }[] = [
+  { key: "ai",       icon: Sparkles,  title: "AI builder",        body: "Describe it in plain English. Watch Claude write real React, wired to a real database, in real time." },
+  { key: "preview",  icon: Eye,       title: "Live preview",      body: "Every keystroke renders. No reload. No deploy step. The preview is the source of truth." },
+  { key: "db",       icon: Database,  title: "Postgres on tap",   body: "One click provisions a dedicated Neon branch for your project. No connection strings to copy around." },
+  { key: "auth",     icon: Lock,      title: "Auth, built in",    body: "Google, GitHub, Apple sign-in wired up the moment you ask for it. Sessions, tokens, the lot." },
+  { key: "domains",  icon: Globe,     title: "Custom domains",    body: "Bring your own domain. SSL is automatic. Or ship to a free deploybro.app subdomain in seconds." },
+  { key: "publish",  icon: Rocket,    title: "One-click publish", body: "A real Vercel deployment behind a real URL. No DevOps. No yaml. No \"works on my machine.\"" },
 ];
+
+/**
+ * Per-feature hero visual. Pure CSS + lucide icons — no image
+ * assets. Sized to fit ~h-44 inside each card.
+ */
+function FeatureVisual({ k }: { k: string }) {
+  if (k === "ai") {
+    return (
+      <div className="absolute inset-x-0 bottom-0 h-44 px-5 pb-5 pt-2 flex flex-col justify-end gap-2">
+        <div className="flex justify-end">
+          <div className="px-3 py-1.5 rounded-2xl rounded-br-sm bg-primary/15 border border-primary/30 text-[11px] text-primary max-w-[80%]">a recipe site with ratings</div>
+        </div>
+        <div className="flex justify-start">
+          <div className="px-3 py-1.5 rounded-2xl rounded-bl-sm bg-surface-raised border border-border text-[11px] text-foreground/80 max-w-[80%] flex items-center gap-1.5">
+            <Sparkles className="w-3 h-3 text-primary shrink-0" />
+            Building 4 pages, wiring DB…
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5 pt-1 text-[10px] text-secondary font-mono">
+          <span className="w-1 h-1 rounded-full bg-primary animate-pulse" />
+          <span className="w-1 h-1 rounded-full bg-primary animate-pulse [animation-delay:120ms]" />
+          <span className="w-1 h-1 rounded-full bg-primary animate-pulse [animation-delay:240ms]" />
+        </div>
+      </div>
+    );
+  }
+  if (k === "preview") {
+    return (
+      <div className="absolute inset-x-0 bottom-0 h-44 px-5 pb-5">
+        <div className="rounded-lg border border-border bg-background/80 backdrop-blur-sm overflow-hidden h-full flex flex-col">
+          <div className="flex items-center gap-1 px-2 py-1.5 border-b border-border bg-surface-raised">
+            <span className="w-1.5 h-1.5 rounded-full bg-red-400/70" />
+            <span className="w-1.5 h-1.5 rounded-full bg-yellow-400/70" />
+            <span className="w-1.5 h-1.5 rounded-full bg-green-400/70" />
+            <span className="ml-2 text-[9px] font-mono text-secondary truncate">localhost:3000</span>
+          </div>
+          <div className="p-3 flex-1 flex flex-col gap-1.5">
+            <div className="h-1.5 w-1/3 rounded bg-foreground/30" />
+            <div className="h-1 w-2/3 rounded bg-foreground/15" />
+            <div className="grid grid-cols-3 gap-1 mt-2 flex-1">
+              <div className="rounded bg-gradient-to-br from-primary/40 to-primary/10" />
+              <div className="rounded bg-foreground/10" />
+              <div className="rounded bg-foreground/10" />
+            </div>
+            <div className="flex items-center gap-1 pt-1 text-[9px] font-mono text-secondary">
+              <span className="w-1 h-1 rounded-full bg-success animate-pulse" />
+              live
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  if (k === "db") {
+    return (
+      <div className="absolute inset-x-0 bottom-0 h-44 flex items-center justify-center pb-2">
+        <div className="relative">
+          <div aria-hidden className="absolute inset-0 -m-6 rounded-full bg-primary/15 blur-2xl" />
+          {/* Stacked DB cylinders. Each disc = ellipse + side rect.
+              The top stack pulses softly to suggest "live writes". */}
+          <svg viewBox="0 0 120 110" className="relative w-32 h-28">
+            <defs>
+              <linearGradient id="dbg" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.9" />
+                <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity="0.5" />
+              </linearGradient>
+            </defs>
+            {[60, 40, 20].map((y, i) => (
+              <g key={y} opacity={1 - i * 0.18}>
+                <ellipse cx="60" cy={y + 18} rx="40" ry="9" fill="hsl(var(--surface-raised))" stroke="hsl(var(--border))" />
+                <path d={`M20 ${y + 18} L20 ${y + 30} A40 9 0 0 0 100 ${y + 30} L100 ${y + 18}`} fill="hsl(var(--surface))" stroke="hsl(var(--border))" />
+              </g>
+            ))}
+            <ellipse cx="60" cy="20" rx="40" ry="9" fill="url(#dbg)" stroke="hsl(var(--primary))" strokeOpacity="0.6" />
+          </svg>
+          <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-md bg-surface-raised border border-border text-[9px] font-mono text-secondary whitespace-nowrap">postgres://…neon.tech</div>
+        </div>
+      </div>
+    );
+  }
+  if (k === "auth") {
+    return (
+      <div className="absolute inset-x-0 bottom-0 h-44 flex items-end justify-center pb-5">
+        <div className="relative">
+          {/* Light rays behind the lock — same effect bolt uses on
+              its "User Management" card. */}
+          <div aria-hidden className="absolute -inset-10 bg-[conic-gradient(from_180deg_at_50%_100%,transparent_0deg,hsl(var(--primary)/0.35)_45deg,transparent_90deg,hsl(var(--primary)/0.35)_135deg,transparent_180deg)] blur-md opacity-80" />
+          <div aria-hidden className="absolute -inset-4 rounded-full bg-primary/20 blur-2xl" />
+          <div className="relative w-20 h-20 rounded-2xl bg-gradient-to-br from-surface-raised to-surface border border-border flex items-center justify-center shadow-[0_10px_40px_-10px_hsl(var(--primary)/0.6)]">
+            <Lock className="w-9 h-9 text-primary" strokeWidth={2.4} />
+          </div>
+          <div className="mt-3 flex items-center justify-center gap-1.5 text-[10px] font-mono text-secondary">
+            <span className="px-1.5 py-0.5 rounded bg-surface-raised border border-border">Google</span>
+            <span className="px-1.5 py-0.5 rounded bg-surface-raised border border-border">GitHub</span>
+            <span className="px-1.5 py-0.5 rounded bg-surface-raised border border-border">Apple</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  if (k === "domains") {
+    return (
+      <div className="absolute inset-x-0 bottom-0 h-44 flex flex-col items-center justify-end gap-2 pb-6">
+        <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-surface-raised shadow-lg w-[85%] max-w-xs">
+          <Lock className="w-3 h-3 text-success shrink-0" />
+          <span className="text-[11px] font-mono text-foreground/90 truncate">yoursite.com</span>
+          <span className="ml-auto px-1.5 py-0.5 rounded bg-success/15 text-success text-[9px] font-mono uppercase tracking-wider">Live</span>
+        </div>
+        <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border/60 bg-surface/60 w-[70%] max-w-[200px] opacity-60">
+          <Globe className="w-3 h-3 text-secondary shrink-0" />
+          <span className="text-[10px] font-mono text-secondary truncate">app.deploybro.app</span>
+        </div>
+      </div>
+    );
+  }
+  if (k === "publish") {
+    return (
+      <div className="absolute inset-x-0 bottom-0 h-44 flex items-center justify-center pb-3">
+        <div className="relative">
+          <div aria-hidden className="absolute -inset-6 bg-primary/30 blur-3xl rounded-full" />
+          {/* Chunky 3D-ish Publish button — bolt's hosting card uses
+              an actual screenshot of one. Pure CSS gradient + ring +
+              double shadow gives the same depth without an asset. */}
+          <button
+            type="button"
+            tabIndex={-1}
+            aria-hidden
+            className="relative inline-flex items-center gap-2 px-7 py-3.5 rounded-xl bg-gradient-to-b from-primary via-primary to-[hsl(215_100%_45%)] text-primary-foreground font-bold text-base tracking-tight ring-1 ring-white/30 shadow-[0_18px_40px_-10px_hsl(var(--primary)/0.7),inset_0_1px_0_0_hsl(0_0%_100%/0.4)] cursor-default"
+          >
+            <Rocket className="w-4 h-4" strokeWidth={2.5} />
+            Publish
+          </button>
+        </div>
+      </div>
+    );
+  }
+  return null;
+}
 
 const STEPS = [
   {
@@ -523,19 +667,33 @@ export default function Landing() {
                 Stop stitching together five SaaS products to launch one app. Database, auth, domains, deployments — wired up the moment you create a project.
               </p>
             </div>
+            {/* Cards are tall (~h-96) so the hero visual at the bottom
+                has room to breathe — bolt's cards do the same. The
+                copy block sits in the top half (relative), the visual
+                is absolutely positioned to the bottom inside the
+                card's `overflow-hidden` clip. */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
               {FEATURES.map((f) => {
                 const Icon = f.icon;
                 return (
-                  <div key={f.title} className="group relative rounded-2xl border border-border bg-surface/60 backdrop-blur-sm p-6 md:p-7 overflow-hidden transition-all hover:border-primary/40 hover:bg-surface">
+                  <div
+                    key={f.key}
+                    className="group relative rounded-2xl border border-border bg-surface/60 backdrop-blur-sm p-6 md:p-7 overflow-hidden transition-all hover:border-primary/40 hover:bg-surface min-h-[22rem] md:min-h-[24rem]"
+                  >
                     <div aria-hidden className="absolute -top-20 -right-20 w-48 h-48 rounded-full bg-primary/10 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity" />
                     <div className="relative">
-                      <div className="inline-flex items-center justify-center w-11 h-11 rounded-xl bg-primary/10 border border-primary/20 mb-5">
-                        <Icon className="w-5 h-5 text-primary" />
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-primary/10 border border-primary/20 shrink-0">
+                          <Icon className="w-4 h-4 text-primary" />
+                        </div>
+                        <h3 className="text-lg md:text-xl font-semibold tracking-tight">{f.title}</h3>
                       </div>
-                      <h3 className="text-lg md:text-xl font-semibold mb-2 tracking-tight">{f.title}</h3>
-                      <p className="text-secondary text-sm md:text-[15px] leading-relaxed">{f.body}</p>
+                      <p className="text-secondary text-sm leading-relaxed">{f.body}</p>
                     </div>
+                    <FeatureVisual k={f.key} />
+                    {/* Soft fade so the visual blends into the card
+                        bottom edge instead of getting clipped hard. */}
+                    <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-surface/80 to-transparent" />
                   </div>
                 );
               })}
