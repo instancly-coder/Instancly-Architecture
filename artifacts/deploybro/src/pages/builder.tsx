@@ -149,7 +149,7 @@ const TAB_META: Record<TabKey, { label: string; icon: any }> = {
   analytics: { label: "Analytics", icon: BarChart3 },
   payments: { label: "Payments", icon: CreditCard },
   integrations: { label: "Integrations", icon: Plug },
-  domains: { label: "Domains", icon: Globe },
+  domains: { label: "Publishing", icon: Rocket },
   history: { label: "History", icon: History },
   settings: { label: "Settings", icon: SettingsIcon },
 };
@@ -746,6 +746,8 @@ export default function Builder() {
       const result = await publishMutation.mutateAsync();
       setActiveDeploymentId(result.deploymentId);
       lastToastedStatusRef.current = null;
+      // Open the Publishing tab so the user sees progress steps immediately.
+      openTab("domains");
       if (result.alreadyRunning) {
         toast.info("A publish is already in progress");
       } else {
@@ -4376,19 +4378,34 @@ function AnalyticsView() {
 
 type DomainStatus = "active" | "pending" | "error";
 
-// Ordered pipeline phases used to draw the progress bar inside the
-// in-flight deployment card. Kept in sync with `deploymentStepLabel` in
-// `lib/api.ts` — if a phase is added there, mirror it here so the bar
-// fills smoothly across the full lifecycle instead of jumping.
-const DEPLOY_STEP_ORDER: ApiDeployment["status"][] = [
-  "queued",
-  "validating",
-  "provisioning_db",
-  "creating_project",
-  "deploying",
-  "polling",
-  "live",
+// Ordered visual steps for the Publishing tab step list.
+// Matches the server-side pipeline phases — if you add a phase there,
+// add a row here. `provisioning_db` is included for completeness even
+// though it's currently skipped (auto-provisioning is opt-in); the step
+// is simply marked "done" when the status jumps over it.
+const DEPLOY_VISUAL_STEPS: {
+  key: ApiDeployment["status"];
+  label: string;
+  hint: string;
+}[] = [
+  { key: "validating",       label: "Validating files",     hint: "Checking your project files for issues" },
+  { key: "creating_project", label: "Creating project",     hint: "Setting up your Vercel project" },
+  { key: "deploying",        label: "Uploading files",      hint: "Sending your app files to Vercel" },
+  { key: "polling",          label: "Building app",         hint: "Vite is bundling and optimising your code" },
+  { key: "live",             label: "Deployed",             hint: "Your app is live on the web" },
 ];
+
+// Maps each status to its position in the visual pipeline so we can
+// decide which steps are done, active, or upcoming.
+const STATUS_TO_STEP_IDX: Partial<Record<ApiDeployment["status"], number>> = {
+  queued:           0, // treat as "about to validate"
+  validating:       0,
+  provisioning_db:  1, // skipped in practice, maps to creating_project
+  creating_project: 1,
+  deploying:        2,
+  polling:          3,
+  live:             4,
+};
 
 function DeploymentStatusCard({
   deployment,
@@ -4397,9 +4414,7 @@ function DeploymentStatusCard({
   deployment: ApiDeployment | null;
   primaryCustomDomain: string | null;
 }) {
-  // Empty state — no deployments yet. We replace the previous amber
-  // "publish first" banner with a more inviting card so the Domains
-  // pane has a clear top-of-page anchor regardless of state.
+  // Empty state — no deployments yet.
   if (!deployment) {
     return (
       <div className="rounded-xl border border-border bg-surface p-5 flex items-start gap-4">
@@ -4409,44 +4424,22 @@ function DeploymentStatusCard({
         <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold">Not published yet</div>
           <div className="text-[12px] text-secondary mt-0.5">
-            Publish your app from the toolbar to get a live URL. After that
-            you can attach a custom domain below.
+            Hit <span className="font-medium text-text">Publish</span> in the
+            toolbar to deploy your app. After the first publish you can attach
+            a custom domain below.
           </div>
         </div>
       </div>
     );
   }
 
-  const isLive = deployment.status === "live";
+  const isLive   = deployment.status === "live";
   const isFailed = deployment.status === "failed";
   const isInflight = !isLive && !isFailed;
 
-  // 0..1 progress through the pipeline phases. We snap `failed` and any
-  // unknown phase to a sensible default so the bar still renders.
-  const stepIndex = DEPLOY_STEP_ORDER.indexOf(deployment.status);
-  const pct =
-    stepIndex >= 0
-      ? (stepIndex / (DEPLOY_STEP_ORDER.length - 1)) * 100
-      : isFailed
-      ? 100
-      : 0;
+  const currentStepIdx = STATUS_TO_STEP_IDX[deployment.status] ?? 0;
 
-  const accent = isLive
-    ? "bg-success/10 text-success"
-    : isFailed
-    ? "bg-destructive/10 text-destructive"
-    : "bg-primary/10 text-primary";
-
-  const Icon = isLive ? Check : isFailed ? AlertCircle : Loader2;
-  const headline = isLive
-    ? "Live"
-    : isFailed
-    ? "Last deploy failed"
-    : "Deploying your app";
-
-  // Prefer the user's verified custom domain over the auto-generated
-  // *.vercel.app URL when both are available — that's the URL the user
-  // actually wants to share once they've connected one.
+  // Prefer verified custom domain over the auto-generated *.vercel.app URL.
   const displayUrl = isLive
     ? primaryCustomDomain
       ? `https://${primaryCustomDomain}`
@@ -4455,92 +4448,130 @@ function DeploymentStatusCard({
 
   const finished = deployment.finishedAt ?? null;
 
+  // Card header accent colours.
+  const headerAccent = isLive
+    ? "bg-success/10 text-success"
+    : isFailed
+    ? "bg-destructive/10 text-destructive"
+    : "bg-primary/10 text-primary";
+  const HeaderIcon = isLive ? Check : isFailed ? AlertCircle : Loader2;
+
   return (
-    <div className="rounded-xl border border-border bg-surface p-5">
-      <div className="flex items-start gap-4">
-        <div
-          className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${accent}`}
-        >
-          <Icon
-            className={`w-5 h-5 ${isInflight ? "animate-spin" : ""}`}
-          />
+    <div className="rounded-xl border border-border bg-surface p-5 space-y-4">
+      {/* ── Header ── */}
+      <div className="flex items-start gap-3">
+        <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${headerAccent}`}>
+          <HeaderIcon className={`w-4.5 h-4.5 ${isInflight ? "animate-spin" : ""}`} />
         </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-semibold">{headline}</span>
-            <span
-              className={`text-[10px] uppercase tracking-wider font-mono px-2 py-0.5 rounded-full ${accent}`}
-            >
-              {deploymentStepLabel(deployment.status)}
-            </span>
-            {finished && (
-              <span className="text-[11px] text-secondary font-mono">
-                {timeAgo(finished)}
-              </span>
-            )}
+        <div className="min-w-0 flex-1 pt-0.5">
+          <div className="text-sm font-semibold leading-tight">
+            {isLive ? "Deployed successfully" : isFailed ? "Deployment failed" : "Deploying your app…"}
           </div>
+          <div className="text-[11px] text-secondary mt-0.5">
+            {isInflight
+              ? "Usually takes 30–90 seconds · steps update automatically"
+              : finished
+              ? timeAgo(finished)
+              : null}
+          </div>
+        </div>
+      </div>
 
-          {isLive && !displayUrl && (
-            <div className="text-[12px] text-secondary mt-1.5">
-              Live URL isn't available yet — refresh in a moment.
-            </div>
-          )}
+      {/* ── Live URL ── */}
+      {isLive && displayUrl && (
+        <div className="flex flex-wrap items-center gap-2 pl-12">
+          <a
+            href={displayUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-sm font-mono text-primary hover:underline truncate max-w-full"
+          >
+            <Globe className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">{displayUrl.replace(/^https?:\/\//, "")}</span>
+            <ExternalLink className="w-3 h-3 shrink-0 opacity-70" />
+          </a>
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 text-[11px] font-mono text-secondary hover:text-text px-2 py-1 rounded hover:bg-background"
+            onClick={() => { void navigator.clipboard.writeText(displayUrl); toast.success("Copied URL"); }}
+          >
+            <Copy className="w-3 h-3" /> Copy
+          </button>
+        </div>
+      )}
+      {isLive && !displayUrl && (
+        <p className="text-[12px] text-secondary pl-12">
+          Live URL isn't available yet — refresh in a moment.
+        </p>
+      )}
 
-          {isLive && displayUrl && (
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <a
-                href={displayUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 text-sm font-mono text-primary hover:underline truncate max-w-full"
-              >
-                <Globe className="w-3.5 h-3.5 shrink-0" />
-                <span className="truncate">
-                  {displayUrl.replace(/^https?:\/\//, "")}
-                </span>
-                <ExternalLink className="w-3 h-3 shrink-0 opacity-70" />
-              </a>
-              <button
-                type="button"
-                className="inline-flex items-center gap-1 text-[11px] font-mono text-secondary hover:text-text px-2 py-1 rounded hover:bg-background"
-                onClick={() => {
-                  void navigator.clipboard.writeText(displayUrl);
-                  toast.success("Copied URL");
-                }}
-              >
-                <Copy className="w-3 h-3" /> Copy
-              </button>
-            </div>
-          )}
+      {/* ── Vertical step list ── */}
+      <div className="pl-2">
+        {DEPLOY_VISUAL_STEPS.map((step, i) => {
+          const isLast = i === DEPLOY_VISUAL_STEPS.length - 1;
+          const isDone    = isLive || (!isFailed && currentStepIdx > i);
+          const isActive  = !isFailed && !isLive && currentStepIdx === i;
+          const isUpcoming = !isFailed && !isLive && currentStepIdx < i;
 
-          {isInflight && (
-            <>
-              <div className="text-[12px] text-secondary mt-1">
-                Hold tight — this usually takes 30–90 seconds. The card
-                updates as each step completes.
+          // When failed we render all steps in a neutral style + an error row below.
+          const isMuted = isFailed;
+
+          const dotCls = isDone
+            ? "bg-success text-white"
+            : isActive
+            ? "bg-primary text-white"
+            : isMuted
+            ? "bg-border text-secondary"
+            : "border-2 border-border bg-surface";
+
+          const labelCls = isActive
+            ? "text-text font-semibold"
+            : isDone
+            ? "text-text"
+            : "text-secondary";
+
+          return (
+            <div key={step.key} className="flex items-stretch gap-3">
+              {/* Dot + connector line */}
+              <div className="flex flex-col items-center" style={{ width: 20 }}>
+                <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 z-10 ${dotCls}`}>
+                  {isDone && <Check className="w-3 h-3" />}
+                  {isActive && <Loader2 className="w-3 h-3 animate-spin" />}
+                </div>
+                {!isLast && (
+                  <div className={`w-px flex-1 mt-1 mb-1 ${isDone ? "bg-success/30" : "bg-border"}`} />
+                )}
               </div>
-              <div className="mt-3 h-1.5 w-full rounded-full bg-background overflow-hidden">
-                <div
-                  className="h-full bg-primary transition-all duration-500 ease-out"
-                  style={{ width: `${Math.max(8, pct)}%` }}
-                />
-              </div>
-            </>
-          )}
 
-          {isFailed && (
-            <>
-              <div className="text-[12px] text-destructive mt-1.5 break-words">
-                {deployment.errorMessage ??
-                  "Something went wrong. Use the Publish button in the toolbar to try again."}
+              {/* Label + optional hint */}
+              <div className={`pb-4 ${isLast ? "pb-0" : ""}`}>
+                <div className={`text-[13px] leading-5 ${labelCls}`}>{step.label}</div>
+                {isActive && (
+                  <div className="text-[11px] text-secondary mt-0.5">{step.hint}</div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Extra row when failed */}
+        {isFailed && (
+          <div className="flex items-start gap-3 mt-1">
+            <div className="w-5 h-5 rounded-full flex items-center justify-center bg-destructive text-white shrink-0">
+              <X className="w-3 h-3" />
+            </div>
+            <div>
+              <div className="text-[13px] font-semibold text-destructive">Failed</div>
+              <div className="text-[11px] text-destructive/80 mt-0.5 break-words max-w-xs">
+                {deployment.errorMessage ?? "Something went wrong."}
               </div>
               <div className="text-[11px] text-secondary mt-1">
                 Tap <span className="font-medium text-text">Republish</span> in
-                the toolbar to retry.
+                the toolbar to try again.
               </div>
-            </>
-          )}
-        </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -4651,8 +4682,8 @@ function DomainsView() {
 
   return (
     <PaneShell
-      title="Domains"
-      subtitle="Connect a custom domain. We provision SSL automatically once DNS resolves."
+      title="Publishing"
+      subtitle="Track your deployment and connect a custom domain."
     >
       <DeploymentStatusCard
         deployment={currentDeployment}
