@@ -79,135 +79,202 @@ const FEATURES: { key: string; icon: typeof Sparkles; title: string; body: strin
  */
 function FeatureVisual({ k }: { k: string }) {
   if (k === "ai") {
+    // Code editor preview: a stylised App.tsx getting written by the
+    // AI in real time, with syntax-coloured tokens and a blinking
+    // caret at the cursor position. Reads "real" enough to convey
+    // "this writes actual React" instead of "this generates toy code".
     return (
-      <div className="absolute inset-x-0 bottom-0 h-44 px-5 pb-5 pt-2 flex flex-col justify-end gap-2">
-        <div className="flex justify-end">
-          <div className="px-3 py-1.5 rounded-2xl rounded-br-sm bg-primary/15 border border-primary/30 text-[11px] text-primary max-w-[80%]">a recipe site with ratings</div>
-        </div>
-        <div className="flex justify-start">
-          <div className="px-3 py-1.5 rounded-2xl rounded-bl-sm bg-surface-raised border border-border text-[11px] text-foreground/80 max-w-[80%] flex items-center gap-1.5">
-            <Sparkles className="w-3 h-3 text-primary shrink-0" />
-            Building 4 pages, wiring DB…
+      <div className="absolute inset-x-0 bottom-0 h-48 px-4 pb-4">
+        <div className="relative h-full rounded-xl border border-border bg-[hsl(220_15%_8%)] overflow-hidden shadow-[0_18px_40px_-12px_hsl(var(--primary)/0.45)]">
+          <div aria-hidden className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-primary/60 to-transparent" />
+          <div className="flex items-center justify-between px-3 py-1.5 border-b border-border/60 bg-black/30">
+            <div className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-400/70" />
+              <span className="w-1.5 h-1.5 rounded-full bg-yellow-400/70" />
+              <span className="w-1.5 h-1.5 rounded-full bg-green-400/70" />
+              <span className="ml-2 text-[9px] font-mono text-secondary">App.tsx</span>
+            </div>
+            <div className="flex items-center gap-1 text-[9px] font-mono text-primary">
+              <Sparkles className="w-2.5 h-2.5" />
+              writing
+            </div>
           </div>
-        </div>
-        <div className="flex items-center gap-1.5 pt-1 text-[10px] text-secondary font-mono">
-          <span className="w-1 h-1 rounded-full bg-primary animate-pulse" />
-          <span className="w-1 h-1 rounded-full bg-primary animate-pulse [animation-delay:120ms]" />
-          <span className="w-1 h-1 rounded-full bg-primary animate-pulse [animation-delay:240ms]" />
+          <pre className="px-3 py-2.5 text-[10.5px] leading-[1.55] font-mono text-foreground/90">
+{`export `}<span className="text-[#c792ea]">function</span>{` `}<span className="text-[#82aaff]">App</span>{`() {
+  `}<span className="text-[#c792ea]">return</span>{` (
+    `}<span className="text-secondary">&lt;</span><span className="text-[#82aaff]">Recipes</span>{` `}<span className="text-[#ffcb6b]">rated</span><span className="text-secondary">/&gt;</span><span className="inline-block align-[-2px] w-1.5 h-3.5 bg-primary ml-px animate-pulse" />
+{`  )
+}`}
+          </pre>
         </div>
       </div>
     );
   }
+
   if (k === "preview") {
+    // Browser frame rendering an actual-looking landing page (eyebrow
+    // pill, hero h1 lines, CTA button). Includes a tiny "edited 1s ago"
+    // chip in the header to land the "every keystroke renders" idea.
     return (
-      <div className="absolute inset-x-0 bottom-0 h-44 px-5 pb-5">
-        <div className="rounded-lg border border-border bg-background/80 backdrop-blur-sm overflow-hidden h-full flex flex-col">
-          <div className="flex items-center gap-1 px-2 py-1.5 border-b border-border bg-surface-raised">
+      <div className="absolute inset-x-0 bottom-0 h-48 px-4 pb-4">
+        <div className="relative h-full rounded-xl border border-border bg-background overflow-hidden shadow-[0_18px_40px_-12px_hsl(var(--primary)/0.4)]">
+          <div className="flex items-center gap-1.5 px-2.5 py-1.5 border-b border-border bg-surface-raised">
             <span className="w-1.5 h-1.5 rounded-full bg-red-400/70" />
             <span className="w-1.5 h-1.5 rounded-full bg-yellow-400/70" />
             <span className="w-1.5 h-1.5 rounded-full bg-green-400/70" />
-            <span className="ml-2 text-[9px] font-mono text-secondary truncate">localhost:3000</span>
+            <span className="ml-1.5 flex-1 px-2 py-0.5 rounded bg-background/80 text-[8.5px] font-mono text-secondary truncate">recipes.deploybro.app</span>
+            <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-primary/15 text-primary text-[8px] font-mono">
+              <span className="w-1 h-1 rounded-full bg-primary animate-pulse" />
+              edited 1s ago
+            </span>
           </div>
-          <div className="p-3 flex-1 flex flex-col gap-1.5">
-            <div className="h-1.5 w-1/3 rounded bg-foreground/30" />
-            <div className="h-1 w-2/3 rounded bg-foreground/15" />
-            <div className="grid grid-cols-3 gap-1 mt-2 flex-1">
-              <div className="rounded bg-gradient-to-br from-primary/40 to-primary/10" />
-              <div className="rounded bg-foreground/10" />
-              <div className="rounded bg-foreground/10" />
-            </div>
-            <div className="flex items-center gap-1 pt-1 text-[9px] font-mono text-secondary">
-              <span className="w-1 h-1 rounded-full bg-success animate-pulse" />
-              live
-            </div>
+          <div className="px-4 pt-3.5 flex flex-col items-center gap-1.5">
+            <div className="px-1.5 py-0.5 rounded-full border border-border text-[7.5px] font-mono uppercase tracking-wider text-secondary">New</div>
+            <div className="h-2 w-3/4 rounded-full bg-foreground/45" />
+            <div className="h-2 w-1/2 rounded-full bg-foreground/30" />
+            <div className="h-1 w-2/3 rounded-full bg-foreground/15 mt-0.5" />
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-hidden
+              className="mt-2 inline-flex items-center gap-1 px-3 py-1 rounded-md bg-primary text-primary-foreground text-[9px] font-bold cursor-default"
+            >
+              Try it now
+            </button>
           </div>
         </div>
       </div>
     );
   }
+
   if (k === "db") {
+    // Neon-style branch diagram: a "main" trunk with a glowing
+    // dashed connector to a child branch DB. Maps directly to what
+    // the product actually does (provisions a Neon branch per project).
     return (
-      <div className="absolute inset-x-0 bottom-0 h-44 flex items-center justify-center pb-2">
+      <div className="absolute inset-x-0 bottom-0 h-48 flex items-center justify-center">
         <div className="relative">
-          <div aria-hidden className="absolute inset-0 -m-6 rounded-full bg-primary/15 blur-2xl" />
-          {/* Stacked DB cylinders. Each disc = ellipse + side rect.
-              The top stack pulses softly to suggest "live writes". */}
-          <svg viewBox="0 0 120 110" className="relative w-32 h-28">
+          <div aria-hidden className="absolute inset-0 -m-10 bg-[radial-gradient(ellipse_at_center,hsl(var(--primary)/0.35)_0%,transparent_60%)] blur-xl" />
+          <svg viewBox="0 0 200 130" className="relative w-48 h-32">
             <defs>
-              <linearGradient id="dbg" x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.9" />
-                <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity="0.5" />
+              <linearGradient id="db-trunk" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.95" />
+                <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity="0.55" />
               </linearGradient>
             </defs>
-            {[60, 40, 20].map((y, i) => (
-              <g key={y} opacity={1 - i * 0.18}>
-                <ellipse cx="60" cy={y + 18} rx="40" ry="9" fill="hsl(var(--surface-raised))" stroke="hsl(var(--border))" />
-                <path d={`M20 ${y + 18} L20 ${y + 30} A40 9 0 0 0 100 ${y + 30} L100 ${y + 18}`} fill="hsl(var(--surface))" stroke="hsl(var(--border))" />
-              </g>
-            ))}
-            <ellipse cx="60" cy="20" rx="40" ry="9" fill="url(#dbg)" stroke="hsl(var(--primary))" strokeOpacity="0.6" />
+            {/* Parent (main) DB */}
+            <ellipse cx="55" cy="22" rx="34" ry="7.5" fill="url(#db-trunk)" stroke="hsl(var(--primary))" strokeOpacity="0.7" />
+            <path d="M21 22 L21 60 A34 7.5 0 0 0 89 60 L89 22" fill="hsl(var(--surface-raised))" stroke="hsl(var(--border))" />
+            <ellipse cx="55" cy="40" rx="34" ry="7.5" fill="hsl(var(--surface))" stroke="hsl(var(--border))" />
+            <ellipse cx="55" cy="60" rx="34" ry="7.5" fill="hsl(var(--surface))" stroke="hsl(var(--border))" />
+            <text x="55" y="80" textAnchor="middle" fontSize="7.5" fill="hsl(var(--foreground))" opacity="0.65" fontFamily="monospace">main</text>
+            {/* Branch connector — dashed, animated flow */}
+            <path d="M89 40 Q120 40 130 70 Q140 95 156 95" stroke="hsl(var(--primary))" strokeOpacity="0.7" strokeWidth="1.5" fill="none" strokeDasharray="4 3">
+              <animate attributeName="stroke-dashoffset" from="0" to="-14" dur="1.4s" repeatCount="indefinite" />
+            </path>
+            {/* Child branch DB */}
+            <ellipse cx="160" cy="78" rx="22" ry="5" fill="url(#db-trunk)" stroke="hsl(var(--primary))" strokeOpacity="0.6" />
+            <path d="M138 78 L138 105 A22 5 0 0 0 182 105 L182 78" fill="hsl(var(--surface-raised))" stroke="hsl(var(--border))" />
+            <ellipse cx="160" cy="91" rx="22" ry="5" fill="hsl(var(--surface))" stroke="hsl(var(--border))" />
+            <ellipse cx="160" cy="105" rx="22" ry="5" fill="hsl(var(--surface))" stroke="hsl(var(--border))" />
+            <text x="160" y="123" textAnchor="middle" fontSize="6.5" fill="hsl(var(--secondary))" fontFamily="monospace">your-app</text>
           </svg>
-          <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-md bg-surface-raised border border-border text-[9px] font-mono text-secondary whitespace-nowrap">postgres://…neon.tech</div>
         </div>
       </div>
     );
   }
+
   if (k === "auth") {
+    // Big chunky padlock tile with a clean upward beam of light (no
+    // conic-gradient mess). Provider chips sit below as proof-of-work.
     return (
-      <div className="absolute inset-x-0 bottom-0 h-44 flex items-end justify-center pb-5">
-        <div className="relative">
-          {/* Light rays behind the lock — same effect bolt uses on
-              its "User Management" card. */}
-          <div aria-hidden className="absolute -inset-10 bg-[conic-gradient(from_180deg_at_50%_100%,transparent_0deg,hsl(var(--primary)/0.35)_45deg,transparent_90deg,hsl(var(--primary)/0.35)_135deg,transparent_180deg)] blur-md opacity-80" />
-          <div aria-hidden className="absolute -inset-4 rounded-full bg-primary/20 blur-2xl" />
-          <div className="relative w-20 h-20 rounded-2xl bg-gradient-to-br from-surface-raised to-surface border border-border flex items-center justify-center shadow-[0_10px_40px_-10px_hsl(var(--primary)/0.6)]">
-            <Lock className="w-9 h-9 text-primary" strokeWidth={2.4} />
+      <div className="absolute inset-x-0 bottom-0 h-48 flex items-end justify-center pb-4">
+        <div className="relative flex flex-col items-center">
+          {/* Beam of light rising from the lock */}
+          <div
+            aria-hidden
+            className="absolute left-1/2 -translate-x-1/2 -top-8 w-32 h-32 bg-[radial-gradient(ellipse_at_bottom,hsl(var(--primary)/0.55)_0%,hsl(var(--primary)/0.18)_30%,transparent_65%)] blur-md"
+          />
+          <div aria-hidden className="absolute -inset-3 rounded-full bg-primary/25 blur-2xl" />
+          <div className="relative w-[88px] h-[88px] rounded-2xl bg-gradient-to-br from-[hsl(220_30%_18%)] via-[hsl(220_30%_12%)] to-[hsl(220_30%_8%)] border border-primary/40 flex items-center justify-center shadow-[0_18px_50px_-10px_hsl(var(--primary)/0.7),inset_0_1px_0_0_hsl(0_0%_100%/0.12)]">
+            <Lock
+              className="w-10 h-10 text-primary [filter:drop-shadow(0_0_10px_hsl(var(--primary)/0.9))]"
+              strokeWidth={2.5}
+            />
           </div>
-          <div className="mt-3 flex items-center justify-center gap-1.5 text-[10px] font-mono text-secondary">
-            <span className="px-1.5 py-0.5 rounded bg-surface-raised border border-border">Google</span>
-            <span className="px-1.5 py-0.5 rounded bg-surface-raised border border-border">GitHub</span>
-            <span className="px-1.5 py-0.5 rounded bg-surface-raised border border-border">Apple</span>
+          <div className="relative mt-4 flex items-center gap-1.5 text-[9.5px] font-mono text-secondary">
+            <span className="px-1.5 py-0.5 rounded-md bg-surface-raised border border-border">Google</span>
+            <span className="px-1.5 py-0.5 rounded-md bg-surface-raised border border-border">GitHub</span>
+            <span className="px-1.5 py-0.5 rounded-md bg-surface-raised border border-border">Apple</span>
           </div>
         </div>
       </div>
     );
   }
+
   if (k === "domains") {
+    // Wireframe globe with a glowing URL chip floating above it.
+    // Single iconic focal element (not a list of stacked rows).
     return (
-      <div className="absolute inset-x-0 bottom-0 h-44 flex flex-col items-center justify-end gap-2 pb-6">
-        <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-surface-raised shadow-lg w-[85%] max-w-xs">
-          <Lock className="w-3 h-3 text-success shrink-0" />
-          <span className="text-[11px] font-mono text-foreground/90 truncate">yoursite.com</span>
-          <span className="ml-auto px-1.5 py-0.5 rounded bg-success/15 text-success text-[9px] font-mono uppercase tracking-wider">Live</span>
-        </div>
-        <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border/60 bg-surface/60 w-[70%] max-w-[200px] opacity-60">
-          <Globe className="w-3 h-3 text-secondary shrink-0" />
-          <span className="text-[10px] font-mono text-secondary truncate">app.deploybro.app</span>
+      <div className="absolute inset-x-0 bottom-0 h-48 flex items-end justify-center pb-3">
+        <div className="relative flex flex-col items-center">
+          {/* URL chip floating above the globe */}
+          <div className="relative z-10 mb-1 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-primary/40 bg-surface-raised shadow-[0_10px_30px_-8px_hsl(var(--primary)/0.7)] whitespace-nowrap">
+            <Lock className="w-2.5 h-2.5 text-success shrink-0" />
+            <span className="text-[10.5px] font-mono text-foreground/90">yoursite.com</span>
+            <span className="ml-1 px-1 py-px rounded bg-success/15 text-success text-[7.5px] font-mono uppercase tracking-wider">SSL</span>
+          </div>
+          <div aria-hidden className="absolute inset-x-0 top-8 h-24 bg-[radial-gradient(ellipse_at_center,hsl(var(--primary)/0.35)_0%,transparent_70%)] blur-xl" />
+          <svg viewBox="0 0 100 100" className="relative w-28 h-28">
+            <circle cx="50" cy="50" r="42" fill="hsl(var(--surface)/0.4)" stroke="hsl(var(--primary))" strokeOpacity="0.7" strokeWidth="1.4" />
+            {/* Latitudes */}
+            <ellipse cx="50" cy="50" rx="42" ry="14" fill="none" stroke="hsl(var(--primary))" strokeOpacity="0.45" strokeWidth="0.9" />
+            <ellipse cx="50" cy="50" rx="42" ry="28" fill="none" stroke="hsl(var(--primary))" strokeOpacity="0.3" strokeWidth="0.9" />
+            {/* Meridians */}
+            <line x1="50" y1="8" x2="50" y2="92" stroke="hsl(var(--primary))" strokeOpacity="0.45" strokeWidth="0.9" />
+            <ellipse cx="50" cy="50" rx="22" ry="42" fill="none" stroke="hsl(var(--primary))" strokeOpacity="0.32" strokeWidth="0.9" />
+            <ellipse cx="50" cy="50" rx="40" ry="42" fill="none" stroke="hsl(var(--primary))" strokeOpacity="0.18" strokeWidth="0.9" />
+            {/* Pinpoint dot */}
+            <circle cx="68" cy="36" r="2.2" fill="hsl(var(--primary))">
+              <animate attributeName="opacity" values="1;0.4;1" dur="1.6s" repeatCount="indefinite" />
+            </circle>
+          </svg>
         </div>
       </div>
     );
   }
+
   if (k === "publish") {
+    // Big floating Publish button + a Build → Deploy → Live status
+    // strip below to give a sense of "this actually does something".
     return (
-      <div className="absolute inset-x-0 bottom-0 h-44 flex items-center justify-center pb-3">
+      <div className="absolute inset-x-0 bottom-0 h-48 flex flex-col items-center justify-end gap-3 pb-4">
         <div className="relative">
-          <div aria-hidden className="absolute -inset-6 bg-primary/30 blur-3xl rounded-full" />
-          {/* Chunky 3D-ish Publish button — bolt's hosting card uses
-              an actual screenshot of one. Pure CSS gradient + ring +
-              double shadow gives the same depth without an asset. */}
+          <div aria-hidden className="absolute -inset-8 bg-primary/35 blur-3xl rounded-full" />
           <button
             type="button"
             tabIndex={-1}
             aria-hidden
-            className="relative inline-flex items-center gap-2 px-7 py-3.5 rounded-xl bg-gradient-to-b from-primary via-primary to-[hsl(215_100%_45%)] text-primary-foreground font-bold text-base tracking-tight ring-1 ring-white/30 shadow-[0_18px_40px_-10px_hsl(var(--primary)/0.7),inset_0_1px_0_0_hsl(0_0%_100%/0.4)] cursor-default"
+            className="relative inline-flex items-center gap-2 px-8 py-4 rounded-xl bg-gradient-to-b from-[hsl(215_100%_60%)] via-primary to-[hsl(215_100%_40%)] text-primary-foreground font-bold text-base tracking-tight ring-1 ring-white/40 shadow-[0_22px_45px_-10px_hsl(var(--primary)/0.85),inset_0_1px_0_0_hsl(0_0%_100%/0.5),inset_0_-1px_0_0_hsl(220_50%_20%/0.4)] cursor-default"
           >
             <Rocket className="w-4 h-4" strokeWidth={2.5} />
             Publish
           </button>
         </div>
+        <div className="relative flex items-center gap-1.5 text-[9px] font-mono text-secondary">
+          <span className="w-1.5 h-1.5 rounded-full bg-success shadow-[0_0_8px_hsl(var(--success)/0.8)]" />
+          <span>Build</span>
+          <span className="w-3 h-px bg-border" />
+          <span className="w-1.5 h-1.5 rounded-full bg-success shadow-[0_0_8px_hsl(var(--success)/0.8)]" />
+          <span>Deploy</span>
+          <span className="w-3 h-px bg-border" />
+          <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse shadow-[0_0_10px_hsl(var(--success))]" />
+          <span className="text-success">Live</span>
+        </div>
       </div>
     );
   }
+
   return null;
 }
 
