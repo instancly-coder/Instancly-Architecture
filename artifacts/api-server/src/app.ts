@@ -2,6 +2,7 @@ import express, { type Express } from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import pinoHttp from "pino-http";
+import path from "path";
 import router from "./routes";
 import stripeWebhookRouter from "./routes/stripe-webhook";
 import { logger } from "./lib/logger";
@@ -45,6 +46,12 @@ app.use(express.json({ limit: "30mb" }));
 app.use(express.urlencoded({ extended: true }));
 
 app.use(tryAuth);
+
+// Serve static public assets (e.g. shadcn-ui.js CDN bundle for previews).
+// __dirname is shimmed by the esbuild banner to point to the dist/ directory,
+// so this resolves to dist/public/ at runtime after the build copy step.
+app.use("/api/assets", express.static(path.join(__dirname, "public")));
+
 app.use("/api", router);
 
 export default app;

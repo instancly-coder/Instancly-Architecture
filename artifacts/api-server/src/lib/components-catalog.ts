@@ -145,7 +145,8 @@ Rules for file blocks:
 - File paths use forward slashes, no leading slash, no "..", e.g. "index.html" or "components/Nav.jsx".
 - Any file you DON'T emit is left untouched. Re-emit a file ONLY when you want to change it. For tiny tweaks, only re-emit the affected file.
 - Whenever you create a NEW \`.jsx\` file (a component, page, or hook that didn't exist in the project before), you MUST also re-emit \`index.html\` with the matching \`<script type="text/babel" data-presets="react" src="…"></script>\` tag inserted in the canonical load order (hooks → components → pages → app.jsx LAST). Skipping this leaves the new file unreferenced and the preview crashes inside the AI-generated \`App\` with "Element type is invalid".
-- The runtime is just the browser globals from the CDNs above (\`React\`, \`ReactDOM\`, \`ReactRouterDOM\`). Don't reference npm packages or ES module imports.
+- The runtime is just the browser globals from the CDNs above (\`React\`, \`ReactDOM\`, \`ReactRouterDOM\`, \`LucideReact\`, \`Recharts\`) plus the auto-injected **\`window.ShadcnUI\`** component library (see "UI Components" section below). Don't reference npm packages or ES module imports.
+- **ShadcnUI is automatically injected** — do NOT add a script tag for it yourself. It is always available as \`window.ShadcnUI\` in every preview.
 - Use Tailwind utility classes for styling.
 
 ## String quoting (read this — the #1 source of compile errors)
@@ -379,6 +380,133 @@ function RevenueChart() {
 Always wrap charts in \`<ResponsiveContainer width="100%" height="100%">\` inside a fixed-height parent (e.g. \`<div className="h-56">\`) — that's how Recharts gets its dimensions. Hide axis lines (\`axisLine={false}\` / \`tickLine={false}\`) and use light grid colours; the default styling is dated. Use brand-coherent colours (palette below, not red/yellow/green). Pies & donuts need a \`<Cell key fill="…" />\` per slice.
 
 When TO add a chart: any dashboard, admin panel, analytics view, finance/SaaS landing, fitness tracker, restaurant analytics, or anywhere the user mentions metrics, growth, history, performance, or comparisons. Invent plausible data that fits the vertical (e.g. for a coffee shop: cups sold per day; for a gym: workout streaks; for an agency: project pipeline). Don't ship a chart with mock data labelled "Series 1" / "Series 2".
+
+## UI Components — \`window.ShadcnUI\`
+
+A **full shadcn/ui-compatible component library** is auto-injected into every preview as \`window.ShadcnUI\`. It uses the same API as the real shadcn/ui (same component names, same props, same variants). Use it aggressively — prefer polished shadcn primitives over hand-rolled Tailwind divs whenever you're building product UI: dashboards, admin panels, SaaS apps, forms, settings pages, modals, command menus.
+
+Destructure at the TOP of any file that needs them (never import — these are globals):
+
+\`\`\`jsx
+const {
+  cn,
+  // Form
+  Button, Input, Textarea, Label, Switch, Checkbox,
+  Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
+  // Display
+  Badge, Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter,
+  Avatar, AvatarImage, AvatarFallback,
+  Separator, Skeleton, Progress, Alert, AlertTitle, AlertDescription,
+  // Table
+  Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
+  // Navigation
+  Tabs, TabsList, TabsTrigger, TabsContent,
+  // Layout
+  Accordion, AccordionItem, AccordionTrigger, AccordionContent,
+  ScrollArea, Collapsible, CollapsibleTrigger, CollapsibleContent,
+  // Overlays
+  Dialog, DialogTrigger, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription,
+  Sheet, SheetTrigger, SheetContent, SheetHeader, SheetTitle, SheetDescription,
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
+  Tooltip, TooltipProvider, TooltipTrigger, TooltipContent,
+  Popover, PopoverTrigger, PopoverContent,
+  // Misc
+  Spinner, AspectRatio,
+} = ShadcnUI;
+\`\`\`
+
+### Key props (same as real shadcn/ui)
+
+**Button** — \`variant\`: \`"default" | "destructive" | "outline" | "secondary" | "ghost" | "link"\`. \`size\`: \`"default" | "sm" | "lg" | "icon"\`.
+
+**Badge** — \`variant\`: \`"default" | "secondary" | "destructive" | "outline" | "success" | "warning"\`.
+
+**Alert** — \`variant\`: \`"default" | "destructive" | "warning" | "success"\`.
+
+**Tabs** — \`defaultValue\` (uncontrolled) or \`value\` + \`onValueChange\` (controlled). Children: \`<TabsList>\`, \`<TabsTrigger value="…">\`, \`<TabsContent value="…">\`.
+
+**Accordion** — \`type="single"\` (default) or \`"multiple"\`. \`defaultValue\` to pre-open an item. Children: \`<AccordionItem value="…">\` → \`<AccordionTrigger>\` + \`<AccordionContent>\`.
+
+**Dialog/Sheet** — use uncontrolled: wrap trigger + content in \`<Dialog>\`/\`<Sheet>\`. \`<DialogTrigger asChild>\` wraps your button. \`<DialogContent>\` renders the modal. Controlled: add \`open\` + \`onOpenChange\`.
+
+**Select** — \`<Select defaultValue="…" onValueChange={(v) => …}>\` → \`<SelectTrigger><SelectValue placeholder="…"/></SelectTrigger>\` → \`<SelectContent>\` → \`<SelectItem value="…">Label</SelectItem>\`.
+
+**Switch/Checkbox** — uncontrolled via \`defaultChecked\` or controlled via \`checked\` + \`onCheckedChange\`.
+
+**DropdownMenu** — \`<DropdownMenu>\` → \`<DropdownMenuTrigger>\` + \`<DropdownMenuContent>\` → \`<DropdownMenuItem onClick={…}>\`.
+
+**Tooltip** — always wrap in \`<TooltipProvider>\`. Then: \`<Tooltip><TooltipTrigger>hover me</TooltipTrigger><TooltipContent>message</TooltipContent></Tooltip>\`.
+
+**Spinner** — \`size\`: \`"sm" | "default" | "lg"\`.
+
+**cn** — className utility. Merges class strings, skips falsy values: \`cn("px-4", isActive && "bg-blue-500", className)\`.
+
+### ShadcnUI in action — dashboard card example
+
+\`\`\`jsx
+// components/StatsCard.jsx
+const { Card, CardHeader, CardTitle, CardDescription, CardContent, Badge, Skeleton } = ShadcnUI;
+
+function StatsCard({ title, value, delta, loading }) {
+  if (loading) return (
+    <Card>
+      <CardHeader><Skeleton className="h-4 w-32" /></CardHeader>
+      <CardContent><Skeleton className="h-8 w-24 mt-2" /></CardContent>
+    </Card>
+  );
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardDescription>{title}</CardDescription>
+        <CardTitle className="text-3xl font-bold">{value}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <Badge variant={delta >= 0 ? "success" : "destructive"}>
+          {delta >= 0 ? "+" : ""}{delta}% vs last month
+        </Badge>
+      </CardContent>
+    </Card>
+  );
+}
+\`\`\`
+
+### ShadcnUI — modal (Dialog) example
+
+\`\`\`jsx
+// components/InviteModal.jsx
+const { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, Button, Input, Label } = ShadcnUI;
+
+function InviteModal() {
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button variant="outline">Invite team member</Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Invite a team member</DialogTitle>
+          <DialogDescription>They will receive an email invitation to join your workspace.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <Label htmlFor="email">Email address</Label>
+          <Input id="email" type="email" placeholder="colleague@company.com" />
+        </div>
+        <DialogFooter>
+          <Button type="submit">Send invite</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+\`\`\`
+
+### When to use ShadcnUI vs raw Tailwind
+
+- **Use ShadcnUI** for: interactive components (buttons, inputs, checkboxes, selects, toggles, tabs, modals, dropdowns, tooltips), status indicators (badges, alerts, progress, skeletons), data tables, card layouts in dashboards/apps.
+- **Use raw Tailwind** for: custom section layouts, hero sections, marketing copy, backgrounds, gradients, typography, images, any purely decorative element that isn't a UI widget.
+- **Combine freely**: \`<Card className="border-none shadow-xl bg-gradient-to-br from-violet-900 to-zinc-950">\` — shadcn components accept Tailwind \`className\` for extension.
+
+**IMPORTANT:** ShadcnUI is NOT listed in index.html — it is injected automatically. Never add a script tag for it. Just destructure from \`ShadcnUI\` at the top of any file.
 
 ## Images — real photography
 

@@ -819,9 +819,26 @@ const BASENAME_SHIM_SCRIPT = `<script data-deploybro-basename-shim>
 })();
 </script>`;
 
+// ShadcnUI bundle — auto-injected into every preview just before </head>.
+// The bundle requires React, which is loaded earlier in <head> by the AI's
+// generated index.html, so injecting at the END of <head> (not the start)
+// ensures window.React is already defined when this script executes.
+const SHADCN_SCRIPT_TAG = `<script data-deploybro-shadcn src="/api/assets/shadcn-ui.js"></script>`;
+
+function injectShadcnBundle(html: string): string {
+  if (/data-deploybro-shadcn/.test(html)) return html; // already present
+  if (/<\/head>/i.test(html)) {
+    return html.replace(/<\/head>/i, `${SHADCN_SCRIPT_TAG}\n</head>`);
+  }
+  if (/<\/body>/i.test(html)) {
+    return html.replace(/<\/body>/i, `${SHADCN_SCRIPT_TAG}\n</body>`);
+  }
+  return html + "\n" + SHADCN_SCRIPT_TAG;
+}
+
 function injectErrorOverlay(html: string): string {
-  const patched = hotPatchVisualCdns(fixUpReactRouterCdn(html));
-  if (/data-deploybro-error-overlay/.test(patched)) return patched;
+  const withShadcn = injectShadcnBundle(hotPatchVisualCdns(fixUpReactRouterCdn(html)));
+  if (/data-deploybro-error-overlay/.test(withShadcn)) return withShadcn;
   // Inject at the START of <head> so:
   //   1) `__APP_BASENAME__` is defined before any other script reads it
   //   2) the script-tag renamer runs BEFORE the parser reaches any
@@ -829,13 +846,13 @@ function injectErrorOverlay(html: string): string {
   // Order matters — basename shim FIRST (so user code can read it from
   // the very first JSX file evaluated), error overlay second.
   const headInjection = `${BASENAME_SHIM_SCRIPT}\n${ERROR_OVERLAY_SCRIPT}`;
-  if (/<head[^>]*>/i.test(patched)) {
-    return patched.replace(/<head[^>]*>/i, (m) => `${m}\n${headInjection}`);
+  if (/<head[^>]*>/i.test(withShadcn)) {
+    return withShadcn.replace(/<head[^>]*>/i, (m) => `${m}\n${headInjection}`);
   }
-  if (/<\/body>/i.test(patched)) {
-    return patched.replace(/<\/body>/i, `${headInjection}\n</body>`);
+  if (/<\/body>/i.test(withShadcn)) {
+    return withShadcn.replace(/<\/body>/i, `${headInjection}\n</body>`);
   }
-  return headInjection + "\n" + patched;
+  return headInjection + "\n" + withShadcn;
 }
 
 function emptyHtml(headline = "Your app will appear here"): string {
