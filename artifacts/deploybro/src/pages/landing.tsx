@@ -204,10 +204,6 @@ export default function Landing() {
           <div aria-hidden className="perspective-grid">
             <div className="perspective-grid__plane" />
           </div>
-          {/* Horizon highlight: thin glowing line + soft halo right at
-              the spot where the perspective grid meets the fade. */}
-          <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-[360px] h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
-          <div aria-hidden className="pointer-events-none absolute left-1/2 -translate-x-1/2 -translate-y-1/2 bottom-[360px] h-32 w-2/3 bg-[radial-gradient(ellipse_at_center,hsl(var(--primary)/0.22),transparent_70%)] blur-2xl" />
           <div className="relative z-10 flex justify-center pt-10 pb-4">
             <Link href="https://deploybro.com/explore" className="glass-pill group inline-flex items-center gap-2 px-5 py-2 rounded-full text-xs font-medium text-foreground/90 transition-transform hover:-translate-y-px">
               Introducing DeployBro v2
