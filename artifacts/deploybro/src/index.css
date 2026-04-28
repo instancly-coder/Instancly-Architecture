@@ -390,15 +390,15 @@
   background-image:
     repeating-linear-gradient(
       to right,
-      hsl(215 100% 65% / 0.6) 0,
-      hsl(215 100% 65% / 0.6) 1px,
+      hsl(var(--border) / 0.7) 0,
+      hsl(var(--border) / 0.7) 1px,
       transparent 1px,
       transparent 80px
     ),
     repeating-linear-gradient(
       to bottom,
-      hsl(215 100% 65% / 0.6) 0,
-      hsl(215 100% 65% / 0.6) 1px,
+      hsl(var(--border) / 0.7) 0,
+      hsl(var(--border) / 0.7) 1px,
       transparent 1px,
       transparent 80px
     );
@@ -409,15 +409,15 @@
   background-image:
     repeating-linear-gradient(
       to right,
-      hsl(215 100% 50% / 0.35) 0,
-      hsl(215 100% 50% / 0.35) 1px,
+      hsl(var(--border) / 0.9) 0,
+      hsl(var(--border) / 0.9) 1px,
       transparent 1px,
       transparent 80px
     ),
     repeating-linear-gradient(
       to bottom,
-      hsl(215 100% 50% / 0.35) 0,
-      hsl(215 100% 50% / 0.35) 1px,
+      hsl(var(--border) / 0.9) 0,
+      hsl(var(--border) / 0.9) 1px,
       transparent 1px,
       transparent 80px
     );
