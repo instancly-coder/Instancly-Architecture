@@ -89,11 +89,22 @@ export default defineConfig({
 });
 `;
 
-// One-line Tailwind v4 entry. The plugin handles content detection
-// automatically, so we don't ship a tailwind.config.js — bundle scan
-// is the v4 default. Imported by src/main.jsx so Vite emits it as a
-// real CSS asset (link tag in the head) instead of inlining at runtime.
-const DEFAULT_TAILWIND_CSS = `@import "tailwindcss";\n`;
+// Tailwind v4 CSS entry. The @tailwindcss/vite plugin normally detects
+// content automatically via the Vite module graph, but the user bundle
+// is loaded with a dynamic `await import()` which may be resolved AFTER
+// Tailwind's initial class-name scan completes. The explicit @source
+// directives below guarantee Tailwind picks up every file in the project
+// regardless of when it appears in the module graph.
+const DEFAULT_TAILWIND_CSS = `\
+@import "tailwindcss";
+
+/* Tell Tailwind exactly where to find class names. The user bundle is a
+   dynamically-imported module that the v4 scanner might miss on first
+   pass — listing it explicitly here makes the CSS build deterministic. */
+@source "../index.html";
+@source "./**/*.{js,jsx,ts,tsx}";
+`;
+
 
 const DEFAULT_VERCEL_JSON = {
   rewrites: [{ source: "/(.*)", destination: "/index.html" }],

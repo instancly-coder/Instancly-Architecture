@@ -19,6 +19,7 @@ import {
   projectNameFor,
   deleteProject as vercelDeleteProject,
   cancelDeployment as vercelCancelDeployment,
+  disableProjectProtection,
   type VercelDeployment,
 } from "../lib/vercel";
 import { deleteBranch as neonDeleteBranch } from "../lib/neon";
@@ -204,6 +205,18 @@ export async function runPublishPipeline(args: {
     if (!hadVercelProject) {
       createdInThisRun.vercelProjectName = projectName;
     }
+
+    // Ensure the deployed site is publicly accessible — Vercel enables
+    // SSO / password-protection by default on some account types. We
+    // call this on every publish (it's idempotent) so even projects
+    // created before this change are fixed on their next re-deploy.
+    await disableProjectProtection(vercelProject.id).catch((err) => {
+      // Non-fatal: log and continue. The site might still be accessible
+      // if protection was never turned on, and a publish failure here
+      // would be far more confusing to the user than a gated live URL.
+      logger.warn({ err, projectId, vercelProjectId: vercelProject.id },
+        "Could not disable Vercel project protection (non-fatal)");
+    });
 
     // ---------- 4. Push DATABASE_URL into the Vercel env ----------
     // Skipped when the project has no opted-in database — the deployed
