@@ -10,7 +10,6 @@ import {
   contentTypeFor,
   injectOrphanScripts,
   sanitizePath,
-  stripOrphanScriptTags,
 } from "../lib/file-blocks";
 import { requireAuth, getAuthedUser } from "../middlewares/auth";
 import {
@@ -416,29 +415,32 @@ router.get(
       // but has no `<script type="text/babel" src="…">` tag pointing at
       // it. We only fetch paths (not content) so this stays cheap even
       // for large projects.
-      // Fetch ALL file paths in this project so we can both:
-      //   (a) strip <script src="X"> tags whose target X doesn't exist
-      //       (kills the "Failed to load …" red-badge errors)
-      //   (b) auto-inject <script> tags for .jsx files that DO exist but
-      //       were missed in the AI's index.html (kills "Element type is
-      //       invalid" mount errors).
-      const allRows = await db
+      //
+      // NOTE: we deliberately do NOT strip orphan script tags whose
+      // target file doesn't exist. A previous version of this route
+      // did, and it caused blank previews — when the AI references
+      // `<Nav />` in app/page.jsx but forgets to emit components/Nav.jsx,
+      // stripping the script tag means `window.Nav` is never defined
+      // and the entire React mount throws "Nav is not defined". The
+      // missing-file route below handles this case much more gracefully:
+      // it returns a no-op `function Nav() { return null }` stub, which
+      // exposeGlobals() in the overlay turns into `window.Nav`, so the
+      // app renders with an empty nav slot instead of crashing. The
+      // separate "Failed to load …" red badge that motivated the
+      // stripper was actually a CORS issue caused by a missing
+      // `allow-same-origin` on the builder iframe sandbox; that has
+      // since been fixed in artifacts/deploybro/src/pages/builder.tsx.
+      const jsxRows = await db
         .select({ path: projectFilesTable.path })
         .from(projectFilesTable)
-        .where(eq(projectFilesTable.projectId, project.id));
-      const allPaths = allRows.map((r) => r.path);
-      const jsxPaths = allPaths.filter((p) => p.endsWith(".jsx"));
-      const { html: cleaned, stripped } = stripOrphanScriptTags(
-        row.content,
-        allPaths,
-      );
-      if (stripped.length > 0) {
-        req.log.info(
-          { strippedCount: stripped.length, samples: stripped.slice(0, 5) },
-          "stripped orphan <script> tags from preview index.html",
+        .where(
+          and(
+            eq(projectFilesTable.projectId, project.id),
+            sql`${projectFilesTable.path} like '%.jsx'`,
+          ),
         );
-      }
-      const withScripts = injectOrphanScripts(cleaned, jsxPaths);
+      const jsxPaths = jsxRows.map((r) => r.path);
+      const withScripts = injectOrphanScripts(row.content, jsxPaths);
       res.send(injectErrorOverlay(withScripts));
       return;
     }

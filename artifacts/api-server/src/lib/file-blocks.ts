@@ -421,56 +421,6 @@ export function injectOrphanScripts(
   return html.slice(0, appMatch.index) + block + html.slice(appMatch.index);
 }
 
-// Symmetric inverse of injectOrphanScripts: remove every
-// `<script type="text/babel" src="X">` tag whose target X is NOT present
-// in the project file set. The AI sometimes lists script tags for files
-// it never actually emitted (e.g. `<script src="lib/utils.js">` because
-// real shadcn projects have one, even though our preview gets `cn` from
-// `window.ShadcnUI`). Without this stripper, the browser fetches the
-// missing file, hits the no-op stub (or worse, a real 404 for non-stub
-// extensions), and the script-loader's catch fires `showBadge("Failed to
-// load …")` — a red corner-badge error on a page the user just shipped.
-//
-// Strip BEFORE inject so that:
-//   1. We remove the AI's dead references first,
-//   2. Then injectOrphanScripts adds tags for any real .jsx files that
-//      ARE in the project but were missed in the AI's index.html.
-//
-// Does NOT affect the published Vercel build — purely a dev-preview
-// mutation, applied only when serving index.html through the preview
-// route. The stored HTML remains untouched.
-export function stripOrphanScriptTags(
-  html: string,
-  allFilePaths: string[],
-): { html: string; stripped: string[] } {
-  // Build a Set of normalised existing paths for O(1) lookup. Strip any
-  // leading "./" or "/" so `./components/Foo.jsx` and `components/Foo.jsx`
-  // compare equal — the parser already canonicalises stored paths via
-  // sanitizePath, but the AI's HTML may still use either form.
-  const existing = new Set(allFilePaths.map((p) => p.replace(/^\.?\/+/, "")));
-
-  const stripped: string[] = [];
-  // Match <script ... type="text/babel" ... src="X" ...></script> in either
-  // attribute order, with single or double quotes. Anchored on the explicit
-  // text/babel type so we never touch CDN <script src="..."> tags (which
-  // have no `type` or use `type="module"`).
-  const TYPE_FIRST =
-    /<script\b[^>]*\btype\s*=\s*["']text\/babel["'][^>]*\bsrc\s*=\s*["']([^"']+)["'][^>]*>\s*<\/script>\s*/gi;
-  const SRC_FIRST =
-    /<script\b[^>]*\bsrc\s*=\s*["']([^"']+)["'][^>]*\btype\s*=\s*["']text\/babel["'][^>]*>\s*<\/script>\s*/gi;
-
-  const replaceFn = (full: string, src: string): string => {
-    const norm = src.trim().replace(/^\.?\/+/, "");
-    if (existing.has(norm)) return full;
-    stripped.push(norm);
-    return `<!-- deploybro: stripped orphan script "${norm}" — file not in project -->\n  `;
-  };
-
-  let out = html.replace(TYPE_FIRST, replaceFn);
-  out = out.replace(SRC_FIRST, replaceFn);
-  return { html: out, stripped };
-}
-
 // Identify the React-mount entry file. Either `app/layout.jsx` (new
 // Next.js-style layout) or `app.jsx` (legacy convention). Both call
 // `ReactDOM.createRoot(...).render(<App />)` and must be loaded last.
