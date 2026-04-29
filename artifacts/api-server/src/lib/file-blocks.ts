@@ -456,6 +456,116 @@ function sortJsxForPreview(paths: string[]): string[] {
   });
 }
 
+// Convert a file path like "components/PricingTable.jsx" or
+// "hooks/useScrollSpy.jsx" into the JS identifier we'll use as the
+// stub component name. Strips the extension, takes the basename, and
+// uppercases the first letter so JSX `<PricingTable />` resolves to
+// the no-op function we generate below.
+function deriveStubName(path: string): string {
+  const base = path.split("/").pop() ?? "Stub";
+  const noExt = base.replace(/\.[^.]+$/, "");
+  // Strip non-identifier chars; if the leading char is a digit prefix
+  // with `_` so `123foo` becomes `_123foo` (a valid JS identifier).
+  let id = noExt.replace(/[^A-Za-z0-9_$]/g, "");
+  if (!id) id = "Stub";
+  if (/^[0-9]/.test(id)) id = "_" + id;
+  // PascalCase the first letter so it parses as a React component
+  // reference (lowercase first letter would be treated as a DOM tag).
+  return id.charAt(0).toUpperCase() + id.slice(1);
+}
+
+// Generate a no-op component stub for a file the AI listed in
+// index.html via `<script type="text/babel" src="X">` but forgot to
+// emit. Persisting this as a real file (instead of relying on the
+// preview route's on-the-fly fallback) means the project tree
+// reflects exactly what the preview is loading and previews are
+// guaranteed structurally complete on disk.
+function buildStubContents(path: string): string {
+  const name = deriveStubName(path);
+  return [
+    `// [DeployBro] Auto-generated stub for ${path}.`,
+    `// The AI referenced this file in index.html but did not emit it.`,
+    `// Replace this with the real implementation, or ask the AI to`,
+    `// flesh it out: "Please implement ${path}".`,
+    `function ${name}() { return null; }`,
+    "",
+  ].join("\n");
+}
+
+// Extract every `src` attribute value from `<script type="text/babel"
+// src="…">` tags in an HTML string. Tolerates either attribute order
+// and either quote style. Same regex pair as `injectOrphanScripts`
+// uses to detect already-referenced files.
+export function extractBabelScriptSources(html: string): string[] {
+  const TYPE_FIRST =
+    /<script\b[^>]*\btype\s*=\s*["']text\/babel["'][^>]*\bsrc\s*=\s*["']([^"']+)["'][^>]*>\s*<\/script>/gi;
+  const SRC_FIRST =
+    /<script\b[^>]*\bsrc\s*=\s*["']([^"']+)["'][^>]*\btype\s*=\s*["']text\/babel["'][^>]*>\s*<\/script>/gi;
+  const out = new Set<string>();
+  for (const re of [TYPE_FIRST, SRC_FIRST]) {
+    re.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(html)) !== null) {
+      out.add(m[1].trim().replace(/^\.?\/+/, ""));
+    }
+  }
+  return [...out];
+}
+
+// Audit the index.html in `parsed` (or the existing project's stored
+// index.html if the AI didn't re-emit it) for `<script src="X">` tags
+// whose target X is missing — i.e. neither in `existingPaths` nor
+// among the `parsed` files emitted in this turn. For each such
+// missing X with a code-file extension, return a `ParsedFile` carrying
+// a no-op component stub. The caller can append these to the file
+// list and persist them in the same transaction.
+//
+// Returns an empty array when index.html is fine. Skips paths that
+// already exist (so subsequent builds don't keep stubbing). Only
+// stubs JS-family extensions (.jsx, .js, .tsx, .ts, .mjs) — for any
+// other missing asset (CSS, image, etc.) we leave it alone so the
+// natural 404 surfaces instead of silently fabricating an empty file.
+export function auditMissingScriptTargets(
+  parsed: ParsedFile[],
+  existingPaths: string[],
+  existingIndexHtml: string | null,
+): ParsedFile[] {
+  // Pick the most authoritative index.html: the one the AI just
+  // emitted in this turn (if any), else the project's stored copy.
+  const justEmittedIndex = parsed.find((f) => f.path === "index.html");
+  const html = justEmittedIndex?.content ?? existingIndexHtml ?? "";
+  if (!html) return [];
+
+  const refs = extractBabelScriptSources(html);
+  if (refs.length === 0) return [];
+
+  // Build a set of every path the project will have AFTER this turn's
+  // writes commit. The AI's just-emitted files take precedence over
+  // existing project files (last write wins), but for "does this path
+  // exist?" purposes the union is what matters.
+  const known = new Set<string>([
+    ...existingPaths.map((p) => p.replace(/^\.?\/+/, "")),
+    ...parsed.map((f) => f.path.replace(/^\.?\/+/, "")),
+  ]);
+
+  const STUB_EXTS = new Set(["jsx", "js", "tsx", "ts", "mjs"]);
+  const stubs: ParsedFile[] = [];
+  const seen = new Set<string>();
+  for (const ref of refs) {
+    if (known.has(ref)) continue;
+    const ext = ref.split(".").pop()?.toLowerCase() ?? "";
+    if (!STUB_EXTS.has(ext)) continue;
+    // sanitizePath rejects ".." and absolute paths; reuse it here so
+    // we never let an AI-supplied src trick us into writing outside
+    // the project root.
+    const safe = sanitizePath(ref);
+    if (!safe || seen.has(safe)) continue;
+    seen.add(safe);
+    stubs.push({ path: safe, content: buildStubContents(safe) });
+  }
+  return stubs;
+}
+
 export function contentTypeFor(path: string): string {
   const ext = path.split(".").pop()?.toLowerCase() ?? "";
   switch (ext) {

@@ -26,6 +26,7 @@ import {
   stripOpenTabDirective,
   parseRequestSecretDirectives,
   stripRequestSecretDirectives,
+  auditMissingScriptTargets,
 } from "../lib/file-blocks";
 import {
   enhancePrompt,
@@ -459,8 +460,44 @@ router.post(
     const persistFiles = async (): Promise<string[]> => {
       const parsed = parseFileBlocks(fullText);
       if (parsed.length === 0) return [];
+
+      // ── Completeness audit ───────────────────────────────────────────
+      // The system prompt instructs the AI to emit every `.jsx` it
+      // references in `<script src="…">`, but bigger builds sometimes
+      // slip and forget one (e.g. `components/Nav.jsx`). The preview
+      // route's on-the-fly fallback handles the missing fetch, but the
+      // user still sees an unpolished result and the project tree
+      // doesn't reflect what's actually loading. We fix this by
+      // synthesising a real persisted no-op stub for every missing
+      // script src, BEFORE the transaction commits — guaranteeing the
+      // saved project is structurally complete on every build.
+      //
+      // We pass the existing project's stored index.html so we still
+      // catch missing refs when the AI didn't re-emit index.html in
+      // this turn but added a new `<NewThing />` reference inside an
+      // existing component. (`existingFiles` was loaded earlier from
+      // the same db transaction view.)
+      const existingPaths = existingFiles.map((f) => f.path);
+      const existingIndexHtml =
+        existingFiles.find((f) => f.path === "index.html")?.content ?? null;
+      const stubs = auditMissingScriptTargets(
+        parsed,
+        existingPaths,
+        existingIndexHtml,
+      );
+      if (stubs.length > 0) {
+        req.log.warn(
+          {
+            count: stubs.length,
+            paths: stubs.map((s) => s.path),
+          },
+          "AI referenced files in index.html that it did not emit; auto-creating no-op stubs",
+        );
+      }
+      const allFiles = [...parsed, ...stubs];
+
       await db.transaction(async (tx) => {
-        for (const f of parsed) {
+        for (const f of allFiles) {
           // UTF-8 byte length, not JS string char count — multibyte
           // characters (emoji, non-ASCII) otherwise under-report
           // size and would drift from how the publish-payload size
