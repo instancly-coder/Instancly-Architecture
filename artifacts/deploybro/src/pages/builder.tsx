@@ -2655,7 +2655,31 @@ function PreviewPane({
               src={previewSrc}
               title="App preview"
               className="flex-1 w-full bg-white"
-              sandbox="allow-scripts allow-forms allow-popups allow-modals"
+              // `allow-same-origin` is REQUIRED, not optional. Without it
+              // the iframe runs at a `null` origin, which means every
+              // `fetch("/api/preview/.../components/Foo.jsx")` the
+              // overlay's script loader makes is treated as cross-origin
+              // by the browser. Our CORS allowlist (lib/origin-allowlist
+              // on the API side) does NOT include `null`, so the response
+              // arrives without an `Access-Control-Allow-Origin` header
+              // and Safari rejects it with the terse error string
+              // "Load failed" — surfaced to the user as the bottom-right
+              // "Failed to load components/Nav.jsx" badge. The AI then
+              // chases its tail trying to "fix" file contents that
+              // aren't actually broken, because the fetch never reached
+              // the server's response body. The same iframe pattern in
+              // pages/project.tsx (the public viewer) already includes
+              // allow-same-origin for exactly this reason; this was a
+              // long-standing oversight on the builder page only.
+              //
+              // The combination of `allow-scripts` + `allow-same-origin`
+              // for an iframe served from our own origin does technically
+              // let the iframe's JS read the parent document — but the
+              // preview is user-authored code we EXPLICITLY trust to
+              // run, the parent already broadcasts via postMessage("*"),
+              // and the public viewer ships the same combination, so
+              // there is no new exposure here.
+              sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
             />
           )}
         </div>
