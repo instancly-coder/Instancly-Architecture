@@ -347,7 +347,18 @@ router.get(
       // loader to throw "HTTP 404" which crashes the entire preview with
       // "UNHANDLED REJECTION". A no-op stub lets the page load gracefully —
       // the component renders nothing and the rest of the UI works.
-      if (path.endsWith(".jsx") || path.endsWith(".js")) {
+      // Cover every script-shaped extension the AI might emit. `.js` and
+      // `.jsx` are by far the most common, but the model occasionally
+      // writes a `<script src="lib/utils.ts">` (TypeScript) or a `.mjs`
+      // module reference. Without these, a bare 404 cascaded into a
+      // "Failed to load" overlay that hid the otherwise-working UI.
+      if (
+        path.endsWith(".jsx") ||
+        path.endsWith(".js") ||
+        path.endsWith(".tsx") ||
+        path.endsWith(".ts") ||
+        path.endsWith(".mjs")
+      ) {
         // Derive a component name from the filename (PascalCase basename
         // without extension). Falls back to "MissingComponent".
         const basename = path.split("/").pop()!.replace(/\.[^.]+$/, "");
@@ -777,10 +788,16 @@ const ERROR_OVERLAY_SCRIPT = `<script data-deploybro-error-overlay>
           return it.promise.then(
             function (source) { transformAndExec(source, it.filename, it.presets); },
             function (err) {
-              show(
+              // A failed script-tag fetch is in the same class as an
+              // unhandled rejection: the AI pointed at the wrong path
+              // (or a stub-route hiccup happened), but the rest of the
+              // page is overwhelmingly working. Demote to the corner
+              // badge instead of the full-screen overlay so the user
+              // can see what they're actually building. The badge still
+              // posts to the parent so "Fix with AI" works the same.
+              showBadge(
                 "Failed to load " + (it.src || it.filename),
                 String((err && err.message) || err || "Network error"),
-                "",
                 it.filename
               );
             }

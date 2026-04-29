@@ -1368,7 +1368,17 @@ export default function Builder() {
       // was clicked. Plain error reports just show a toast — the user
       // might be mid-prompt and we don't want to clobber their input.
       if (!data.autofix) {
-        toast.error("Preview hit an error. Click 'Fix this with AI' to debug.", {
+        // Single stable toast id so a burst of errors (e.g. an unhandled
+        // rejection AND a failed script-tag fetch firing back-to-back
+        // from the same broken build) updates one toast in place
+        // instead of stacking three "Preview hit an error" cards on
+        // top of each other. The latest message wins so the user
+        // always sees the most recent failure context.
+        const summary = where ? `${message} (${where})` : message;
+        toast.error("Preview hit an error", {
+          id: "deploybro-preview-error",
+          description:
+            summary.length > 140 ? summary.slice(0, 137) + "…" : summary,
           duration: 5000,
         });
         return;
