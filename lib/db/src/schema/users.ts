@@ -10,6 +10,15 @@ export const usersTable = pgTable("users", {
   plan: text("plan").default("Free").notNull(),
   balance: numeric("balance", { precision: 12, scale: 2 }).default("0").notNull(),
   status: text("status").default("active").notNull(),
+  // Last time this user received the monthly Free-tier credit grant
+  // ($2.50 top-up, see `grantFreeMonthlyIfDue` in
+  // artifacts/api-server/src/lib/free-credits.ts). NULL means "never
+  // granted" — that user is eligible immediately on next auth check.
+  // Existing rows get NULL on backfill so every Free user receives the
+  // first grant the next time they hit an authed endpoint.
+  freeMonthlyGrantAt: timestamp("free_monthly_grant_at", {
+    withTimezone: true,
+  }),
   // Referral attribution. Set once at signup time from the cookie that
   // the public template/explore pages drop on first visit. We do NOT
   // FK-constrain `referredViaProjectId` here to avoid a circular

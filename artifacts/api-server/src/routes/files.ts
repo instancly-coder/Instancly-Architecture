@@ -6,7 +6,12 @@ import {
   projectFilesTable,
 } from "@workspace/db";
 import { and, asc, eq, sql } from "drizzle-orm";
-import { contentTypeFor, injectOrphanScripts, sanitizePath } from "../lib/file-blocks";
+import {
+  contentTypeFor,
+  injectOrphanScripts,
+  sanitizePath,
+  stripOrphanScriptTags,
+} from "../lib/file-blocks";
 import { requireAuth, getAuthedUser } from "../middlewares/auth";
 import {
   ListProjectFilesResponse,
@@ -411,17 +416,29 @@ router.get(
       // but has no `<script type="text/babel" src="…">` tag pointing at
       // it. We only fetch paths (not content) so this stays cheap even
       // for large projects.
-      const jsxRows = await db
+      // Fetch ALL file paths in this project so we can both:
+      //   (a) strip <script src="X"> tags whose target X doesn't exist
+      //       (kills the "Failed to load …" red-badge errors)
+      //   (b) auto-inject <script> tags for .jsx files that DO exist but
+      //       were missed in the AI's index.html (kills "Element type is
+      //       invalid" mount errors).
+      const allRows = await db
         .select({ path: projectFilesTable.path })
         .from(projectFilesTable)
-        .where(
-          and(
-            eq(projectFilesTable.projectId, project.id),
-            sql`${projectFilesTable.path} like '%.jsx'`,
-          ),
+        .where(eq(projectFilesTable.projectId, project.id));
+      const allPaths = allRows.map((r) => r.path);
+      const jsxPaths = allPaths.filter((p) => p.endsWith(".jsx"));
+      const { html: cleaned, stripped } = stripOrphanScriptTags(
+        row.content,
+        allPaths,
+      );
+      if (stripped.length > 0) {
+        req.log.info(
+          { strippedCount: stripped.length, samples: stripped.slice(0, 5) },
+          "stripped orphan <script> tags from preview index.html",
         );
-      const jsxPaths = jsxRows.map((r) => r.path);
-      const withScripts = injectOrphanScripts(row.content, jsxPaths);
+      }
+      const withScripts = injectOrphanScripts(cleaned, jsxPaths);
       res.send(injectErrorOverlay(withScripts));
       return;
     }

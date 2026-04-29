@@ -4,6 +4,10 @@ import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import {
+  FREE_TIER_MONTHLY_AMOUNT,
+  grantFreeMonthlyIfDue,
+} from "../lib/free-credits";
+import {
   clearReferralCookie,
   readReferralAttribution,
 } from "../lib/referral-attribution";
@@ -131,6 +135,9 @@ async function ensureUser(
   )[0];
 
   if (existing) {
+    // Fire-and-forget: top up Free-tier users to $2.50 if they're due.
+    // Conditional UPDATE — no-op when not due, so cheap to call here.
+    void grantFreeMonthlyIfDue(existing.id);
     return {
       id: existing.id,
       sub,
@@ -174,6 +181,11 @@ async function ensureUser(
       avatarUrl: (payload.picture as string | undefined) ?? null,
       referredByUserId: attribution?.referrerUserId ?? null,
       referredViaProjectId: attribution?.referredViaProjectId ?? null,
+      // Free-tier signup grant: every new account starts with $2.50
+      // and a fresh 30-day grant clock. See lib/free-credits.ts for
+      // the matching monthly top-up logic.
+      balance: FREE_TIER_MONTHLY_AMOUNT,
+      freeMonthlyGrantAt: new Date(),
     })
     .returning();
 
