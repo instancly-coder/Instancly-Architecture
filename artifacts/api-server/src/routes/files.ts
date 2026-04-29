@@ -538,6 +538,67 @@ const ERROR_OVERLAY_SCRIPT = `<script data-deploybro-error-overlay>
     if (document.body) paint();
     else document.addEventListener("DOMContentLoaded", paint);
   }
+  // --- Non-blocking corner badge for benign errors.
+  //
+  // Failed fetch()s and other promise rejections used to invoke show()
+  // directly, which painted the full-screen red overlay and made the
+  // user think their entire app was broken — even though the rendered
+  // UI was almost always fine and only a background data-fetch had
+  // failed. Demoted to a small dismissible bottom-right pill that still
+  // surfaces the error and offers "Fix with AI", but lets the user
+  // keep using the working parts of the page. Truly fatal errors
+  // (window.onerror, console.error from Babel parse failures) still
+  // get the full overlay because those genuinely block render.
+  var badgeShown = false;
+  function showBadge(title, message, where) {
+    if (badgeShown) return;
+    badgeShown = true;
+    lastError = { title: title, message: message, stack: "", where: where || "" };
+    postToParent(lastError);
+    function paint() {
+      var el = document.createElement("div");
+      el.setAttribute("data-deploybro-error-badge-root", "");
+      // role=alert + aria-live=assertive so screen reader users learn
+      // about the background failure even though the badge is small.
+      el.setAttribute("role", "alert");
+      el.setAttribute("aria-live", "assertive");
+      el.style.cssText =
+        "position:fixed;bottom:16px;right:16px;background:#1f1f24;color:#fff;" +
+        "border:1px solid #2a2a30;border-radius:10px;padding:10px 12px;" +
+        "font:12px/1.4 ui-sans-serif,system-ui,-apple-system,sans-serif;" +
+        "z-index:2147483647;max-width:340px;display:flex;gap:8px;" +
+        "align-items:flex-start;box-shadow:0 8px 24px rgba(0,0,0,0.45);";
+      el.innerHTML =
+        '<div style="width:8px;height:8px;background:#ef4444;border-radius:9999px;flex-shrink:0;margin-top:5px;"></div>' +
+        '<div style="flex:1;min-width:0;">' +
+          '<div style="font-weight:600;color:#fca5a5;font-size:11px;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:2px;">' +
+            esc(title) +
+          '</div>' +
+          '<div style="color:#e5e7eb;word-break:break-word;">' + esc(message) + '</div>' +
+          '<div style="margin-top:6px;display:flex;gap:6px;">' +
+            '<button type="button" data-deploybro-fix-btn ' +
+              'style="background:#6366f1;color:#fff;border:0;border-radius:6px;padding:5px 9px;' +
+              'font:600 11px/1 ui-sans-serif,system-ui,sans-serif;cursor:pointer;">Fix with AI</button>' +
+            '<button type="button" data-deploybro-dismiss-btn ' +
+              'style="background:transparent;color:#9ca3af;border:0;border-radius:6px;padding:5px 9px;' +
+              'font:500 11px/1 ui-sans-serif,system-ui,sans-serif;cursor:pointer;">Dismiss</button>' +
+          '</div>' +
+        '</div>';
+      var fixBtn = el.querySelector("[data-deploybro-fix-btn]");
+      if (fixBtn) fixBtn.addEventListener("click", function () {
+        postToParent(Object.assign({}, lastError, { autofix: true }));
+      });
+      var dismissBtn = el.querySelector("[data-deploybro-dismiss-btn]");
+      if (dismissBtn) dismissBtn.addEventListener("click", function () {
+        try { el.remove(); } catch (_) {}
+        badgeShown = false;
+      });
+      (document.body || document.documentElement).appendChild(el);
+    }
+    if (document.body) paint();
+    else document.addEventListener("DOMContentLoaded", paint);
+  }
+
   window.addEventListener("error", function (e) {
     var msg = (e.error && e.error.message) || e.message || "Unknown error";
     var stack = (e.error && e.error.stack) || "";
@@ -549,7 +610,7 @@ const ERROR_OVERLAY_SCRIPT = `<script data-deploybro-error-overlay>
   window.addEventListener("unhandledrejection", function (e) {
     var r = e.reason || {};
     var msg = (r && r.message) || (typeof r === "string" ? r : "Unhandled promise rejection");
-    show("Unhandled rejection", msg, (r && r.stack) || "", "");
+    showBadge("Unhandled rejection", msg, "");
   });
   // Babel-standalone reports JSX parse errors via console.error rather
   // than throwing. Hook so they surface to the user too.

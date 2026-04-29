@@ -1632,7 +1632,7 @@ export default function Builder() {
       <div className="flex flex-1 overflow-hidden relative">
         {/* Left Panel - Chat (desktop) */}
         <aside
-          className="hidden md:flex shrink-0 border-r border-border bg-surface flex-col h-full"
+          className="builder-chat-panel hidden md:flex shrink-0 flex-col h-full"
           style={{ width: chatWidth }}
         >
           <ChatPanel
@@ -1814,7 +1814,7 @@ export default function Builder() {
         />
       )}
       <div
-        className={`md:hidden fixed left-0 right-0 bottom-0 z-50 h-[85vh] bg-surface border-t border-border rounded-t-2xl shadow-2xl flex flex-col transition-transform duration-300 ${
+        className={`builder-chat-panel md:hidden fixed left-0 right-0 bottom-0 z-50 h-[85vh] rounded-t-2xl shadow-2xl flex flex-col transition-transform duration-300 ${
           mobileChatOpen ? "translate-y-0" : "translate-y-full"
         }`}
       >
@@ -2148,7 +2148,7 @@ function ChatPanel({
                   <button
                     onClick={() => setOpenBuildId(open ? null : b.id)}
                     aria-expanded={open}
-                    className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-md border border-border bg-surface hover:bg-surface-raised hover:border-primary/40 font-mono text-left transition-colors"
+                    className="builder-chat-accordion-trigger w-full flex items-center justify-between gap-2 px-2.5 py-2 font-mono text-left"
                   >
                     <span>Worked for {durationLabel}</span>
                     <ChevronDown
@@ -2161,7 +2161,7 @@ function ChatPanel({
 
                 {/* Expanded price details */}
                 {open && (
-                  <div className="mt-2 rounded-lg border border-border bg-surface p-3 space-y-2.5 text-xs animate-in fade-in slide-in-from-top-1 duration-150">
+                  <div className="builder-chat-accordion-body mt-2 p-3 space-y-2.5 text-xs animate-in fade-in slide-in-from-top-1 duration-150">
                     <div className="flex items-center justify-between">
                       <span className="text-secondary">Model</span>
                       <span className="font-mono text-foreground">{b.model}</span>
@@ -2253,7 +2253,7 @@ function ChatPanel({
           )}
       </div>
 
-      <div className="p-3 border-t border-border bg-surface shrink-0">
+      <div className="builder-chat-input-bar p-3 shrink-0">
         {/* Quick follow-up task chips. Hidden while a build is streaming
             and while the user is typing — both states mean the previous
             chips are stale or about to be replaced. Click drops the text
@@ -2275,7 +2275,7 @@ function ChatPanel({
             ))}
           </div>
         )}
-        <div className="prompt-glow rounded-xl border border-border bg-background">
+        <div className="prompt-glow builder-chat-input-shell rounded-xl">
           {/* Attachment + URL chips */}
           {(attachments.length > 0 || refUrls.length > 0) && (
             <div className="flex flex-wrap gap-1.5 p-2 pb-0">
@@ -2662,13 +2662,7 @@ function PreviewPane({
 // gradient surface.
 function PreviewPaneShell({ children }: { children: React.ReactNode }) {
   return (
-    <div
-      className="flex-1 flex flex-col relative overflow-hidden"
-      style={{
-        background:
-          "radial-gradient(120% 80% at 50% 0%, rgba(59,130,246,0.12) 0%, rgba(15,15,18,0) 60%), linear-gradient(180deg, #0b0b0f 0%, #0e0f14 100%)",
-      }}
-    >
+    <div className="preview-canvas flex-1 flex flex-col relative overflow-hidden">
       <div className="relative flex-1 flex flex-col">{children}</div>
     </div>
   );
@@ -2680,11 +2674,7 @@ function PreviewEmptyState() {
       <div className="relative">
         <div
           aria-hidden
-          className="absolute inset-0 -m-6 rounded-full blur-2xl opacity-40"
-          style={{
-            background:
-              "radial-gradient(circle, rgba(59,130,246,0.7) 0%, rgba(59,130,246,0) 70%)",
-          }}
+          className="preview-glow absolute inset-0 -m-6 rounded-full blur-2xl opacity-40"
         />
         <BrandLogo className="relative h-10 w-auto text-foreground opacity-95" />
       </div>
@@ -2709,11 +2699,7 @@ function PreviewBuildingState() {
       <div className="relative">
         <div
           aria-hidden
-          className="absolute inset-0 -m-4 rounded-full blur-2xl opacity-50"
-          style={{
-            background:
-              "radial-gradient(circle, rgba(59,130,246,0.7) 0%, rgba(59,130,246,0) 70%)",
-          }}
+          className="preview-glow absolute inset-0 -m-4 rounded-full blur-2xl opacity-50"
         />
         <BrandLogo className="relative h-10 w-auto" />
       </div>

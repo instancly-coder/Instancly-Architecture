@@ -445,3 +445,97 @@
   background-color: #FF3B30;
   box-shadow: 0 0 6px #FF3B3060;
 }
+
+/* ────────────────────────────────────────────────────────────────
+ * Builder chrome
+ *
+ * Pulled out of inline Tailwind soup in builder.tsx so the chat
+ * panel, accordion cards, and prompt input share one canonical
+ * surface palette instead of every component reinventing it.
+ *
+ *   - .builder-chat-panel     pure black side rail (was `bg-surface`,
+ *                             which read as washed-out grey against
+ *                             the rest of the dark builder).
+ *   - .builder-chat-input-bar transparent black footer that holds
+ *                             the prompt input + quick-task chips.
+ *                             No top border — the colour change does
+ *                             the separating.
+ *   - .builder-chat-input-shell, .builder-chat-accordion-trigger,
+ *     .builder-chat-accordion-body
+ *                             flat lighter-grey card surface, no
+ *                             border. The prompt-glow ring frames
+ *                             the input on its own; an extra border
+ *                             made it read as double-walled. The
+ *                             accordions hover-lift slightly so they
+ *                             still feel clickable without a border.
+ * ──────────────────────────────────────────────────────────── */
+/* Light-mode defaults — fall through to the same `--surface` family
+   the rest of the app uses, so a user on the system light theme sees
+   a coherent palette instead of a pitch-black panel inside a white
+   shell. The intentional pure-black + flat dark grey treatment the
+   user asked for is applied via the `.dark` overrides below. */
+.builder-chat-panel {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+.builder-chat-input-bar {
+  background-color: hsl(var(--background));
+  border-top: none;
+}
+.builder-chat-input-shell {
+  background-color: hsl(var(--surface-raised));
+  border: none;
+}
+.builder-chat-accordion-trigger {
+  background-color: hsl(var(--surface-raised));
+  border: none;
+  border-radius: var(--radius);
+  transition: background-color 0.18s ease;
+}
+.builder-chat-accordion-trigger:hover {
+  background-color: hsl(var(--surface));
+}
+.builder-chat-accordion-body {
+  background-color: hsl(var(--surface-raised));
+  border: none;
+  border-radius: calc(var(--radius) + 2px);
+}
+
+/* Dark-mode treatment requested by design:
+   chat panel goes true black so it reads as a clearly separate side
+   rail; accordions + input shell sit on a flat lighter grey with no
+   border (the prompt-glow ring frames the input on its own). */
+.dark .builder-chat-panel,
+.dark .builder-chat-input-bar {
+  background-color: #000;
+}
+.dark .builder-chat-input-shell,
+.dark .builder-chat-accordion-trigger,
+.dark .builder-chat-accordion-body {
+  background-color: hsl(0 0% 14%);
+}
+.dark .builder-chat-accordion-trigger:hover {
+  background-color: hsl(0 0% 18%);
+}
+
+/* ────────────────────────────────────────────────────────────────
+ * Preview pane backdrops
+ *
+ * The radial-blue + dark-gradient device backdrop and the soft
+ * brand glow behind the empty/building logo were duplicated as
+ * inline `style={{ background: "radial-gradient(...)" }}` in
+ * three different React components. Centralised here so the
+ * preview empty states share one consistent treatment.
+ * ──────────────────────────────────────────────────────────── */
+.preview-canvas {
+  background:
+    radial-gradient(120% 80% at 50% 0%, rgba(59, 130, 246, 0.12) 0%, rgba(15, 15, 18, 0) 60%),
+    linear-gradient(180deg, #0b0b0f 0%, #0e0f14 100%);
+}
+.preview-glow {
+  background: radial-gradient(
+    circle,
+    rgba(59, 130, 246, 0.7) 0%,
+    rgba(59, 130, 246, 0) 70%
+  );
+}
