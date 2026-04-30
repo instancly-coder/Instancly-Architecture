@@ -179,8 +179,8 @@ export default function Landing() {
             </Link>
           </div>
           <div className="px-4 sm:px-8 max-w-7xl mx-auto w-full text-center flex flex-col items-center justify-center min-h-[80vh] pt-2 pb-16">
-            <h1 className="text-4xl sm:text-5xl md:text-7xl font-black tracking-tight mb-6 leading-tight">
-              What will you build today?
+            <h1 className="text-5xl sm:text-6xl md:text-8xl lg:text-9xl font-black tracking-tighter mb-6 leading-none">
+              What will you <span className="text-primary">build</span> today?
             </h1>
             <p className="text-base sm:text-lg text-muted-foreground font-semibold max-w-xl mx-auto mb-10">
               Describe it. Watch DeployBro <span className="text-primary">build</span> it live. <span className="whitespace-nowrap">Publish to a real URL.</span>
