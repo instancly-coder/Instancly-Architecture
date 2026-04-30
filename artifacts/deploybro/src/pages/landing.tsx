@@ -9,9 +9,10 @@ import {
   ListTodo,
   ChevronDown,
   X,
+  RotateCcw,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
-import { useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useRef, useState, type KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { MarketingNav } from "@/components/marketing-nav";
 import { MarketingFooter } from "@/components/marketing-footer";
@@ -100,6 +101,19 @@ export default function Landing() {
   const [urlError, setUrlError] = useState("");
   const [attachNotice, setAttachNotice] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const promptRef = useRef<HTMLTextAreaElement>(null);
+  // Pick a random subset of IDEAS to display so the chip row stays
+  // capped at ~2 lines on the homepage. The Refresh button reshuffles.
+  const VISIBLE_IDEAS = 5;
+  const pickIdeas = useCallback(() => {
+    const indices = IDEAS.map((_, i) => i);
+    for (let i = indices.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [indices[i], indices[j]] = [indices[j]!, indices[i]!];
+    }
+    return indices.slice(0, VISIBLE_IDEAS);
+  }, []);
+  const [ideaIndices, setIdeaIndices] = useState<number[]>(() => pickIdeas());
   const { data: templates = [], isLoading } = useTemplates();
   const { data: me } = useMe();
   // Match the in-builder gate (`builder.tsx`): plan defaults to "Free"
@@ -144,22 +158,22 @@ export default function Landing() {
 
   const goAfterSubmit = () => navigate("/build/new");
 
-  // Idea-chip click path: stash a fully-fleshed prompt + the user's
-  // current model selection, then bounce straight to /build/new. We
-  // skip planMode and any attached images/URLs because the chips are
-  // a fast "show me what this looks like" entry point — anything more
-  // configurable belongs in the prompt box itself.
-  const submitIdea = (ideaPrompt: string) => {
-    try {
-      sessionStorage.setItem("deploybro:initial-prompt", ideaPrompt);
-      const modelKey =
-        HOME_MODELS.find((m) => m.name === selectedModel)?.key ?? "haiku";
-      sessionStorage.setItem(
-        "deploybro:initial-settings",
-        JSON.stringify({ model: modelKey, planMode: false }),
-      );
-    } catch {}
-    goAfterSubmit();
+  // Idea-chip click path: drop the fleshed-out prompt into the box
+  // above so the user can tweak it before sending. Only the Send
+  // button (or Enter inside the textarea) actually navigates to the
+  // builder — chips are an inspiration shortcut, not a redirect.
+  const fillPromptFromIdea = (ideaPrompt: string) => {
+    setPrompt(ideaPrompt);
+    // Focus and drop the cursor at the end so further typing extends
+    // the prompt naturally.
+    requestAnimationFrame(() => {
+      const el = promptRef.current;
+      if (!el) return;
+      el.focus();
+      try {
+        el.setSelectionRange(ideaPrompt.length, ideaPrompt.length);
+      } catch {}
+    });
   };
 
   const submit = async () => {
@@ -279,7 +293,7 @@ export default function Landing() {
                     })}
                   </div>
                 )}
-                <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={onKeyDown} placeholder={refUrls.length > 0 ? "Tell DeployBro how to redesign these references..." : planMode ? "Plan first, then build... describe your idea" : "Ask DeployBro to create a landing page for my..."} className="w-full min-h-[60px] max-h-[180px] bg-transparent p-3 text-sm text-foreground placeholder:text-muted focus:outline-none resize-none" />
+                <textarea ref={promptRef} value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={onKeyDown} placeholder={refUrls.length > 0 ? "Tell DeployBro how to redesign these references..." : planMode ? "Plan first, then build... describe your idea" : "Ask DeployBro to create a landing page for my..."} className="w-full min-h-[60px] max-h-[180px] bg-transparent p-3 text-sm text-foreground placeholder:text-muted focus:outline-none resize-none" />
                 <div className="flex items-center justify-between gap-2 px-2 pb-2">
                   <div className="flex items-center gap-1 min-w-0">
                     <input ref={fileInputRef} type="file" multiple accept="image/png,image/jpeg,image/webp,image/gif" hidden onChange={(e) => { onPickFiles(e.target.files); if (fileInputRef.current) fileInputRef.current.value = ""; }} />
@@ -390,20 +404,33 @@ export default function Landing() {
                   step. Each chip carries a fleshed-out prompt over to
                   the builder so the first build has enough context to
                   produce something real, not a stub. */}
-              <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-2 max-w-2xl mx-auto">
                 <span className="text-[10px] uppercase tracking-wider font-mono text-secondary mr-1">
                   Or try
                 </span>
-                {IDEAS.map((idea) => (
-                  <button
-                    key={idea.label}
-                    type="button"
-                    onClick={() => submitIdea(idea.prompt)}
-                    className="px-3 py-1.5 rounded-full border border-border bg-surface hover:bg-surface-raised hover:border-primary/50 text-xs font-medium text-foreground/80 hover:text-foreground transition-colors"
-                  >
-                    {idea.label}
-                  </button>
-                ))}
+                {ideaIndices.map((i) => {
+                  const idea = IDEAS[i];
+                  if (!idea) return null;
+                  return (
+                    <button
+                      key={idea.label}
+                      type="button"
+                      onClick={() => fillPromptFromIdea(idea.prompt)}
+                      className="px-3 py-1.5 rounded-full border border-border bg-surface hover:bg-surface-raised hover:border-primary/50 text-xs font-medium text-foreground/80 hover:text-foreground transition-colors"
+                    >
+                      {idea.label}
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => setIdeaIndices(pickIdeas())}
+                  aria-label="Show different ideas"
+                  title="Show different ideas"
+                  className="p-1.5 rounded-full border border-border bg-surface hover:bg-surface-raised hover:border-primary/50 text-secondary hover:text-foreground transition-colors"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                </button>
               </div>
             </div>
             <div className="mt-10 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-secondary">
