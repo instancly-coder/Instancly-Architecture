@@ -351,36 +351,6 @@ export default function Landing() {
       <MarketingNav />
       <main className="flex-1">
         <section className="relative overflow-hidden">
-          {/* Background-only stack: kept on -z-10 so the hero content
-              paints over it. Three layers:
-                1. Grid — the foundation. Covers the full hero with a
-                   soft radial mask so it reads strongest under the
-                   glow and dissolves at the edges/bottom.
-                2. Ambient halo — the wide outer wash that bleeds
-                   primary tint through the upper third.
-                3. Hot core — a tighter, brighter spot at top-center
-                   that gives the "lit from above" feeling. */}
-          <div aria-hidden className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
-            {/* 1. Grid — uses foreground-on-alpha so it's visible in
-                both themes regardless of how `--border` is tuned. */}
-            <div
-              className="absolute inset-0"
-              style={{
-                backgroundImage:
-                  "linear-gradient(to right, rgba(255,255,255,0.11) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.11) 1px, transparent 1px)",
-                backgroundSize: "48px 48px",
-                maskImage:
-                  "radial-gradient(ellipse 85% 75% at 50% 28%, black 0%, black 45%, transparent 95%)",
-                WebkitMaskImage:
-                  "radial-gradient(ellipse 85% 75% at 50% 28%, black 0%, black 45%, transparent 95%)",
-              }}
-            />
-            {/* 2. Ambient halo — wide outer wash bleeding from the
-                top, painted *over* the grid so the glow tints it. */}
-            <div className="absolute inset-0 bg-[radial-gradient(70%_55%_at_50%_0%,hsl(var(--primary)/0.18)_0%,transparent_75%)]" />
-            {/* 3. Hot core — tight, brighter top-center spot. */}
-            <div className="absolute inset-0 bg-[radial-gradient(30%_22%_at_50%_2%,hsl(var(--primary)/0.38)_0%,transparent_70%)]" />
-          </div>
           <div className="relative z-10 flex justify-center pt-10 pb-4">
             <Link href="https://deploybro.com/explore" className="glass-pill group inline-flex items-center gap-2 px-5 py-2 rounded-full text-xs font-medium text-foreground/90 transition-transform hover:-translate-y-px">
               Introducing DeployBro v2
@@ -392,7 +362,7 @@ export default function Landing() {
               What will you <span className="text-primary">build</span> today?
             </h1>
             <p className="text-base sm:text-lg text-muted-foreground font-semibold max-w-xl mx-auto mb-10">
-              Describe it. Watch DeployBro <span className="text-primary">build</span> it live. <span className="whitespace-nowrap">Publish to a real URL.</span>
+              Describe it. Watch DeployBro build it live. <span className="whitespace-nowrap">Publish to a real URL.</span>
             </p>
             <div className="w-full max-w-2xl mx-auto">
               {attachNotice && (
