@@ -351,6 +351,10 @@ export default function Landing() {
       <MarketingNav />
       <main className="flex-1">
         <section className="relative overflow-hidden">
+          <div aria-hidden className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+            <div className="absolute inset-0 bg-[radial-gradient(70%_55%_at_50%_0%,hsl(var(--primary)/0.18)_0%,transparent_75%)]" />
+            <div className="absolute inset-0 bg-[radial-gradient(30%_22%_at_50%_2%,hsl(var(--primary)/0.38)_0%,transparent_70%)]" />
+          </div>
           <div className="relative z-10 flex justify-center pt-10 pb-4">
             <Link href="https://deploybro.com/explore" className="glass-pill group inline-flex items-center gap-2 px-5 py-2 rounded-full text-xs font-medium text-foreground/90 transition-transform hover:-translate-y-px">
               Introducing DeployBro v2
