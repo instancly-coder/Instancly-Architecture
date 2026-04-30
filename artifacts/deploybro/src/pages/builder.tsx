@@ -1367,7 +1367,7 @@ export default function Builder() {
   const currentStep = phase ? { phase, text: "" } : null;
 
   return (
-    <div className="h-screen w-full bg-background flex flex-col overflow-hidden text-foreground">
+    <div className="h-[100dvh] w-full bg-background flex flex-col overflow-hidden text-foreground">
       {/* Top Navbar */}
       {/* The navbar is split at the same boundary as the body: a brand
           column whose width matches the chat panel, a draggable vertical

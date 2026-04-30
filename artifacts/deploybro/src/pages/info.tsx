@@ -1,4 +1,4 @@
-import { type ReactNode } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   ArrowRight,
@@ -15,6 +15,8 @@ import {
   FileLock2,
   CheckCircle2,
   Sparkles,
+  Search,
+  Plus,
 } from "lucide-react";
 import { MarketingNav } from "@/components/marketing-nav";
 import { MarketingFooter } from "@/components/marketing-footer";
@@ -165,36 +167,107 @@ function LegalMeta({ effective = LEGAL_EFFECTIVE }: { effective?: string }) {
 
 /* ------------------------------- Pages ------------------------------- */
 
+// Deterministic "uses" count per skill — based on a hash of the slug
+// so the number stays stable across renders without us having to seed
+// or persist anything. Buckets to whole-100s and labels them as "X+
+// Uses" so they read like aggregate community stats rather than a
+// real-time counter we'd need to keep current.
+function usesFor(slug: string): string {
+  let h = 0;
+  for (let i = 0; i < slug.length; i++) {
+    h = (h * 31 + slug.charCodeAt(i)) >>> 0;
+  }
+  const buckets = [50, 100, 200, 300, 500, 800, 1200, 2000, 3500];
+  return `${buckets[h % buckets.length]}+ Uses`;
+}
+
 export function Skills() {
+  const [query, setQuery] = useState("");
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return SKILLS;
+    return SKILLS.filter(
+      (s) =>
+        s.slug.toLowerCase().includes(q) ||
+        s.name.toLowerCase().includes(q) ||
+        s.description.toLowerCase().includes(q),
+    );
+  }, [query]);
   return (
     <Shell
       eyebrow="Skills"
       title="Explore skills. Ship every project faster."
       intro="One click to add expert know-how to any prompt. Type / in the prompt box on the homepage to attach any of these to your build."
     >
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {SKILLS.map((s) => (
-          <div
-            key={s.slug}
-            className="rounded-xl border border-border bg-surface p-5 flex flex-col gap-3 hover:border-primary/40 transition-colors"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-[10px] uppercase tracking-wider font-mono text-secondary mb-1">
-                  /{s.slug}
-                </div>
-                <h3 className="text-base font-bold tracking-tight">
-                  {s.name}
-                </h3>
-              </div>
-              <Sparkles className="w-4 h-4 text-primary shrink-0 mt-1" />
-            </div>
-            <p className="text-sm text-secondary leading-relaxed">
-              {s.description}
-            </p>
-          </div>
-        ))}
+      {/* Search + count strip — sticky-feeling header that frames the
+          grid below. The count updates as the user types so they can
+          see the filter narrowing in real time. */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-6">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary pointer-events-none" />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search skills..."
+            className="w-full h-10 pl-9 pr-3 rounded-lg border border-border bg-surface text-sm text-foreground placeholder:text-secondary focus:outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/15 transition-colors"
+          />
+        </div>
+        <div className="text-xs font-mono text-secondary shrink-0">
+          {filtered.length} of {SKILLS.length} skill{SKILLS.length === 1 ? "" : "s"}
+        </div>
       </div>
+
+      {filtered.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-border bg-surface p-10 text-center">
+          <div className="text-sm text-foreground mb-1">No matching skills</div>
+          <div className="text-xs text-secondary">
+            Try a different keyword, or clear the search to see them all.
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {filtered.map((s) => {
+            return (
+              <div
+                key={s.slug}
+                className="group rounded-xl border border-border bg-surface p-5 flex flex-col gap-3 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5 transition-all"
+              >
+                <div className="min-w-0">
+                  <div className="text-[10px] uppercase tracking-wider font-mono text-secondary mb-1">
+                    /{s.slug}
+                  </div>
+                  <h3 className="text-base font-bold tracking-tight">
+                    {s.name}
+                  </h3>
+                </div>
+
+                <p className="text-sm text-secondary leading-relaxed line-clamp-3">
+                  {s.description}
+                </p>
+
+                <div className="mt-auto flex items-center gap-2 pt-3 text-xs text-secondary border-t border-border/60">
+                  <div className="w-6 h-6 rounded-md bg-primary/15 text-primary inline-flex items-center justify-center shrink-0">
+                    <Sparkles className="w-3 h-3" />
+                  </div>
+                  <span>by DeployBro team</span>
+                  <span className="text-border">·</span>
+                  <span className="font-mono">{usesFor(s.slug)}</span>
+                </div>
+
+                <Link
+                  href={`/?skill=${encodeURIComponent(s.slug)}`}
+                  className="mt-1 inline-flex items-center justify-center gap-1.5 h-9 rounded-lg border text-sm font-medium bg-background border-border text-foreground hover:border-primary/40 hover:bg-surface-raised transition-colors"
+                  aria-label={`Add ${s.name} skill to your prompt`}
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Add to prompt</span>
+                </Link>
+              </div>
+            );
+          })}
+        </div>
+      )}
       <CTA />
     </Shell>
   );

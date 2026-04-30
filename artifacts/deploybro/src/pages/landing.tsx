@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { SKILLS, buildSkillsPrefix, type Skill } from "@/skills";
 import { Link, useLocation } from "wouter";
-import { useCallback, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { MarketingNav } from "@/components/marketing-nav";
 import { MarketingFooter } from "@/components/marketing-footer";
@@ -126,6 +126,42 @@ export default function Landing() {
   const removeSkill = (slug: string) => {
     setActiveSkills((prev) => prev.filter((s) => s !== slug));
   };
+  // Deep-link: `/?skill=foo` (or `/?skills=foo,bar`) pre-attaches the
+  // referenced skill(s) and clears the query so the URL stays clean.
+  // Any unknown slug is silently ignored. We focus the prompt so the
+  // user can immediately type their request after landing here from the
+  // /skills page's "+ Add to prompt" buttons.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const hadSkillParam =
+      params.has("skill") || params.has("skills");
+    if (!hadSkillParam) return;
+    const raw = params.get("skill") ?? params.get("skills") ?? "";
+    const slugs = raw
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => SKILLS.some((sk) => sk.slug === s));
+    // Always strip the params so the URL doesn't keep re-triggering this
+    // effect on remount and so a stale `?skill=` doesn't sit in the
+    // address bar after handling. We do this even when every slug was
+    // invalid, otherwise typos would persist visibly.
+    params.delete("skill");
+    params.delete("skills");
+    const qs = params.toString();
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${qs ? `?${qs}` : ""}${window.location.hash}`,
+    );
+    if (slugs.length === 0) return;
+    setActiveSkills((prev) => {
+      const next = [...prev];
+      for (const slug of slugs) if (!next.includes(slug)) next.push(slug);
+      return next;
+    });
+    requestAnimationFrame(() => promptRef.current?.focus());
+  }, []);
   // Slash-picker: opens when the user's current prompt looks like
   // `/<query>` with no whitespace yet, so it doesn't fire on prose
   // that happens to contain a slash mid-sentence.
