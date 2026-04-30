@@ -31,6 +31,44 @@ const HOME_MODELS: { name: string; key: "haiku" | "sonnet" | "opus"; note: strin
 
 
 
+// Quick-start project ideas surfaced as chips under the homepage prompt
+// box. Each entry has a short button label and a fully-fleshed prompt
+// that gets handed straight to the builder so the AI has enough to
+// scaffold a real first build (not "make a wedding site" but a complete
+// brief covering pages, sections, and tone).
+const IDEAS: { label: string; prompt: string }[] = [
+  {
+    label: "Wedding planner",
+    prompt:
+      "A wedding planning app for a couple. Include a guest list with RSVP tracking, a budget tracker broken down by category (venue, catering, attire, etc.), a vendor contact directory, a week-by-week task checklist, and a wedding-day timeline. Use a soft, romantic visual style with serif headings and warm neutral colors.",
+  },
+  {
+    label: "Online shop",
+    prompt:
+      "A small online shop. Include a product grid with category filters, product detail pages with an image gallery and add-to-cart, a shopping cart sheet, and a checkout form ready to wire up to Stripe. Clean, minimal layout with product photography front and center.",
+  },
+  {
+    label: "SaaS landing page",
+    prompt:
+      "A modern SaaS landing page. Include a hero with a strong headline, subhead and primary CTA, a feature grid with icons, a testimonials carousel, a 3-tier pricing table with a most-popular plan, an FAQ accordion, and a final sign-up section. Bold typography, generous whitespace, accent color for CTAs.",
+  },
+  {
+    label: "Portfolio site",
+    prompt:
+      "A personal portfolio site. Include a hero with my name and a short tagline, an about section, a case-study grid for past projects with detail pages, a writing/blog feed, and a contact form. Confident editorial design with strong typography and lots of breathing room.",
+  },
+  {
+    label: "Restaurant",
+    prompt:
+      "A restaurant website. Include a hero with the restaurant name and tagline, a full menu organized by category with prices, hours and address with a map embed, a photo gallery of the food and space, and a reservation form. Warm color palette and food-photography-driven layout.",
+  },
+  {
+    label: "Habit tracker",
+    prompt:
+      "A habit tracking app. Include a daily checklist of habits, a streak counter for each habit, a calendar heat-map view of completions over the year, weekly stats with progress charts, and a place to add or edit habits. Calm, minimal design with rounded cards and a soft accent color.",
+  },
+];
+
 const STEPS = [
   {
     step: "01",
@@ -105,6 +143,24 @@ export default function Landing() {
     });
 
   const goAfterSubmit = () => navigate("/build/new");
+
+  // Idea-chip click path: stash a fully-fleshed prompt + the user's
+  // current model selection, then bounce straight to /build/new. We
+  // skip planMode and any attached images/URLs because the chips are
+  // a fast "show me what this looks like" entry point — anything more
+  // configurable belongs in the prompt box itself.
+  const submitIdea = (ideaPrompt: string) => {
+    try {
+      sessionStorage.setItem("deploybro:initial-prompt", ideaPrompt);
+      const modelKey =
+        HOME_MODELS.find((m) => m.name === selectedModel)?.key ?? "haiku";
+      sessionStorage.setItem(
+        "deploybro:initial-settings",
+        JSON.stringify({ model: modelKey, planMode: false }),
+      );
+    } catch {}
+    goAfterSubmit();
+  };
 
   const submit = async () => {
     const value = prompt.trim();
@@ -330,8 +386,24 @@ export default function Landing() {
                   </div>
                 </div>
               </div>
-              <div className="text-[10px] text-secondary text-center mt-2">
-                Enter to send · Shift+Enter for newline
+              {/* Idea chips — quick-start presets that skip the typing
+                  step. Each chip carries a fleshed-out prompt over to
+                  the builder so the first build has enough context to
+                  produce something real, not a stub. */}
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                <span className="text-[10px] uppercase tracking-wider font-mono text-secondary mr-1">
+                  Or try
+                </span>
+                {IDEAS.map((idea) => (
+                  <button
+                    key={idea.label}
+                    type="button"
+                    onClick={() => submitIdea(idea.prompt)}
+                    className="px-3 py-1.5 rounded-full border border-border bg-surface hover:bg-surface-raised hover:border-primary/50 text-xs font-medium text-foreground/80 hover:text-foreground transition-colors"
+                  >
+                    {idea.label}
+                  </button>
+                ))}
               </div>
             </div>
             <div className="mt-10 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-secondary">
