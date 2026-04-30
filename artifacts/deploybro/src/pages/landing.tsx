@@ -11,7 +11,7 @@ import {
   X,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useRef, useState, type KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { MarketingNav } from "@/components/marketing-nav";
 import { MarketingFooter } from "@/components/marketing-footer";
@@ -29,15 +29,6 @@ const HOME_MODELS: { name: string; key: "haiku" | "sonnet" | "opus"; note: strin
   { name: "Power Bro",   key: "opus",   note: "Most capable",            isPro: true },
 ];
 
-const ROTATING_NOUNS = [
-  "side project",
-  "online shop",
-  "SaaS",
-  "dashboard",
-  "wedding site",
-  "weekend hack",
-  "dream app",
-];
 
 
 const STEPS = [
@@ -61,7 +52,6 @@ const STEPS = [
 export default function Landing() {
   const [, navigate] = useLocation();
   const [prompt, setPrompt] = useState("");
-  const [nounIndex, setNounIndex] = useState(0);
   const [selectedModel, setSelectedModel] = useState<string>("Economy Bro");
   const [planMode, setPlanMode] = useState<boolean>(false);
   const [refUrls, setRefUrls] = useState<string[]>([]);
@@ -80,12 +70,6 @@ export default function Landing() {
   // than Free unlocks the Pro-only models.
   const isFreePlan = (me?.plan ?? "Free").toLowerCase() === "free";
 
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      setNounIndex((i) => (i + 1) % ROTATING_NOUNS.length);
-    }, 1800);
-    return () => window.clearInterval(id);
-  }, []);
 
   const onPickFiles = (files: FileList | null) => {
     if (!files) return;
@@ -195,12 +179,8 @@ export default function Landing() {
             </Link>
           </div>
           <div className="px-4 sm:px-8 max-w-7xl mx-auto w-full text-center flex flex-col items-center justify-center min-h-[80vh] pt-2 pb-16">
-            <h1 className="flex flex-col items-center text-4xl sm:text-5xl md:text-7xl font-black tracking-tight mb-6 leading-none gap-3 sm:gap-4 md:gap-5">
-              <span>Ship your</span>
-              <span key={nounIndex} className="inline-block text-primary animate-rotate-in italic font-black text-5xl sm:text-6xl md:text-8xl leading-none tracking-tight" style={{ textShadow: "0 0 50px hsl(215 100% 60% / 0.6)" }}>
-                {ROTATING_NOUNS[nounIndex]}
-              </span>
-              <span>in an afternoon.</span>
+            <h1 className="text-4xl sm:text-5xl md:text-7xl font-black tracking-tight mb-6 leading-tight">
+              What will you build today?
             </h1>
             <p className="text-base sm:text-lg text-muted-foreground font-normal max-w-xl mx-auto mb-10">
               Describe it. Watch DeployBro build it live. <span className="whitespace-nowrap">Publish to a real URL.</span>
