@@ -1,7 +1,6 @@
 import {
   ArrowUp,
   ArrowRight,
-  Globe,
   Cpu,
   Check,
   Plus,
@@ -46,10 +45,6 @@ const STEPS = [
     step: "01",
     title: "Start with an idea",
     body: "Describe the app you want in plain English. Drop in a screenshot, a Notion doc, or a half-baked sketch — anything goes.",
-    chat: [
-      { who: "you", text: "I want a recipe site where I can save meals and rate them" },
-      { who: "ai", text: "Got it. Building a recipe collection with ratings and tags…" },
-    ],
   },
   {
     step: "02",
@@ -60,7 +55,6 @@ const STEPS = [
     step: "03",
     title: "Refine and ship",
     body: "Tweak it with simple feedback — \"make the hero bigger\", \"add login\". When it's right, hit Publish. You get a real URL in seconds.",
-    url: "recipes.deploybro.app",
   },
 ];
 
@@ -185,21 +179,14 @@ export default function Landing() {
       <main className="flex-1">
         <section className="relative overflow-hidden">
           {/* Background-only stack: kept on -z-10 so the hero content
-              paints over it. Holds the soft top halo + the faint flat
-              grid on the upper half. */}
+              paints over it. Holds the soft top halo + a faint flat
+              grid that dissolves before it reaches the prompt box. */}
           <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
             {/* Soft top glow — keeps the hero's primary-tinted halo */}
             <div className="absolute inset-0 bg-[radial-gradient(60%_50%_at_50%_0%,hsl(var(--primary)/0.18)_0%,transparent_70%)]" />
-            {/* Faint flat grid in the upper portion — trimmed so it
-                doesn't fight with the perspective grid below. */}
+            {/* Faint flat grid in the upper portion — fades to
+                transparent so it doesn't fight with the hero copy. */}
             <div className="absolute inset-x-0 top-0 h-1/2 opacity-[0.18] dark:opacity-[0.12]" style={{ backgroundImage: "linear-gradient(to right, hsl(var(--border)) 1px, transparent 1px), linear-gradient(to bottom, hsl(var(--border)) 1px, transparent 1px)", backgroundSize: "56px 56px", maskImage: "radial-gradient(ellipse at top, black 30%, transparent 70%)", WebkitMaskImage: "radial-gradient(ellipse at top, black 30%, transparent 70%)" }} />
-          </div>
-          {/* Perspective grid — lives outside the -z-10 wrapper so it
-              can't be hidden behind any opaque ancestor background. The
-              `pointer-events-none` on the wrapper class keeps it from
-              swallowing clicks on the hero's interactive elements. */}
-          <div aria-hidden className="perspective-grid">
-            <div className="perspective-grid__plane" />
           </div>
           <div className="relative z-10 flex justify-center pt-10 pb-4">
             <Link href="https://deploybro.com/explore" className="glass-pill group inline-flex items-center gap-2 px-5 py-2 rounded-full text-xs font-medium text-foreground/90 transition-transform hover:-translate-y-px">
@@ -224,11 +211,16 @@ export default function Landing() {
                   {attachNotice}
                 </div>
               )}
-              <div className="prompt-glow rounded-[14px] border border-border bg-background text-left focus-within:border-primary focus-within:shadow-[0_0_0_1px_hsl(var(--primary))] transition-shadow">
+              {/* Match the in-builder prompt input: same `.prompt-glow`
+                  ring + `.builder-chat-input-shell` flat surface, same
+                  compact button row. The marketing surface should feel
+                  like a continuation of the editor, not a different
+                  control. */}
+              <div className="prompt-glow builder-chat-input-shell rounded-xl">
                 {(imageFiles.length > 0 || refUrls.length > 0) && (
-                  <div className="flex flex-wrap gap-1.5 p-3 pb-0">
+                  <div className="flex flex-wrap gap-1.5 p-2 pb-0">
                     {imageFiles.map((f, i) => (
-                      <span key={`img-${i}`} className="inline-flex items-center gap-1.5 max-w-[200px] px-2 py-1 rounded-md bg-surface-raised border border-border text-xs text-foreground">
+                      <span key={`img-${i}`} className="inline-flex items-center gap-1.5 max-w-[180px] px-2 py-1 rounded-md bg-surface-raised border border-border text-[11px] text-foreground">
                         <ImageIcon className="w-3 h-3 text-secondary shrink-0" />
                         <span className="truncate">{f.name}</span>
                         <button type="button" onClick={() => setImageFiles((prev) => prev.filter((_, j) => j !== i))} className="text-secondary hover:text-foreground" aria-label="Remove image">
@@ -240,7 +232,7 @@ export default function Landing() {
                       let host = u;
                       try { host = new URL(u).host; } catch {}
                       return (
-                        <span key={`url-${i}`} className="inline-flex items-center gap-1.5 max-w-[220px] px-2 py-1 rounded-md bg-primary/10 border border-primary/30 text-xs text-foreground" title={u}>
+                        <span key={`url-${i}`} className="inline-flex items-center gap-1.5 max-w-[200px] px-2 py-1 rounded-md bg-primary/10 border border-primary/30 text-[11px] text-foreground" title={u}>
                           <Link2 className="w-3 h-3 text-primary shrink-0" />
                           <span className="truncate">{host}</span>
                           <button type="button" onClick={() => setRefUrls((prev) => prev.filter((_, j) => j !== i))} className="text-secondary hover:text-foreground" aria-label="Remove URL">
@@ -251,13 +243,13 @@ export default function Landing() {
                     })}
                   </div>
                 )}
-                <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={onKeyDown} placeholder={refUrls.length > 0 ? "Tell DeployBro how to redesign these references..." : planMode ? "Plan first, then build... describe your idea" : "Ask DeployBro to create a landing page for my..."} rows={3} className="w-full min-h-[88px] max-h-[220px] bg-transparent p-4 text-base text-foreground placeholder:text-muted outline-none resize-none" />
+                <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={onKeyDown} placeholder={refUrls.length > 0 ? "Tell DeployBro how to redesign these references..." : planMode ? "Plan first, then build... describe your idea" : "Ask DeployBro to create a landing page for my..."} className="w-full min-h-[60px] max-h-[180px] bg-transparent p-3 text-sm text-foreground placeholder:text-muted focus:outline-none resize-none" />
                 <div className="flex items-center justify-between gap-2 px-2 pb-2">
-                  <div className="flex items-center gap-1 min-w-0 flex-wrap">
+                  <div className="flex items-center gap-1 min-w-0">
                     <input ref={fileInputRef} type="file" multiple accept="image/png,image/jpeg,image/webp,image/gif" hidden onChange={(e) => { onPickFiles(e.target.files); if (fileInputRef.current) fileInputRef.current.value = ""; }} />
                     <Popover open={addOpen} onOpenChange={(o) => { setAddOpen(o); if (!o) setUrlError(""); }}>
                       <PopoverTrigger asChild>
-                        <button type="button" className="w-8 h-8 rounded-md flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors shrink-0" title="Attach image or add a URL" aria-label="Attach image or add a URL">
+                        <button type="button" className="w-7 h-7 rounded-md flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors shrink-0" title="Attach image or add a URL" aria-label="Attach image or add a URL">
                           <Plus className="w-4 h-4" />
                         </button>
                       </PopoverTrigger>
@@ -266,16 +258,16 @@ export default function Landing() {
                           <ImageIcon className="w-3.5 h-3.5 text-secondary shrink-0" />
                           <div className="flex-1 min-w-0">
                             <div className="font-medium">Upload image</div>
-                            <div className="text-[10px] text-secondary">PNG, JPG, WEBP or GIF — up to 5</div>
+                            <div className="text-[10px] text-secondary">PNG, JPG, WEBP or GIF — up to 5 images</div>
                           </div>
                         </button>
                         <div className="h-px bg-border my-1" />
                         <div className="px-2 py-1.5">
                           <div className="flex items-center gap-1.5 mb-1.5">
                             <Link2 className="w-3.5 h-3.5 text-secondary" />
-                            <span className="text-[11px] font-medium text-foreground">Redesign a website</span>
+                            <span className="text-[11px] font-medium text-foreground">Add a website to redesign</span>
                           </div>
-                          <div className="text-[10px] text-secondary mb-2 leading-snug">Paste any public URL — the AI fetches it as a starting point.</div>
+                          <div className="text-[10px] text-secondary mb-2 leading-snug">Paste any public site — the AI fetches it and uses it as a starting point.</div>
                           <div className="flex gap-1">
                             <input type="url" value={urlDraft} onChange={(e) => { setUrlDraft(e.target.value); setUrlError(""); }} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addUrl(); } }} placeholder="stripe.com" className="flex-1 min-w-0 h-7 px-2 rounded-md border border-border bg-background text-[11px] focus:outline-none focus:border-primary" autoFocus />
                             <button type="button" onClick={addUrl} disabled={!urlDraft.trim()} className="h-7 px-2 rounded-md text-[11px] font-medium bg-primary text-primary-foreground disabled:opacity-40 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors">Add</button>
@@ -286,14 +278,9 @@ export default function Landing() {
                     </Popover>
                     <Popover open={modelOpen} onOpenChange={setModelOpen}>
                       <PopoverTrigger asChild>
-                        <button type="button" className="h-8 px-2.5 rounded-md inline-flex items-center gap-1.5 text-xs font-mono text-secondary hover:text-foreground hover:bg-surface-raised transition-colors min-w-0" title="Choose model">
+                        <button type="button" className="h-7 px-2 rounded-md inline-flex items-center gap-1.5 text-[11px] font-mono text-secondary hover:text-foreground hover:bg-surface-raised transition-colors min-w-0" title="Change model">
                           <Cpu className="w-3.5 h-3.5 shrink-0" />
                           <span className="truncate">{selectedModel}</span>
-                          {HOME_MODELS.find((m) => m.name === selectedModel)?.isPro && (
-                            <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-mono uppercase tracking-wider bg-primary/15 text-primary border border-primary/30">
-                              Pro
-                            </span>
-                          )}
                           <ChevronDown className="w-3 h-3 opacity-60 shrink-0" />
                         </button>
                       </PopoverTrigger>
@@ -304,10 +291,7 @@ export default function Landing() {
                           // Mirrors the in-builder model menu: Pro-only
                           // entries stay visible so free users know what
                           // they're missing, but clicking one bounces to
-                          // billing instead of switching the model. The
-                          // Pro pill sits on the right of the row, paired
-                          // with the active-check, so the model name
-                          // column stays clean and aligned.
+                          // billing instead of switching the model.
                           const locked = isFreePlan && !!m.isPro;
                           return (
                             <button
@@ -336,14 +320,16 @@ export default function Landing() {
                               }`}
                             >
                               <div className="flex-1 min-w-0">
-                                <div className="font-medium truncate">{m.name}</div>
+                                <div className="font-medium truncate flex items-center gap-1.5">
+                                  <span className="truncate">{m.name}</span>
+                                  {m.isPro && (
+                                    <span className="text-[9px] leading-none px-1.5 py-0.5 rounded bg-primary/15 text-primary border border-primary/25 font-mono uppercase tracking-wider shrink-0">
+                                      Pro
+                                    </span>
+                                  )}
+                                </div>
                                 <div className="text-[10px] text-secondary font-mono">{m.note}</div>
                               </div>
-                              {m.isPro && (
-                                <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-mono uppercase tracking-wider bg-primary/15 text-primary border border-primary/30">
-                                  Pro
-                                </span>
-                              )}
                               {active && !locked && (
                                 <Check className="w-3.5 h-3.5 text-primary shrink-0" />
                               )}
@@ -354,7 +340,7 @@ export default function Landing() {
                     </Popover>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <button type="button" onClick={() => setPlanMode(!planMode)} className={`h-8 px-2.5 rounded-md inline-flex items-center gap-1.5 text-xs transition-colors ${planMode ? "bg-primary/15 text-primary border border-primary/30" : "text-secondary hover:text-foreground hover:bg-surface-raised border border-transparent"}`} title={planMode ? "Plan mode is on — AI plans before coding" : "Turn on plan mode"} aria-pressed={planMode}>
+                    <button type="button" onClick={() => setPlanMode(!planMode)} className={`h-7 px-2 rounded-md inline-flex items-center gap-1.5 text-[11px] font-mono transition-colors ${planMode ? "bg-primary/15 text-primary border border-primary/30" : "text-secondary hover:text-foreground hover:bg-surface-raised border border-transparent"}`} title={planMode ? "Plan mode is on — AI plans before coding" : "Turn on plan mode"} aria-pressed={planMode}>
                       <ListTodo className="w-3.5 h-3.5 shrink-0" />
                       <span>Plan</span>
                     </button>
@@ -363,6 +349,9 @@ export default function Landing() {
                     </button>
                   </div>
                 </div>
+              </div>
+              <div className="text-[10px] text-secondary text-center mt-2">
+                Enter to send · Shift+Enter for newline
               </div>
             </div>
             <div className="mt-10 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-secondary">
@@ -384,93 +373,22 @@ export default function Landing() {
                 Three moves. Each one is a single sentence. No frameworks to learn.
               </p>
             </div>
-            <div className="space-y-20 md:space-y-28">
-              {STEPS.map((s, i) => {
-                const reverse = i % 2 === 1;
-                return (
-                  <div key={s.step} className={`grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-14 items-center ${reverse ? "md:[&>*:first-child]:order-2" : ""}`}>
-                    <div>
-                      <div className="text-xs font-mono text-primary mb-3">STEP {s.step}</div>
-                      <h3 className="text-2xl md:text-3xl font-bold mb-4 tracking-tight">{s.title}</h3>
-                      <p className="text-secondary text-base md:text-lg leading-relaxed">{s.body}</p>
-                    </div>
-                    <div className="relative">
-                      <div className="absolute -inset-6 bg-primary/10 blur-3xl rounded-full -z-10" />
-                      {i === 0 && (
-                        <div className="rounded-xl border border-border bg-surface shadow-2xl shadow-black/10 dark:shadow-black/40 p-4 space-y-3">
-                          {s.chat?.map((m, j) => (
-                            <div key={j} className={`flex ${m.who === "you" ? "justify-end" : "justify-start"}`}>
-                              <div className={`max-w-[80%] px-4 py-2.5 rounded-xl text-sm ${m.who === "you" ? "bg-primary/15 text-primary rounded-br-sm border border-primary/25" : "bg-surface-raised text-foreground rounded-bl-sm border border-border"}`}>
-                                {m.text}
-                              </div>
-                            </div>
-                          ))}
-                          <div className="flex items-center gap-2 pt-2 text-xs text-secondary">
-                            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                            Building…
-                          </div>
-                        </div>
-                      )}
-                      {i === 1 && (
-                        <div className="rounded-xl border border-border bg-surface shadow-2xl shadow-black/10 dark:shadow-black/40 overflow-hidden">
-                          <div className="flex items-center gap-1.5 px-3 py-2 border-b border-border bg-surface-raised">
-                            <span className="w-2.5 h-2.5 rounded-full bg-red-400/70" />
-                            <span className="w-2.5 h-2.5 rounded-full bg-yellow-400/70" />
-                            <span className="w-2.5 h-2.5 rounded-full bg-green-400/70" />
-                            <span className="ml-3 text-xs font-mono text-secondary truncate">recipes.app — preview</span>
-                          </div>
-                          <div className="p-5 bg-surface-raised/30 space-y-4">
-                            <div className="space-y-2">
-                              <div className="h-3 w-1/3 rounded bg-foreground/15" />
-                              <div className="h-2 w-2/3 rounded bg-foreground/10" />
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                              {[1, 2, 3, 4].map((n) => (
-                                <div key={n} className="rounded-lg border border-border bg-background p-2.5">
-                                  <div className="aspect-[4/3] rounded bg-gradient-to-br from-primary/30 to-foreground/5 mb-2" />
-                                  <div className="h-1.5 w-3/4 rounded bg-foreground/15 mb-1" />
-                                  <div className="flex gap-0.5">
-                                    {[1, 2, 3, 4, 5].map((s) => (
-                                      <span key={s} className={`w-1 h-1 rounded-full ${s <= (n % 4) + 2 ? "bg-primary" : "bg-foreground/20"}`} />
-                                    ))}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                          <div className="px-4 py-2 border-t border-border flex items-center gap-2 text-xs">
-                            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                            <span className="text-secondary">Adding \"Save recipe\" button…</span>
-                          </div>
-                        </div>
-                      )}
-                      {i === 2 && (
-                        <div className="rounded-xl border border-border bg-surface shadow-2xl shadow-black/10 dark:shadow-black/40 overflow-hidden">
-                          <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-surface-raised">
-                            <Globe className="w-3.5 h-3.5 text-primary" />
-                            <span className="text-xs font-mono text-secondary truncate">https://{s.url}</span>
-                            <span className="ml-auto text-[10px] font-mono px-1.5 py-0.5 rounded bg-success/15 text-success">LIVE</span>
-                          </div>
-                          <div className="p-5 bg-surface-raised/30">
-                            <div className="h-3 w-1/3 rounded bg-foreground/10 mb-3" />
-                            <div className="h-2 w-2/3 rounded bg-foreground/10 mb-2" />
-                            <div className="h-2 w-1/2 rounded bg-foreground/10 mb-5" />
-                            <div className="grid grid-cols-3 gap-2">
-                              {[1, 2, 3].map((n) => (
-                                <div key={n} className="aspect-square rounded bg-gradient-to-br from-primary/30 to-foreground/5" />
-                              ))}
-                            </div>
-                          </div>
-                          <div className="px-4 py-2 border-t border-border flex items-center gap-2 text-xs">
-                            <Check className="w-3 h-3 text-primary" />
-                            <span className="text-secondary">Deployed in 4.2s</span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+            {/* Three plain cards — same hover-elevate treatment used
+                everywhere else on the marketing surface. Replaces the
+                previous full-width illustrated panels which made the
+                section dominate the page; the simpler cards keep the
+                "three quick moves" promise without burying the rest. */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+              {STEPS.map((s) => (
+                <div
+                  key={s.step}
+                  className="rounded-xl border border-border bg-surface p-6 md:p-7 hover-elevate transition-colors"
+                >
+                  <div className="text-xs font-mono text-primary mb-3">STEP {s.step}</div>
+                  <h3 className="text-xl md:text-2xl font-bold mb-3 tracking-tight">{s.title}</h3>
+                  <p className="text-secondary text-sm md:text-base leading-relaxed">{s.body}</p>
+                </div>
+              ))}
             </div>
           </div>
         </section>
