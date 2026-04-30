@@ -182,8 +182,8 @@ export default function Landing() {
             <h1 className="text-4xl sm:text-5xl md:text-7xl font-black tracking-tight mb-6 leading-tight">
               What will you build today?
             </h1>
-            <p className="text-base sm:text-lg text-muted-foreground font-normal max-w-xl mx-auto mb-10">
-              Describe it. Watch DeployBro build it live. <span className="whitespace-nowrap">Publish to a real URL.</span>
+            <p className="text-base sm:text-lg text-muted-foreground font-semibold max-w-xl mx-auto mb-10">
+              Describe it. Watch DeployBro <span className="text-primary">build</span> it live. <span className="whitespace-nowrap">Publish to a real URL.</span>
             </p>
             <div className="w-full max-w-2xl mx-auto">
               {attachNotice && (
