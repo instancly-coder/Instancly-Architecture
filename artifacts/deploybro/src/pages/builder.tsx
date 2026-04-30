@@ -27,14 +27,12 @@ import {
   ArrowRight,
   RotateCw,
   RefreshCw,
-  Search,
   Check,
   ArrowUp,
   Square,
   Paperclip,
   Image as ImageIcon,
   Link2,
-  ListTodo,
   Cpu,
   Globe,
   ShieldCheck,
@@ -473,132 +471,72 @@ async function* readSSE(res: Response): AsyncGenerator<{ event: string; data: an
   }
 }
 
-// Tab strip used in two places: inside the navbar on desktop (with labels)
-// and as a standalone row on mobile (icons only). Defined at module scope so
-// each instance owns its own popover/search state without resetting on every
-// parent re-render.
-function BuilderTabStrip({
-  openTabs,
+// The old BuilderTabStrip (horizontal tabs + add-tab popover) was
+// replaced by BuilderTabsMenu — see below — which collapses every
+// view into a single dropdown trigger next to Chat ↔ Preview.
+
+// Compact "View" picker that replaces the old horizontal tab strip.
+// The current tab name + chevron act as the trigger; the dropdown
+// lists every available tab as a menu item. Selecting one switches
+// the right pane to that view (and on mobile, also flips the
+// Chat ↔ Preview toggle to Preview so the user actually sees it).
+function BuilderTabsMenu({
   activeTab,
   setActiveTab,
-  closeTab,
   openTab,
-  compact = false,
+  onPick,
   className = "",
+  triggerClassName = "",
 }: {
-  openTabs: TabKey[];
   activeTab: TabKey;
   setActiveTab: (k: TabKey) => void;
-  closeTab: (k: TabKey) => void;
   openTab: (k: TabKey) => void;
-  compact?: boolean;
+  onPick?: (k: TabKey) => void;
   className?: string;
+  triggerClassName?: string;
 }) {
-  const [addOpen, setAddOpen] = useState(false);
-  const [tabSearch, setTabSearch] = useState("");
-
-  const availableToAdd = ADDABLE_TABS.filter((k) => !openTabs.includes(k)).filter(
-    (k) => TAB_META[k].label.toLowerCase().includes(tabSearch.toLowerCase())
-  );
-
-  const handlePick = (k: TabKey) => {
+  const ALL_TABS: TabKey[] = ["preview", ...ADDABLE_TABS];
+  const activeMeta = TAB_META[activeTab];
+  const ActiveIcon = activeMeta.icon;
+  const handleSelect = (k: TabKey) => {
     openTab(k);
-    setAddOpen(false);
-    setTabSearch("");
+    setActiveTab(k);
+    onPick?.(k);
   };
-
   return (
     <div className={className}>
-      {openTabs.map((key) => {
-        const meta = TAB_META[key];
-        const Icon = meta.icon;
-        const active = activeTab === key;
-        const closeable = key !== "preview";
-        return (
-          <div
-            key={key}
-            className={`group h-8 ${compact ? "pl-2 pr-1" : "pl-3 pr-1"} rounded-md text-sm flex items-center gap-2 whitespace-nowrap transition-colors border-2 ${
-              active
-                ? "bg-primary/10 text-primary border-primary"
-                : "text-secondary hover:text-foreground hover:bg-surface-raised border-transparent"
-            }`}
-          >
-            <button
-              onClick={() => setActiveTab(key)}
-              className="flex items-center gap-2 h-full pr-1"
-              aria-label={meta.label}
-              title={compact ? meta.label : undefined}
-            >
-              <Icon className="w-4 h-4" />
-              {!compact && <span>{meta.label}</span>}
-            </button>
-            {closeable ? (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  closeTab(key);
-                }}
-                className={`w-5 h-5 rounded flex items-center justify-center ml-0.5 transition-colors ${
-                  active
-                    ? "text-primary/70 hover:text-primary hover:bg-primary/10"
-                    : "text-secondary hover:text-foreground hover:bg-background/60"
-                }`}
-                aria-label={`Close ${meta.label}`}
-              >
-                <X className="w-3 h-3" />
-              </button>
-            ) : (
-              <span className="w-1.5" />
-            )}
-          </div>
-        );
-      })}
-
-      <Popover open={addOpen} onOpenChange={setAddOpen}>
-        <PopoverTrigger asChild>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
           <button
-            className="ml-1 w-7 h-7 rounded-md flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors shrink-0"
-            aria-label="Add tab"
-            title="Add tab"
+            type="button"
+            className={`h-7 inline-flex items-center gap-1.5 rounded-md px-2 text-xs font-medium text-secondary hover:text-foreground hover:bg-surface-raised border border-border transition-colors ${triggerClassName}`}
+            aria-label="Switch view"
+            title="Switch view"
           >
-            <Plus className="w-4 h-4" />
+            <ActiveIcon className="w-3.5 h-3.5" />
+            <span className="truncate max-w-[10rem]">{activeMeta.label}</span>
+            <ChevronDown className="w-3.5 h-3.5 text-secondary" />
           </button>
-        </PopoverTrigger>
-        <PopoverContent align="start" className="w-64 p-2 border-border">
-          <div className="relative mb-2">
-            <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-secondary" />
-            <input
-              autoFocus
-              value={tabSearch}
-              onChange={(e) => setTabSearch(e.target.value)}
-              placeholder="Search tabs..."
-              className="w-full bg-background border border-border rounded-md pl-7 pr-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-primary"
-            />
-          </div>
-          <div className="max-h-64 overflow-y-auto">
-            {availableToAdd.length === 0 ? (
-              <div className="text-xs text-secondary px-2 py-3 text-center">
-                No tabs match
-              </div>
-            ) : (
-              availableToAdd.map((k) => {
-                const meta = TAB_META[k];
-                const Icon = meta.icon;
-                return (
-                  <button
-                    key={k}
-                    onClick={() => handlePick(k)}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-left text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
-                  >
-                    <Icon className="w-3.5 h-3.5" />
-                    <span>{meta.label}</span>
-                  </button>
-                );
-              })
-            )}
-          </div>
-        </PopoverContent>
-      </Popover>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-56 border-border max-h-[70vh] overflow-y-auto">
+          {ALL_TABS.map((key) => {
+            const meta = TAB_META[key];
+            const Icon = meta.icon;
+            const active = activeTab === key;
+            return (
+              <DropdownMenuItem
+                key={key}
+                onSelect={() => handleSelect(key)}
+                className={`flex items-center gap-2 cursor-pointer ${active ? "text-primary" : ""}`}
+              >
+                <Icon className="w-4 h-4" />
+                <span className="flex-1 text-sm">{meta.label}</span>
+                {active && <Check className="w-3.5 h-3.5" />}
+              </DropdownMenuItem>
+            );
+          })}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }
@@ -1525,6 +1463,18 @@ export default function Builder() {
               <span>Preview</span>
             </button>
           </div>
+          {/* Mobile View picker — sits next to the Chat ↔ Preview
+              toggle so the user can swap the right pane between
+              Preview / Files / Database / Env / etc without a
+              dedicated tab strip. Picking a non-Chat view also flips
+              the toggle to Preview so the choice is visible. */}
+          <BuilderTabsMenu
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+            openTab={openTab}
+            onPick={() => setMobileShowChat(false)}
+            className="md:hidden inline-flex"
+          />
         </div>
 
         {/* Drag handle aligned with the body's chat-resize handle so the
@@ -1536,15 +1486,16 @@ export default function Builder() {
           title="Drag to resize · double-click to reset"
         />
 
-        {/* Tab strip — desktop only, lives in the navbar to use the
-            otherwise-empty middle space. Mobile gets its own row below. */}
-        <BuilderTabStrip
-          openTabs={openTabs}
+        {/* View picker — desktop only. Replaces the old horizontal
+            tab strip with a single dropdown trigger so the navbar
+            doesn't get crowded as more views (Database, Env Vars, …)
+            are added. Mobile gets the same picker placed next to the
+            Chat ↔ Preview toggle. */}
+        <BuilderTabsMenu
           activeTab={activeTab}
           setActiveTab={setActiveTab}
-          closeTab={closeTab}
           openTab={openTab}
-          className="hidden md:flex flex-1 items-center gap-1 px-2 overflow-x-auto min-w-0"
+          className="hidden md:flex items-center gap-1 px-2 min-w-0"
         />
 
         <div className="flex items-center gap-2 md:gap-3 shrink-0 ml-auto px-3 md:px-4">
@@ -1739,17 +1690,9 @@ export default function Builder() {
             mobileShowChat ? "hidden md:flex" : "flex"
           }`}
         >
-          {/* Tab strip — mobile only (icons), since the desktop strip lives
-              inside the navbar above. */}
-          <BuilderTabStrip
-            compact
-            openTabs={openTabs}
-            activeTab={activeTab}
-            setActiveTab={setActiveTab}
-            closeTab={closeTab}
-            openTab={openTab}
-            className="md:hidden h-11 border-b border-border bg-surface flex items-center px-2 gap-1 overflow-x-auto shrink-0"
-          />
+          {/* The mobile tab strip used to live here. View switching
+              now happens via the BuilderTabsMenu in the topbar (next
+              to the Chat ↔ Preview toggle). */}
 
           {/* Live URL bar (preview only) — hidden on mobile by default, toggleable via 3-dots menu */}
           {activeTab === "preview" && (
@@ -2526,7 +2469,21 @@ function ChatPanel({
                 title={planMode ? "Plan mode is on — AI plans before coding" : "Turn on plan mode"}
                 aria-pressed={planMode}
               >
-                <ListTodo className="w-3.5 h-3.5 shrink-0" />
+                {/* Visual checkbox indicator instead of an icon —
+                    matches the homepage Plan toggle so the on/off
+                    state reads at a glance. */}
+                <span
+                  aria-hidden="true"
+                  className={`w-3.5 h-3.5 rounded-[3px] border flex items-center justify-center shrink-0 transition-colors ${
+                    planMode
+                      ? "bg-primary border-primary"
+                      : "border-secondary/70"
+                  }`}
+                >
+                  {planMode && (
+                    <Check className="w-2.5 h-2.5 text-primary-foreground" strokeWidth={3} />
+                  )}
+                </span>
                 <span>Plan</span>
               </button>
 

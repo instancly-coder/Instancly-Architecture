@@ -6,7 +6,6 @@ import {
   Plus,
   Image as ImageIcon,
   Link2,
-  ListTodo,
   ChevronDown,
   X,
   RotateCcw,
@@ -391,7 +390,21 @@ export default function Landing() {
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     <button type="button" onClick={() => setPlanMode(!planMode)} className={`h-7 px-2 rounded-md inline-flex items-center gap-1.5 text-[11px] font-mono transition-colors ${planMode ? "bg-primary/15 text-primary border border-primary/30" : "text-secondary hover:text-foreground hover:bg-surface-raised border border-transparent"}`} title={planMode ? "Plan mode is on — AI plans before coding" : "Turn on plan mode"} aria-pressed={planMode}>
-                      <ListTodo className="w-3.5 h-3.5 shrink-0" />
+                      {/* Visual checkbox indicator. Mirrors the
+                          builder's Plan toggle so the on/off state
+                          reads instantly without needing the icon. */}
+                      <span
+                        aria-hidden="true"
+                        className={`w-3.5 h-3.5 rounded-[3px] border flex items-center justify-center shrink-0 transition-colors ${
+                          planMode
+                            ? "bg-primary border-primary"
+                            : "border-secondary/70"
+                        }`}
+                      >
+                        {planMode && (
+                          <Check className="w-2.5 h-2.5 text-primary-foreground" strokeWidth={3} />
+                        )}
+                      </span>
                       <span>Plan</span>
                     </button>
                     <button type="button" onClick={() => void submit()} aria-label="Generate" disabled={!prompt.trim()} className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors" title="Send">

@@ -1,0 +1,166 @@
+Explore skills. Ship every project faster.
+One click to add expert know-how to any prompt.
+
+Accessibility
+
+SEO
+
+Design System
+
+Add Skill
+
+Performance
+
+Copywriting
+
+Localization
+
+Micro-interactions
+
+Onboarding
+
+Accessibility
+
+SEO
+
+Design System
+
+Add Skill
+
+Performance
+
+Copywriting
+
+Localization
+
+Micro-interactions
+
+Onboarding
+
++ Add skill
+polish
+Performs a final quality pass fixing alignment, spacing, consistency, and micro-detail issues before shipping. Elevates good work to great work.
+Learn more
+by Sticklight team
+•
+100+ Uses
+
++ Add to prompt
+seo
+SEO best practices for React + Vite + Tailwind CSS apps built with sticklight.com. Use when building or reviewing web pages, writing content for the web, generating meta tags, improving search rankings, setting up sitemap or robots.txt, adding structured data (JSON-LD), or optimizing images and performance in a Vite-based SPA. Covers: static fallback meta tags, dynamic SEO with @unhead/react, useSEO hook, sitemaps (dynamic via Edge Function and static), semantic HTML, heading hierarchy, image SEO, link best practices, URL structure, Core Web Vitals, favicon and OG image specs, mobile-first design, and IndexNow integration for instant search engine notifications.
+Learn more
+by Sticklight team
+•
+100+ Uses
+
++ Add to prompt
+3d-web-experience
+Build interactive 3D scenes for the web using Three.js r128. Use this skill ONLY when the user explicitly asks for 3D — product viewers, 3D hero backgrounds, interactive geometry, particle scenes, or scroll-driven 3D camera work. Do NOT trigger for standard 2D websites, CSS animations, or SVG graphics. Trigger words: 3D, three.js, WebGL, 3D scene, product viewer, 3D background, interactive 3D, rotating model, particle system, 3D experience.
+Learn more
+by Sticklight team
+•
+90+ Uses
+
++ Add to prompt
+auth
+Authentication and authorization patterns for React + Vite + Tailwind apps using Cloud Backend (Supabase). Use when implementing login, signup, password reset, session management, protected routes, Row Level Security (RLS), role-based access control, or user data tables. Covers: profiles table with auto-creation trigger, user_roles table, AuthContext with getUser() (not getSession()), ProtectedRoute component, full auth pages (Login, Signup, Forgot Password, Reset Password with expired link handling), logout, user-owned data with RLS policies, and security best practices.
+Learn more
+by Sticklight team
+•
+90+ Uses
+
++ Add to prompt
+ui-ux-patterns
+Measurable UX rules, UI style catalog, industry-specific guidance, and pre-delivery checklist for any frontend project. ALWAYS trigger this skill alongside frontend-design when building websites, landing pages, dashboards, apps, React components, or any interactive UI. Also trigger when users mention "UX," "usability," "accessibility," "a11y," "WCAG," "responsive," "mobile-friendly," "user experience," "UI patterns," "checklist," or ask to audit, review, or improve the usability of any frontend. This skill provides the hard numbers — minimum sizes, contrast ratios, timing values, spacing rules — so Claude doesn't guess.
+Learn more
+by Sticklight team
+•
+80+ Uses
+
++ Add to prompt
+frontend-design
+Create distinctive, production-grade frontend interfaces with high design quality. Use this skill when the user asks to build web components, pages, or applications. Generates creative, polished code that avoids generic AI aesthetics.
+Learn more
+by Sticklight team
+•
+80+ Uses
+
++ Add to prompt
+delight
+Add moments of joy, personality, and unexpected touches that make interfaces memorable and enjoyable to use. Elevates functional to delightful. Use when the user asks to add polish, personality, animations, micro-interactions, delight, or make an interface feel fun or memorable.
+Learn more
+by Sticklight team
+•
+80+ Uses
+
++ Add to prompt
+performance
+Core Web Vitals optimization for React + TypeScript + Vite + Tailwind CSS apps built with sticklight.com. Use when optimizing page load speed, improving Lighthouse scores, fixing First Contentful Paint (FCP), Largest Contentful Paint (LCP), Cumulative Layout Shift (CLS), Total Blocking Time (TBT), or Interaction to Next Paint (INP). Focused on what search engines and users experience on page load. Covers: critical rendering path (loading shell, resource hints, above-the-fold optimization), font loading (preconnect, preload, display=swap), third-party script deferral (analytics, GTM, chat widgets), image optimization (dimensions, loading priority, fetchPriority), CSS performance (GPU-accelerated animations, transform/opacity, prefers-reduced-motion), passive event listeners, code splitting with React.lazy, skeleton screens, and avoiding heavy dependencies.
+Learn more
+by Sticklight team
+•
+80+ Uses
+
++ Add to prompt
+animation-patterns
+Review a feature and enhance it with purposeful animations, micro-interactions, and motion effects that improve usability and delight. Use when the user mentions adding animation, transitions, micro-interactions, motion design, hover effects, or making the UI feel more alive.
+Learn more
+by Sticklight team
+•
+70+ Uses
+
++ Add to prompt
+responsive
+Make websites, apps, and dashboards work beautifully across screen sizes. Use when the user mentions responsive, mobile, tablet, breakpoints, adaptive layout, touch targets, or cross-device — or when building any UI that needs to work beyond desktop. Self-contained — no other skills required.
+Learn more
+by Sticklight team
+•
+70+ Uses
+
++ Add to prompt
+anti-ai-design-slop
+Kill list of visual cliches, layout tropes, and UI patterns that make frontends look AI-generated. ALWAYS trigger this skill alongside frontend-design whenever Claude builds any frontend — websites, landing pages, dashboards, React components, HTML pages, artifacts, or any visual UI. Also trigger when users say "make it look less AI," "this looks generic," "don't make it look like every other AI site," "avoid the AI look," "no AI slop," or when reviewing/auditing any frontend output. This is a companion checklist of what to NEVER do — the frontend-design skill handles what TO do.
+Learn more
+by Sticklight team
+•
+70+ Uses
+
++ Add to prompt
+skill-creator
+Guide for creating or improving Sticklight user skills (specialized instructions stored in the Skills editor). Use when the user wants to add a new skill, rewrite skill content, tune descriptions for better triggering, or migrate ideas from file-based skill docs into Sticklight's DB format.
+Learn more
+by Sticklight team
+•
+60+ Uses
+
++ Add to prompt
+shadows
+Shadow and elevation system for creating depth hierarchy. Covers sharp, soft, glow, layered, and neumorphic shadow styles. Includes tinted shadows, dark mode patterns, performant animations, and elevation formulas. Use when adding shadows, depth, or elevation to any UI element.
+Learn more
+by Sticklight team
+•
+60+ Uses
+
++ Add to prompt
+mobile-design
+Mobile-first design system for building iOS and Android apps with React Native, Flutter, or native frameworks. Covers touch interaction, performance, platform conventions, and visual quality. Prevents generic AI mobile aesthetics (pill overload, glassmorphism shells, gradient hero sections, metric-card grids) and enforces human-designed, functional UI. Use whenever building any mobile app, mobile component, React Native screen, Flutter widget, or mobile UI — even if the user doesn't say "mobile design system." Also trigger when reviewing mobile code for UX or performance issues, or when the user describes an app that "looks too AI-generated" or "generic."
+Learn more
+by Sticklight team
+•
+50+ Uses
+
++ Add to prompt
+
+FAQs
+
+What exactly is a skill?
+
+Do I need to know how to code to create a skill?
+
+Can I use skills across multiple projects?
+
+What's the difference between a skill and a template?
+
+How do I upload my own skill to Sticklight?
+
+What makes a good skill?
