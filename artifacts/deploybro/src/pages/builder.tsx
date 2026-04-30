@@ -1428,53 +1428,93 @@ export default function Builder() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          {/* Mobile Chat ↔ Preview toggle. Lives where the project
-              dropdown sits on desktop. Replaces the old floating chat
-              FAB so the workspace below has one consistent way to
-              switch sides on small screens. */}
-          <div
-            className="md:hidden inline-flex items-center rounded-md bg-surface-raised border border-border p-0.5 ml-1"
-            aria-label="Switch between chat and preview"
-          >
-            <button
-              type="button"
-              aria-pressed={mobileShowChat}
-              onClick={() => setMobileShowChat(true)}
-              className={`h-7 px-3 rounded text-xs font-medium inline-flex items-center gap-1.5 transition-colors ${
-                mobileShowChat
-                  ? "bg-primary text-primary-foreground"
-                  : "text-secondary hover:text-foreground"
-              }`}
-            >
-              <MessageSquare className="w-3.5 h-3.5" />
-              <span>Chat</span>
-            </button>
-            <button
-              type="button"
-              aria-pressed={!mobileShowChat}
-              onClick={() => setMobileShowChat(false)}
-              className={`h-7 px-3 rounded text-xs font-medium inline-flex items-center gap-1.5 transition-colors ${
-                !mobileShowChat
-                  ? "bg-primary text-primary-foreground"
-                  : "text-secondary hover:text-foreground"
-              }`}
-            >
-              <Eye className="w-3.5 h-3.5" />
-              <span>Preview</span>
-            </button>
-          </div>
-          {/* Mobile View picker — sits next to the Chat ↔ Preview
-              toggle so the user can swap the right pane between
-              Preview / Files / Database / Env / etc without a
-              dedicated tab strip. Picking a non-Chat view also flips
-              the toggle to Preview so the choice is visible. */}
-          <BuilderTabsMenu
-            activeTab={activeTab}
-            setActiveTab={setActiveTab}
-            openTab={openTab}
-            onPick={() => setMobileShowChat(false)}
-            className="md:hidden inline-flex"
-          />
+          {/* Mobile Chat ↔ Preview toggle. One combined segmented
+              control: Chat button, the right-pane button (whose label
+              reflects the current view), and a chevron trigger that
+              opens the view picker. Picking a view from the dropdown
+              also flips to the right pane so the change is visible.
+              Replaces both the old standalone Chat ↔ Preview toggle
+              and the separate BuilderTabsMenu that used to sit
+              alongside it. */}
+          {(() => {
+            const activeMeta = TAB_META[activeTab];
+            const ActiveIcon = activeMeta.icon;
+            const ALL_TABS: TabKey[] = ["preview", ...ADDABLE_TABS];
+            return (
+              <div
+                className="md:hidden inline-flex items-center rounded-md bg-surface-raised border border-border p-0.5 ml-1"
+                aria-label="Switch between chat and preview"
+              >
+                <button
+                  type="button"
+                  aria-pressed={mobileShowChat}
+                  onClick={() => setMobileShowChat(true)}
+                  className={`h-7 px-3 rounded text-xs font-medium inline-flex items-center gap-1.5 transition-colors ${
+                    mobileShowChat
+                      ? "bg-primary text-primary-foreground"
+                      : "text-secondary hover:text-foreground"
+                  }`}
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  <span>Chat</span>
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={!mobileShowChat}
+                  onClick={() => setMobileShowChat(false)}
+                  className={`h-7 pl-3 pr-2 rounded-l text-xs font-medium inline-flex items-center gap-1.5 transition-colors ${
+                    !mobileShowChat
+                      ? "bg-primary text-primary-foreground"
+                      : "text-secondary hover:text-foreground"
+                  }`}
+                >
+                  <ActiveIcon className="w-3.5 h-3.5" />
+                  <span className="truncate max-w-[6rem]">{activeMeta.label}</span>
+                </button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label="Pick a view"
+                      title="Pick a view"
+                      className={`h-7 px-1.5 rounded-r inline-flex items-center transition-colors ${
+                        !mobileShowChat
+                          ? "bg-primary text-primary-foreground"
+                          : "text-secondary hover:text-foreground"
+                      }`}
+                    >
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="end"
+                    className="w-56 border-border max-h-[70vh] overflow-y-auto"
+                  >
+                    {ALL_TABS.map((key) => {
+                      const meta = TAB_META[key];
+                      const Icon = meta.icon;
+                      const active = activeTab === key;
+                      return (
+                        <DropdownMenuItem
+                          key={key}
+                          onSelect={() => {
+                            openTab(key);
+                            setActiveTab(key);
+                            setMobileShowChat(false);
+                          }}
+                          className={`flex items-center gap-2 cursor-pointer ${active ? "text-primary" : ""}`}
+                        >
+                          <Icon className="w-4 h-4" />
+                          <span className="flex-1 text-sm">{meta.label}</span>
+                          {active && <Check className="w-3.5 h-3.5" />}
+                        </DropdownMenuItem>
+                      );
+                    })}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Drag handle aligned with the body's chat-resize handle so the
