@@ -9,7 +9,9 @@ import {
   ChevronDown,
   X,
   RotateCcw,
+  Sparkles,
 } from "lucide-react";
+import { SKILLS, buildSkillsPrefix, type Skill } from "@/skills";
 import { Link, useLocation } from "wouter";
 import { useCallback, useRef, useState, type KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
@@ -113,6 +115,45 @@ export default function Landing() {
     return indices.slice(0, VISIBLE_IDEAS);
   }, []);
   const [ideaIndices, setIdeaIndices] = useState<number[]>(() => pickIdeas());
+  // Active skills attached to this prompt. Each one prepends its
+  // body to the final prompt before it goes to the builder, so the
+  // AI knows which "expert hat" to wear. Slash-picker (below) adds
+  // them; the chips above the textarea remove them.
+  const [activeSkills, setActiveSkills] = useState<string[]>([]);
+  const addSkill = (slug: string) => {
+    setActiveSkills((prev) => (prev.includes(slug) ? prev : [...prev, slug]));
+  };
+  const removeSkill = (slug: string) => {
+    setActiveSkills((prev) => prev.filter((s) => s !== slug));
+  };
+  // Slash-picker: opens when the user's current prompt looks like
+  // `/<query>` with no whitespace yet, so it doesn't fire on prose
+  // that happens to contain a slash mid-sentence.
+  const slashMatch = /^\/([\w-]*)$/.exec(prompt);
+  const slashOpen = slashMatch !== null;
+  const slashQuery = (slashMatch?.[1] ?? "").toLowerCase();
+  const slashResults: Skill[] = slashOpen
+    ? SKILLS.filter(
+        (s) =>
+          !activeSkills.includes(s.slug) &&
+          (s.slug.toLowerCase().includes(slashQuery) ||
+            s.name.toLowerCase().includes(slashQuery)),
+      ).slice(0, 8)
+    : [];
+  // Highlighted item in the slash picker (for arrow-key navigation).
+  // Clamp to the current results length so the user doesn't end up
+  // pointing past the end of the array as they type.
+  const [slashIndex, setSlashIndex] = useState(0);
+  const safeSlashIndex =
+    slashResults.length === 0
+      ? 0
+      : Math.min(slashIndex, slashResults.length - 1);
+  const pickSkill = (slug: string) => {
+    addSkill(slug);
+    setPrompt("");
+    setSlashIndex(0);
+    requestAnimationFrame(() => promptRef.current?.focus());
+  };
   const { data: templates = [], isLoading } = useTemplates();
   const { data: me } = useMe();
   // Match the in-builder gate (`builder.tsx`): plan defaults to "Free"
@@ -177,10 +218,20 @@ export default function Landing() {
 
   const submit = async () => {
     const value = prompt.trim();
-    if (value) {
-      try { sessionStorage.setItem("deploybro:initial-prompt", value); }
-      catch {}
+    // Guard: a build requires actual user text. Skills alone are
+    // just instructions — without a request they'd kick off an
+    // empty build. We bail out (and bounce focus back) if the user
+    // only attached skills without typing anything.
+    if (!value) {
+      promptRef.current?.focus();
+      return;
     }
+    // Skills get prepended as "Apply the following skill instructions
+    // to the request below…" so the builder receives one combined
+    // prompt. Empty skills array → no prefix, identical to before.
+    const finalPrompt = `${buildSkillsPrefix(activeSkills)}${value}`.trim();
+    try { sessionStorage.setItem("deploybro:initial-prompt", finalPrompt); }
+    catch {}
     try {
       const modelKey = HOME_MODELS.find((m) => m.name === selectedModel)?.key ?? "haiku";
       const baseSettings: Record<string, unknown> = { model: modelKey, planMode };
@@ -220,6 +271,39 @@ export default function Landing() {
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    // When the slash-picker is open, Enter or Tab confirms the first
+    // matching skill instead of submitting the prompt. Esc closes it
+    // (by clearing the partial /token).
+    if (slashOpen) {
+      if (e.key === "ArrowDown") {
+        if (slashResults.length > 0) {
+          e.preventDefault();
+          setSlashIndex((i) => (i + 1) % slashResults.length);
+          return;
+        }
+      }
+      if (e.key === "ArrowUp") {
+        if (slashResults.length > 0) {
+          e.preventDefault();
+          setSlashIndex(
+            (i) => (i - 1 + slashResults.length) % slashResults.length,
+          );
+          return;
+        }
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        if (slashResults.length > 0) {
+          e.preventDefault();
+          pickSkill(slashResults[safeSlashIndex]!.slug);
+          return;
+        }
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setPrompt("");
+        return;
+      }
+    }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       void submit();
@@ -265,7 +349,89 @@ export default function Landing() {
                   compact button row. The marketing surface should feel
                   like a continuation of the editor, not a different
                   control. */}
-              <div className="prompt-glow builder-chat-input-shell rounded-xl">
+              <div className="prompt-glow builder-chat-input-shell rounded-xl relative">
+                {activeSkills.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 p-2 pb-0">
+                    {activeSkills.map((slug) => {
+                      const s = SKILLS.find((x) => x.slug === slug);
+                      if (!s) return null;
+                      return (
+                        <span
+                          key={slug}
+                          className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-primary/10 border border-primary/30 text-[11px] text-foreground"
+                          title={s.description}
+                        >
+                          <Sparkles className="w-3 h-3 text-primary shrink-0" />
+                          <span className="truncate">{s.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => removeSkill(slug)}
+                            className="text-secondary hover:text-foreground"
+                            aria-label={`Remove ${s.name} skill`}
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+                {slashOpen && (
+                  // Floating skill picker. Positioned above the input
+                  // so it doesn't push the layout around as it opens
+                  // and closes; capped to 8 results to stay scannable.
+                  <div
+                    className="absolute left-0 right-0 bottom-full mb-2 z-20 rounded-xl border border-border bg-surface shadow-lg overflow-hidden"
+                    role="dialog"
+                    aria-label="Skill picker"
+                  >
+                    <div className="px-3 py-2 text-[10px] uppercase tracking-wider text-secondary border-b border-border">
+                      Skills{slashQuery ? ` matching "${slashQuery}"` : ""}
+                    </div>
+                    {slashResults.length === 0 ? (
+                      <div className="px-3 py-3 text-xs text-secondary">
+                        No matching skills. Press Esc to dismiss.
+                      </div>
+                    ) : (
+                      <ul
+                        className="max-h-72 overflow-y-auto"
+                        role="listbox"
+                        aria-label="Available skills"
+                      >
+                        {slashResults.map((s, idx) => (
+                          <li key={s.slug} role="option" aria-selected={idx === safeSlashIndex}>
+                            <button
+                              type="button"
+                              onMouseEnter={() => setSlashIndex(idx)}
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                pickSkill(s.slug);
+                              }}
+                              className={`w-full flex items-start gap-2 px-3 py-2 text-left hover:bg-surface-raised transition-colors ${
+                                idx === safeSlashIndex ? "bg-surface-raised" : ""
+                              }`}
+                            >
+                              <Sparkles className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-medium text-foreground">
+                                    {s.name}
+                                  </span>
+                                  <span className="text-[10px] font-mono text-secondary">
+                                    /{s.slug}
+                                  </span>
+                                </div>
+                                <div className="text-[11px] text-secondary line-clamp-2">
+                                  {s.description}
+                                </div>
+                              </div>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
                 {(imageFiles.length > 0 || refUrls.length > 0) && (
                   <div className="flex flex-wrap gap-1.5 p-2 pb-0">
                     {imageFiles.map((f, i) => (

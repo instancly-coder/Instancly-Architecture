@@ -14,13 +14,16 @@ import {
   Cookie,
   FileLock2,
   CheckCircle2,
+  Sparkles,
 } from "lucide-react";
 import { MarketingNav } from "@/components/marketing-nav";
 import { MarketingFooter } from "@/components/marketing-footer";
 import { Button } from "@/components/ui/button";
+import { SKILLS } from "@/skills";
 
 const MARKETING_LINKS = [
   { href: "/explore", label: "Explore", icon: Compass },
+  { href: "/skills", label: "Skills", icon: Sparkles },
   { href: "/how-it-works", label: "How it works", icon: LayoutTemplate },
   { href: "/changelog", label: "Changelog", icon: GitCommit },
   { href: "/status", label: "Status", icon: ActivityIcon },
@@ -161,6 +164,41 @@ function LegalMeta({ effective = LEGAL_EFFECTIVE }: { effective?: string }) {
 }
 
 /* ------------------------------- Pages ------------------------------- */
+
+export function Skills() {
+  return (
+    <Shell
+      eyebrow="Skills"
+      title="Explore skills. Ship every project faster."
+      intro="One click to add expert know-how to any prompt. Type / in the prompt box on the homepage to attach any of these to your build."
+    >
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {SKILLS.map((s) => (
+          <div
+            key={s.slug}
+            className="rounded-xl border border-border bg-surface p-5 flex flex-col gap-3 hover:border-primary/40 transition-colors"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-[10px] uppercase tracking-wider font-mono text-secondary mb-1">
+                  /{s.slug}
+                </div>
+                <h3 className="text-base font-bold tracking-tight">
+                  {s.name}
+                </h3>
+              </div>
+              <Sparkles className="w-4 h-4 text-primary shrink-0 mt-1" />
+            </div>
+            <p className="text-sm text-secondary leading-relaxed">
+              {s.description}
+            </p>
+          </div>
+        ))}
+      </div>
+      <CTA />
+    </Shell>
+  );
+}
 
 export function HowItWorks() {
   return (

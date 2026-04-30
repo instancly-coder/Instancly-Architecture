@@ -56,6 +56,7 @@ import {
   CookiePolicy,
   DPA,
   HowItWorks,
+  Skills,
 } from "@/pages/info";
 
 initThemeOnce();
@@ -101,6 +102,7 @@ function Router() {
       <Route path="/admin/revenue" component={gated(AdminRevenue)} />
       <Route path="/admin/payouts" component={gated(AdminPayouts)} />
       <Route path="/how-it-works" component={HowItWorks} />
+      <Route path="/skills" component={Skills} />
       <Route path="/changelog" component={Changelog} />
       <Route path="/status" component={Status} />
       <Route path="/about" component={About} />
