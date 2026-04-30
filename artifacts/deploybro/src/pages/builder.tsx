@@ -968,7 +968,11 @@ export default function Builder() {
   >(null);
   const [activeFile, setActiveFile] = useState<string>("src/app/page.tsx");
   const [openBuildId, setOpenBuildId] = useState<string | null>(null);
-  const [mobileChatOpen, setMobileChatOpen] = useState(false);
+  // Mobile-only: which side of the builder is currently visible. The
+  // Chat ↔ Preview toggle in the topbar flips this, replacing the old
+  // floating-FAB-plus-bottom-sheet pattern. Defaults to chat so the
+  // user lands in the input where they'll usually start typing.
+  const [mobileShowChat, setMobileShowChat] = useState(true);
 
   // Resizable chat panel (desktop)
   const [chatWidth, setChatWidth] = useState<number>(() => {
@@ -1442,13 +1446,15 @@ export default function Builder() {
           <Link href="/dashboard" className="hover:opacity-80 transition-opacity shrink-0 flex items-center">
             <BrandLogo className="h-5 w-auto text-foreground" />
           </Link>
-          <div className="w-px h-4 bg-border hidden sm:block"></div>
-          {/* Project switcher — shows current slug; opens a dropdown of
-              all the user's projects so they can jump between them
-              without going back to the dashboard. */}
+          <div className="w-px h-4 bg-border hidden md:block"></div>
+          {/* Project switcher — desktop only. Mobile uses the
+              Chat ↔ Preview toggle below in this same slot, since
+              screen real-estate at the top is too cramped to host
+              both. The user can jump between projects from the
+              dashboard or via the 3-dot menu on the right. */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-1 min-w-0 rounded-md px-1.5 py-1 hover:bg-surface-raised transition-colors group">
+              <button className="hidden md:flex items-center gap-1 min-w-0 rounded-md px-1.5 py-1 hover:bg-surface-raised transition-colors group">
                 <span className="text-sm font-mono text-foreground truncate max-w-[10rem] sm:max-w-[14rem]">
                   {project?.name ?? slug}
                 </span>
@@ -1484,6 +1490,41 @@ export default function Builder() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          {/* Mobile Chat ↔ Preview toggle. Lives where the project
+              dropdown sits on desktop. Replaces the old floating chat
+              FAB so the workspace below has one consistent way to
+              switch sides on small screens. */}
+          <div
+            className="md:hidden inline-flex items-center rounded-md bg-surface-raised border border-border p-0.5 ml-1"
+            aria-label="Switch between chat and preview"
+          >
+            <button
+              type="button"
+              aria-pressed={mobileShowChat}
+              onClick={() => setMobileShowChat(true)}
+              className={`h-7 px-3 rounded text-xs font-medium inline-flex items-center gap-1.5 transition-colors ${
+                mobileShowChat
+                  ? "bg-primary text-primary-foreground"
+                  : "text-secondary hover:text-foreground"
+              }`}
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              <span>Chat</span>
+            </button>
+            <button
+              type="button"
+              aria-pressed={!mobileShowChat}
+              onClick={() => setMobileShowChat(false)}
+              className={`h-7 px-3 rounded text-xs font-medium inline-flex items-center gap-1.5 transition-colors ${
+                !mobileShowChat
+                  ? "bg-primary text-primary-foreground"
+                  : "text-secondary hover:text-foreground"
+              }`}
+            >
+              <Eye className="w-3.5 h-3.5" />
+              <span>Preview</span>
+            </button>
+          </div>
         </div>
 
         {/* Drag handle aligned with the body's chat-resize handle so the
@@ -1640,10 +1681,17 @@ export default function Builder() {
 
       {/* Main Area */}
       <div className="flex flex-1 overflow-hidden relative">
-        {/* Left Panel - Chat (desktop) */}
+        {/* Left Panel - Chat. Always rendered (so its state and any
+            in-flight stream survive mode switches), but on mobile we
+            hide whichever side isn't selected by the topbar's
+            Chat ↔ Preview toggle. On desktop the aside stays at its
+            user-resizable `chatWidth`; on mobile it stretches to fill
+            the screen because there's no preview alongside it. */}
         <aside
-          className="builder-chat-panel hidden md:flex shrink-0 flex-col h-full"
-          style={{ width: chatWidth }}
+          className={`builder-chat-panel flex-col h-full md:shrink-0 md:w-[var(--chat-w)] w-full ${
+            mobileShowChat ? "flex" : "hidden md:flex"
+          }`}
+          style={{ ["--chat-w" as string]: `${chatWidth}px` } as React.CSSProperties}
         >
           <ChatPanel
             chatInput={chatInput}
@@ -1684,8 +1732,13 @@ export default function Builder() {
           title="Drag to resize · double-click to reset"
         />
 
-        {/* Right Panel - Tabbed Workspace */}
-        <section className="flex-1 flex flex-col bg-background overflow-hidden min-w-0">
+        {/* Right Panel - Tabbed Workspace. Hidden on mobile when the
+            topbar toggle has Chat selected; always visible on desktop. */}
+        <section
+          className={`flex-1 flex-col bg-background overflow-hidden min-w-0 ${
+            mobileShowChat ? "hidden md:flex" : "flex"
+          }`}
+        >
           {/* Tab strip — mobile only (icons), since the desktop strip lives
               inside the navbar above. */}
           <BuilderTabStrip
@@ -1808,69 +1861,9 @@ export default function Builder() {
         </section>
       </div>
 
-      {/* Mobile Chat Sheet */}
-      <button
-        onClick={() => setMobileChatOpen(true)}
-        className="md:hidden fixed bottom-4 right-4 z-30 h-12 w-12 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90"
-        aria-label="Open chat"
-      >
-        <MessageSquare className="w-5 h-5" />
-      </button>
-
-      {mobileChatOpen && (
-        <div
-          className="md:hidden fixed inset-0 z-40 bg-black/60 animate-in fade-in"
-          onClick={() => setMobileChatOpen(false)}
-        />
-      )}
-      <div
-        className={`builder-chat-panel md:hidden fixed left-0 right-0 bottom-0 z-50 h-[85vh] rounded-t-2xl shadow-2xl flex flex-col transition-transform duration-300 ${
-          mobileChatOpen ? "translate-y-0" : "translate-y-full"
-        }`}
-      >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-          <div className="flex items-center gap-2">
-            <span className="w-10 h-1 rounded-full bg-border block sm:hidden absolute left-1/2 -translate-x-1/2 top-2" />
-            <h3 className="font-bold text-sm">Build chat</h3>
-          </div>
-          <button
-            onClick={() => setMobileChatOpen(false)}
-            className="text-secondary hover:text-foreground p-1 rounded hover:bg-surface-raised"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-        <ChatPanel
-          chatInput={chatInput}
-          setChatInput={setChatInput}
-          isStreaming={isStreaming}
-          currentPhase={currentStep?.phase}
-          streamSteps={streamSteps}
-          typed={typed}
-          pendingPrompt={pendingPrompt}
-          onSend={handleSend}
-          openBuildId={openBuildId}
-          setOpenBuildId={setOpenBuildId}
-          pastBuilds={pastBuilds}
-          isHistoryLoading={isBuildsLoading}
-          selectedModel={selectedModel}
-          setSelectedModel={setSelectedModel}
-          planMode={planMode}
-          setPlanMode={setPlanMode}
-          attachments={attachments}
-          setAttachments={setAttachments}
-          refUrls={refUrls}
-          setRefUrls={setRefUrls}
-          quickTasks={quickTasks}
-          onStop={() => abortRef.current?.abort()}
-          pendingSecretRequests={pendingSecretRequests}
-          setPendingSecretRequests={setPendingSecretRequests}
-          setOpenTabs={setOpenTabs}
-          setActiveTab={setActiveTab}
-          username={username}
-          slug={slug}
-        />
-      </div>
+      {/* Mobile chat is handled inline by the aside above + the
+          Chat ↔ Preview toggle in the topbar. The old floating FAB
+          and bottom-sheet pattern has been removed. */}
     </div>
   );
 }
