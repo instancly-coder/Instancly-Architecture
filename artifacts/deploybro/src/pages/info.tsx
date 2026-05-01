@@ -21,6 +21,7 @@ import {
 import { MarketingNav } from "@/components/marketing-nav";
 import { MarketingFooter } from "@/components/marketing-footer";
 import { Button } from "@/components/ui/button";
+import { BrandLogo } from "@/components/brand-logo";
 import { SKILLS } from "@/skills";
 
 const MARKETING_LINKS = [
@@ -74,6 +75,7 @@ export function Shell({
   prose = false,
   headerActions,
   headerExtra,
+  halo = false,
 }: {
   eyebrow?: string;
   title: string;
@@ -81,16 +83,20 @@ export function Shell({
   children: ReactNode;
   prose?: boolean;
   headerActions?: ReactNode;
-  // Optional content rendered inside the page header, below the
-  // intro paragraph and above the body. Used by /explore to plant
-  // a hero search bar with an autocomplete dropdown.
   headerExtra?: ReactNode;
+  halo?: boolean;
 }) {
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
       <MarketingNav />
-      <main className="flex-1">
-        <div className="px-4 sm:px-8 max-w-7xl mx-auto w-full pt-12 pb-24 grid grid-cols-1 lg:grid-cols-[200px_1fr] gap-10 lg:gap-14">
+      <main className="flex-1 relative">
+        {halo && (
+          <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-[420px] overflow-hidden z-0">
+            <div className="absolute inset-0 bg-[radial-gradient(70%_55%_at_50%_0%,hsl(var(--primary)/0.15)_0%,transparent_75%)]" />
+            <div className="absolute inset-0 bg-[radial-gradient(30%_22%_at_50%_0%,hsl(var(--primary)/0.32)_0%,transparent_70%)]" />
+          </div>
+        )}
+        <div className="relative z-10 px-4 sm:px-8 max-w-7xl mx-auto w-full pt-12 pb-24 grid grid-cols-1 lg:grid-cols-[200px_1fr] gap-10 lg:gap-14">
           <aside className="hidden lg:block">
             <SideNav />
           </aside>
@@ -198,6 +204,7 @@ export function Skills() {
       eyebrow="Skills"
       title="Explore skills. Ship every project faster."
       intro="One click to add expert know-how to any prompt. Type / in the prompt box on the homepage to attach any of these to your build."
+      halo
     >
       {/* Search + count strip — sticky-feeling header that frames the
           grid below. The count updates as the user types so they can
@@ -247,8 +254,8 @@ export function Skills() {
                 </p>
 
                 <div className="mt-auto flex items-center gap-2 pt-3 text-xs text-secondary border-t border-border/60">
-                  <div className="w-6 h-6 rounded-md bg-primary/15 text-primary inline-flex items-center justify-center shrink-0">
-                    <Sparkles className="w-3 h-3" />
+                  <div className="w-6 h-6 rounded-md bg-surface-raised inline-flex items-center justify-center shrink-0">
+                    <BrandLogo className="h-3 w-auto" />
                   </div>
                   <span>by DeployBro team</span>
                   <span className="text-border">·</span>
