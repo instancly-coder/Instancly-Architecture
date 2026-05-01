@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { Menu } from "lucide-react";
 import { BrandLogo } from "./brand-logo";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useMe } from "@/lib/api";
 import { useMobileUserMenu } from "./mobile-user-menu";
@@ -17,14 +17,30 @@ export function MarketingNav() {
   const [open, setOpen] = useState(false);
   const { data: me } = useMe();
   const { openMenu } = useMobileUserMenu();
+  const isHome = location === "/";
+  const [atTop, setAtTop] = useState(true);
+
+  useEffect(() => {
+    if (!isHome) return;
+    const onScroll = () => setAtTop(window.scrollY < 10);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [isHome]);
 
   const isActive = (href: string) => {
     if (href === "/") return location === "/";
     return location.startsWith(href);
   };
 
+  const transparent = isHome && atTop;
+
   return (
-    <nav className="sticky top-0 z-50 bg-surface/80 backdrop-blur-md border-b border-border h-14 flex items-center justify-between px-6">
+    <nav className={`sticky top-0 z-50 h-14 flex items-center justify-between px-6 transition-all duration-300 ${
+      transparent
+        ? "bg-transparent border-b border-transparent"
+        : "bg-surface/80 backdrop-blur-md border-b border-border"
+    }`}>
       <Link href="/" className="flex items-center hover:opacity-80 transition-opacity" aria-label="DeployBro">
         <BrandLogo className="h-5 w-auto text-foreground" />
       </Link>
