@@ -20,26 +20,25 @@ export function MarketingNav() {
   const [atTop, setAtTop] = useState(true);
 
   useEffect(() => {
-    if (!isHome) return;
     const onScroll = () => setAtTop(window.scrollY < 10);
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
-  }, [isHome]);
+  }, [location]);
 
   const isActive = (href: string) => {
     if (href === "/") return location === "/";
     return location.startsWith(href);
   };
 
-  const transparent = isHome && atTop;
+  const navClass = isHome && atTop
+    ? "bg-transparent"
+    : atTop
+      ? "bg-surface"
+      : "bg-surface/80 backdrop-blur-md border-b border-border";
 
   return (
-    <nav className={`sticky top-0 z-50 h-14 flex items-center justify-between px-6 transition-all duration-300 ${
-      transparent
-        ? "bg-transparent"
-        : "bg-surface/80 backdrop-blur-md border-b border-border"
-    }`}>
+    <nav className={`sticky top-0 z-50 h-14 flex items-center justify-between px-6 transition-all duration-300 ${navClass}`}>
       <Link href="/" className="flex items-center hover:opacity-80 transition-opacity" aria-label="DeployBro">
         <BrandLogo className="h-5 w-auto text-foreground" />
       </Link>
