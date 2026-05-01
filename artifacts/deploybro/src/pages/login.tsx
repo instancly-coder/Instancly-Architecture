@@ -184,7 +184,7 @@ function ProviderButton({
       type="button"
       onClick={onClick}
       disabled={busy}
-      className="w-full h-11 inline-flex items-center justify-center gap-3 rounded-md border border-border bg-background hover:bg-surface-raised transition-colors text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+      className="w-full h-11 inline-flex items-center justify-center gap-3 rounded-md bg-background hover:bg-surface-raised transition-colors text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
     >
       {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <span className="w-4 h-4 inline-flex items-center justify-center">{icon}</span>}
       <span>{label}</span>
