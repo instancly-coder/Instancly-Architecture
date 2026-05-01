@@ -350,7 +350,7 @@ export default function Landing() {
     <div className="min-h-screen bg-background text-foreground flex flex-col">
       <MarketingNav />
       <main className="flex-1">
-        <section className="relative overflow-hidden">
+        <section className="relative overflow-hidden -mt-14 pt-14">
           <div aria-hidden className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
             <div className="absolute inset-0 bg-[radial-gradient(70%_55%_at_50%_0%,hsl(var(--primary)/0.18)_0%,transparent_75%)]" />
             <div className="absolute inset-0 bg-[radial-gradient(30%_22%_at_50%_2%,hsl(var(--primary)/0.38)_0%,transparent_70%)]" />
