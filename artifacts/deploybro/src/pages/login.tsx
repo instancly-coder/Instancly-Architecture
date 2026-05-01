@@ -112,48 +112,56 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6">
-      <Link href="/" className="mb-8 hover:opacity-80 transition-opacity" aria-label="DeployBro home">
-        <BrandLogo className="h-8 w-auto text-foreground" />
-      </Link>
+    <div className="min-h-screen bg-background relative flex items-center justify-center p-6 overflow-hidden">
+      {/* Halo */}
+      <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-[50vh] z-0">
+        <div className="absolute inset-0 bg-[radial-gradient(70%_60%_at_50%_0%,hsl(var(--primary)/0.18)_0%,transparent_75%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(30%_25%_at_50%_0%,hsl(var(--primary)/0.35)_0%,transparent_70%)]" />
+      </div>
 
-      <div className="w-full max-w-sm bg-surface border border-border rounded-xl p-8 shadow-2xl">
-        <h1 className="text-2xl font-bold tracking-tight text-center mb-2">
-          Log in to DeployBro
-        </h1>
-        <p className="text-sm text-secondary text-center mb-6">
-          Continue with your favourite account.
-        </p>
+      <div className="relative z-10 w-full max-w-sm">
+        <div className="bg-surface rounded-xl p-8 shadow-2xl">
+          <Link href="/" className="flex justify-center mb-6 hover:opacity-80 transition-opacity" aria-label="DeployBro home">
+            <BrandLogo className="h-7 w-auto text-foreground" />
+          </Link>
 
-        <div className="space-y-3">
-          <ProviderButton
-            provider="google"
-            label="Continue with Google"
-            busy={busy === "google"}
-            onClick={() => handleClick("google")}
-            icon={<GoogleIcon />}
-          />
-          <ProviderButton
-            provider="apple"
-            label="Continue with Apple"
-            busy={busy === "apple"}
-            onClick={() => handleClick("apple")}
-            icon={<AppleIcon />}
-          />
-          <ProviderButton
-            provider="github"
-            label="Continue with GitHub"
-            busy={busy === "github"}
-            onClick={() => handleClick("github")}
-            icon={<GitHubIcon />}
-          />
+          <h1 className="text-2xl font-bold tracking-tight text-center mb-2">
+            Log in to DeployBro
+          </h1>
+          <p className="text-sm text-secondary text-center mb-6">
+            Continue with your favourite account.
+          </p>
+
+          <div className="space-y-3">
+            <ProviderButton
+              provider="google"
+              label="Continue with Google"
+              busy={busy === "google"}
+              onClick={() => handleClick("google")}
+              icon={<GoogleIcon />}
+            />
+            <ProviderButton
+              provider="apple"
+              label="Continue with Apple"
+              busy={busy === "apple"}
+              onClick={() => handleClick("apple")}
+              icon={<AppleIcon />}
+            />
+            <ProviderButton
+              provider="github"
+              label="Continue with GitHub"
+              busy={busy === "github"}
+              onClick={() => handleClick("github")}
+              icon={<GitHubIcon />}
+            />
+          </div>
+
+          <p className="text-xs text-secondary text-center mt-6">
+            By continuing you agree to our{" "}
+            <Link href="/terms" className="underline hover:text-foreground">Terms</Link> and{" "}
+            <Link href="/privacy" className="underline hover:text-foreground">Privacy Policy</Link>.
+          </p>
         </div>
-
-        <p className="text-xs text-secondary text-center mt-6">
-          By continuing you agree to our{" "}
-          <Link href="/terms" className="underline hover:text-foreground">Terms</Link> and{" "}
-          <Link href="/privacy" className="underline hover:text-foreground">Privacy Policy</Link>.
-        </p>
       </div>
     </div>
   );
