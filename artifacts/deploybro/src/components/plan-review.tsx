@@ -20,6 +20,125 @@ export type Plan = {
   copyTone: string;
 };
 
+// Lightweight markdown renderer scoped to the format the server emits
+// from /ai/plan: `## heading`, paragraphs, `- bullets`, `**bold**`, and
+// inline `` `code` ``. We render these directly instead of pulling in a
+// full markdown library because the format is tightly server-controlled
+// and we want fine UI control (hex colors get a swatch, bullets get a
+// custom dot, etc).
+export function PlanText({ text }: { text: string }) {
+  const lines = text.split("\n");
+  const blocks: Array<
+    | { type: "h"; content: string }
+    | { type: "p"; content: string }
+    | { type: "ul"; items: string[] }
+  > = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (line.startsWith("## ")) {
+      blocks.push({ type: "h", content: line.slice(3) });
+      i++;
+    } else if (line.startsWith("- ")) {
+      const items: string[] = [];
+      while (i < lines.length && lines[i].startsWith("- ")) {
+        items.push(lines[i].slice(2));
+        i++;
+      }
+      blocks.push({ type: "ul", items });
+    } else if (line.trim() === "") {
+      i++;
+    } else {
+      blocks.push({ type: "p", content: line });
+      i++;
+    }
+  }
+  return (
+    <div className="space-y-2">
+      {blocks.map((b, idx) => {
+        if (b.type === "h") {
+          return (
+            <h3
+              key={idx}
+              className="text-sm font-semibold text-foreground mt-2 first:mt-0"
+            >
+              {b.content}
+            </h3>
+          );
+        }
+        if (b.type === "ul") {
+          return (
+            <ul key={idx} className="space-y-1 ml-0.5">
+              {b.items.map((it, ii) => (
+                <li
+                  key={ii}
+                  className="flex gap-2 text-sm leading-relaxed text-foreground"
+                >
+                  <span className="text-secondary mt-[2px] shrink-0">•</span>
+                  <span className="flex-1 min-w-0">
+                    <PlanInlineMd text={it} />
+                  </span>
+                </li>
+              ))}
+            </ul>
+          );
+        }
+        return (
+          <p key={idx} className="text-sm leading-relaxed text-foreground">
+            <PlanInlineMd text={b.content} />
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
+function PlanInlineMd({ text }: { text: string }) {
+  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
+  return (
+    <>
+      {parts.map((p, i) => {
+        if (p.startsWith("**") && p.endsWith("**")) {
+          return (
+            <strong key={i} className="font-semibold text-foreground">
+              {p.slice(2, -2)}
+            </strong>
+          );
+        }
+        if (p.startsWith("`") && p.endsWith("`")) {
+          const inner = p.slice(1, -1);
+          // Hex colors get a tiny inline swatch so the palette is
+          // visible at a glance — the streamed text is the only place
+          // the user sees the actual colors before approving the plan.
+          if (/^#[0-9a-fA-F]{6}$/.test(inner)) {
+            return (
+              <span
+                key={i}
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-surface-raised text-xs font-mono align-middle"
+              >
+                <span
+                  className="inline-block w-2.5 h-2.5 rounded-sm border border-border/60"
+                  style={{ backgroundColor: inner }}
+                />
+                {inner}
+              </span>
+            );
+          }
+          return (
+            <code
+              key={i}
+              className="px-1 py-0.5 rounded bg-surface-raised text-xs font-mono"
+            >
+              {inner}
+            </code>
+          );
+        }
+        return <span key={i}>{p}</span>;
+      })}
+    </>
+  );
+}
+
 type Props = {
   open: boolean;
   plan: Plan;

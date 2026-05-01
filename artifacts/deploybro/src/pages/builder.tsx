@@ -51,6 +51,7 @@ import {
   Loader2,
   Rocket,
   Sparkles,
+  Pencil,
   Upload,
   ArrowDownAZ,
   ArrowDown10,
@@ -59,7 +60,11 @@ import {
 } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { DeleteProjectDialog } from "@/components/delete-project-dialog";
-import { PlanReview, type Plan as ApprovedPlan } from "@/components/plan-review";
+import {
+  PlanReview,
+  PlanText,
+  type Plan as ApprovedPlan,
+} from "@/components/plan-review";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -777,13 +782,28 @@ export default function Builder() {
   // picker never silently changes the default model.
   const [selectedModel, setSelectedModel] = useState<string>("Economy Bro");
   // Plan mode: when ON, the user's submit triggers a two-stage flow —
-  // first /ai/plan returns a structured JSON plan that we surface in a
-  // review modal, then on approval /ai/build runs locked to that plan.
+  // first /ai/plan streams a structured plan into the chat as its own
+  // bubble, then on "Build this" /ai/build runs locked to that plan.
   const [planMode, setPlanMode] = useState<boolean>(false);
-  // When the planning pass returns and we're waiting on the user to
-  // review/edit/approve, we stash the plan AND the original send args
-  // here. `null` means no plan in flight; setting this opens the modal.
-  const [pendingPlan, setPendingPlan] = useState<{
+  // The in-flight (or completed-and-awaiting-approval) plan stream.
+  // `status: "streaming"` while bytes are still arriving, `"ready"`
+  // once the server sent the structured plan + done event. The bubble
+  // shows action buttons only in the `"ready"` state.
+  const [planStream, setPlanStream] = useState<{
+    prompt: string;
+    overrides: {
+      modelKey?: "haiku" | "sonnet" | "opus";
+      urls?: string[];
+      files?: File[];
+    };
+    typed: string;
+    plan: ApprovedPlan | null;
+    status: "streaming" | "ready";
+  } | null>(null);
+  // Set when the user clicks "Edit plan" on a ready plan bubble. Opens
+  // the structured review modal as an opt-in fine-tune step. `null`
+  // means the modal is closed; the streaming bubble is the default UX.
+  const [editingPlan, setEditingPlan] = useState<{
     prompt: string;
     plan: ApprovedPlan;
     overrides: {
@@ -792,9 +812,9 @@ export default function Builder() {
       files?: File[];
     };
   } | null>(null);
-  // While /ai/plan is in flight (before the modal opens). Drives the
-  // checklist row + lets us disable the Send button.
-  const [isPlanning, setIsPlanning] = useState<boolean>(false);
+  // Aborts the in-flight /ai/plan SSE stream so a user dismissing the
+  // bubble (or unmounting) closes the connection and stops billing.
+  const planAbortRef = useRef<AbortController | null>(null);
   // Attachments + reference URLs are lifted here (rather than living inside
   // ChatPanel) so handleSend can include them in the build request body.
   const [attachments, setAttachments] = useState<File[]>([]);
@@ -807,11 +827,12 @@ export default function Builder() {
   // `phase` / `typed` / `streamSteps` mid-stream.
   const cleanupTimerRef = useRef<number | null>(null);
 
-  // Cancel any in-flight build stream when this component unmounts so the
-  // server can close the upstream Claude connection and stop billing.
+  // Cancel any in-flight build OR plan stream when this component unmounts
+  // so the server can close the upstream Claude connection and stop billing.
   useEffect(() => {
     return () => {
       abortRef.current?.abort();
+      planAbortRef.current?.abort();
     };
   }, []);
 
@@ -985,7 +1006,19 @@ export default function Builder() {
     // React event in the first slot, so guard against non-string args.
     const raw =
       typeof overridePrompt === "string" ? overridePrompt : chatInput;
-    if (!raw.trim() || isStreaming || isPlanning || !username || !slug) return;
+    if (
+      !raw.trim() ||
+      isStreaming ||
+      // Block new sends while ANY plan bubble is in flight — both while
+      // the stream is still arriving AND while a "ready" bubble is
+      // waiting for the user's Build / Edit / Cancel decision. Without
+      // this guard, hitting Send a second time orphans the previous
+      // plan + prompt with no way to recover them.
+      planStream !== null ||
+      !username ||
+      !slug
+    )
+      return;
     const prompt = raw.trim();
     // Cancel any pending cleanup timer from the previous run so it
     // can't fire 600ms into this new send and wipe the freshly-set
@@ -996,11 +1029,12 @@ export default function Builder() {
     }
 
     // ─── Two-stage Plan Mode interception ────────────────────────────────
-    // When Plan Mode is on AND the user hasn't yet approved a plan, fire a
-    // cheap /ai/plan call instead of jumping straight to /ai/build. The
-    // returned structured plan opens the review modal; on "Build this" the
-    // modal re-enters handleSend with overrides.approvedPlan set, which
-    // skips this branch and falls through to the normal build path below.
+    // When Plan Mode is on AND the user hasn't yet approved a plan, open
+    // an SSE connection to /ai/plan and stream a friendly markdown plan
+    // straight into the chat as its own bubble. When the stream finishes
+    // the bubble shows "Build this" / "Edit plan" / "Cancel" buttons; the
+    // first re-enters handleSend with overrides.approvedPlan set (which
+    // skips this branch), the second opens the structured review modal.
     const _effectivePlanMode = overrides?.planMode ?? planMode;
     if (_effectivePlanMode && !overrides?.approvedPlan) {
       const _modelKey =
@@ -1009,9 +1043,21 @@ export default function Builder() {
       const _sendingUrls = overrides?.urls ?? refUrls;
       const _sendingFiles = overrides?.files ?? attachments;
       setChatInput("");
-      setIsPlanning(true);
+      const controller = new AbortController();
+      planAbortRef.current = controller;
+      setPlanStream({
+        prompt,
+        overrides: {
+          modelKey: _modelKey,
+          urls: _sendingUrls,
+          files: _sendingFiles,
+        },
+        typed: "",
+        plan: null,
+        status: "streaming",
+      });
       try {
-        const planRes = await fetch(`/api/ai/plan/${username}/${slug}`, {
+        const res = await fetch(`/api/ai/plan/${username}/${slug}`, {
           method: "POST",
           credentials: "include",
           headers: { "content-type": "application/json" },
@@ -1019,31 +1065,50 @@ export default function Builder() {
             prompt,
             ...(_sendingUrls.length > 0 ? { urls: _sendingUrls } : {}),
           }),
+          signal: controller.signal,
         });
-        const data = await planRes.json().catch(() => ({}));
-        if (!planRes.ok) {
-          throw new Error(data?.message || `HTTP ${planRes.status}`);
+        if (
+          !res.ok &&
+          res.headers.get("content-type")?.includes("application/json")
+        ) {
+          const j = await res.json().catch(() => ({}));
+          throw new Error(j.message || `HTTP ${res.status}`);
         }
-        if (!data?.plan) throw new Error("No plan returned");
-        setPendingPlan({
-          prompt,
-          plan: data.plan as ApprovedPlan,
-          overrides: {
-            modelKey: _modelKey,
-            urls: _sendingUrls,
-            files: _sendingFiles,
-          },
-        });
+        for await (const evt of readSSE(res)) {
+          if (evt.event === "delta" && typeof evt.data?.text === "string") {
+            const text = evt.data.text as string;
+            setPlanStream((cur) =>
+              cur ? { ...cur, typed: cur.typed + text } : cur,
+            );
+          } else if (evt.event === "plan" && evt.data?.plan) {
+            const planFromServer = evt.data.plan as ApprovedPlan;
+            setPlanStream((cur) =>
+              cur ? { ...cur, plan: planFromServer } : cur,
+            );
+          } else if (evt.event === "error") {
+            throw new Error(evt.data?.message || "Plan failed");
+          } else if (evt.event === "done" && evt.data?.ok) {
+            setPlanStream((cur) =>
+              cur ? { ...cur, status: "ready" } : cur,
+            );
+          }
+        }
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "Couldn't draft a plan";
-        toast.error(msg);
-        // Restore the prompt so the user can retry without retyping —
-        // but only if the composer is still empty. The user might have
-        // started typing a follow-up while the planner was in flight,
-        // and we shouldn't clobber their fresh draft.
-        setChatInput((cur) => (cur.trim().length === 0 ? prompt : cur));
+        const aborted = (err as { name?: string })?.name === "AbortError";
+        if (!aborted) {
+          const msg =
+            err instanceof Error ? err.message : "Couldn't draft a plan";
+          toast.error(msg);
+          setPlanStream(null);
+          // Restore the prompt so the user can retry without retyping —
+          // unless they started typing a follow-up while the planner was
+          // in flight (don't clobber a fresh draft).
+          setChatInput((cur) =>
+            cur.trim().length === 0 ? prompt : cur,
+          );
+        }
       } finally {
-        setIsPlanning(false);
+        planAbortRef.current = null;
       }
       return;
     }
@@ -1773,6 +1838,33 @@ export default function Builder() {
             typed={typed}
             pendingPrompt={pendingPrompt}
             onSend={handleSend}
+            planStream={planStream}
+            onApprovePlan={() => {
+              if (!planStream?.plan) return;
+              const { prompt: planPrompt, overrides, plan } = planStream;
+              setPlanStream(null);
+              void handleSend(planPrompt, {
+                ...overrides,
+                planMode: true,
+                approvedPlan: plan,
+              });
+            }}
+            onEditPlan={() => {
+              if (!planStream?.plan) return;
+              setEditingPlan({
+                prompt: planStream.prompt,
+                plan: planStream.plan,
+                overrides: planStream.overrides,
+              });
+            }}
+            onDismissPlan={() => {
+              planAbortRef.current?.abort();
+              const restored = planStream?.prompt ?? "";
+              setPlanStream(null);
+              setChatInput((cur) =>
+                cur.trim().length === 0 ? restored : cur,
+              );
+            }}
             openBuildId={openBuildId}
             setOpenBuildId={setOpenBuildId}
             pastBuilds={pastBuilds}
@@ -1928,28 +2020,26 @@ export default function Builder() {
           Chat ↔ Preview toggle in the topbar. The old floating FAB
           and bottom-sheet pattern has been removed. */}
 
-      {/* Plan Mode review modal. Opens once /ai/plan returns; the user
-          tweaks/approves the structured plan and "Build this" hands the
-          plan back to handleSend as the locked spec for /ai/build. */}
-      {pendingPlan && (
+      {/* Plan Mode review modal — opt-in editor. The default plan-mode
+          flow renders the streamed plan inline in the chat with action
+          buttons; this modal only opens when the user clicks "Edit plan"
+          on a ready plan bubble to fine-tune sections/colors/etc. */}
+      {editingPlan && (
         <PlanReview
           open
-          plan={pendingPlan.plan}
-          onCancel={() => {
-            const restored = pendingPlan.prompt;
-            setPendingPlan(null);
-            // Put the original prompt back in the composer so the user
-            // can edit it and retry — unless they already started
-            // typing something new while the modal was open.
-            setChatInput((cur) => (cur.trim().length === 0 ? restored : cur));
-          }}
+          plan={editingPlan.plan}
+          onCancel={() => setEditingPlan(null)}
           onApprove={(modifiedPlan) => {
-            const { prompt: planPrompt, overrides } = pendingPlan;
-            setPendingPlan(null);
-            // Re-enter handleSend with the approved plan attached. We
-            // keep planMode:true so the request body still carries the
-            // flag (server uses approvedPlan presence as the canonical
-            // signal, but the flag stays for UI/telemetry consistency).
+            const { prompt: planPrompt, overrides } = editingPlan;
+            setEditingPlan(null);
+            // Closing the modal also closes the streamed bubble — the
+            // build is starting and the bubble's role is done.
+            setPlanStream(null);
+            // Re-enter handleSend with the (possibly edited) approved
+            // plan attached. We keep planMode:true so the request body
+            // still carries the flag (server uses approvedPlan presence
+            // as the canonical signal, but the flag stays for UI /
+            // telemetry consistency).
             void handleSend(planPrompt, {
               ...overrides,
               planMode: true,
@@ -1999,6 +2089,10 @@ function ChatPanel({
   typed,
   pendingPrompt,
   onSend,
+  planStream,
+  onApprovePlan,
+  onEditPlan,
+  onDismissPlan,
   openBuildId,
   setOpenBuildId,
   pastBuilds,
@@ -2028,6 +2122,24 @@ function ChatPanel({
   typed: string;
   pendingPrompt: string | null;
   onSend: () => void;
+  // The in-flight plan stream (replaces the old modal-only flow). Null
+  // when no plan is being drafted; otherwise the plan bubble renders
+  // inline in the chat. `status: "ready"` flips the action buttons on.
+  planStream: {
+    prompt: string;
+    typed: string;
+    plan: ApprovedPlan | null;
+    status: "streaming" | "ready";
+  } | null;
+  // "Build this" button on a ready plan bubble — fires the build with
+  // the plan attached as the locked spec.
+  onApprovePlan: () => void;
+  // "Edit plan" button on a ready plan bubble — opens the structured
+  // review modal so the user can fine-tune sections / colors / etc.
+  onEditPlan: () => void;
+  // Dismiss / cancel the plan bubble. Aborts the SSE stream if it's
+  // still in flight and restores the original prompt to the composer.
+  onDismissPlan: () => void;
   openBuildId: string | null;
   setOpenBuildId: (id: string | null) => void;
   pastBuilds: PastBuild[];
@@ -2114,6 +2226,11 @@ function ChatPanel({
     streamSteps.length,
     pastBuilds.length,
     isStreaming,
+    // The plan stream bubble grows token-by-token while drafting and
+    // again when the action buttons render — keep the latest content
+    // pinned to the bottom on both transitions.
+    planStream?.typed.length,
+    planStream?.status,
   ]);
 
   // Belt-and-braces: keep the chat pinned to the bottom whenever the
@@ -2332,6 +2449,83 @@ function ChatPanel({
             {/* The per-step icon list used to live here, but the AI's prose
                 narrative above already tells the user what's happening — the
                 redundant labels added noise without adding information. */}
+          </div>
+        )}
+
+        {/* Streaming plan bubble — the new Plan Mode UX. Rendered as its
+            own block (not multiplexed with the build streaming bubble
+            above) because plan + build never run concurrently: planStream
+            is set by the plan-mode interception in handleSend, and the
+            "Build this" handler clears planStream before kicking off the
+            build. */}
+        {planStream && (
+          <div className="space-y-3">
+            {/* Mirror the user's prompt as a sent bubble so the chat
+                reads as a real conversation rather than a free-floating
+                AI reply. */}
+            <div className="flex justify-end">
+              <div className="max-w-[88%] px-3.5 py-2 rounded-2xl rounded-br-md bg-primary/15 text-primary text-sm leading-snug">
+                {planStream.prompt}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-border bg-surface-raised/60 p-4 space-y-3">
+              <div className="flex items-center gap-2 text-xs text-secondary">
+                <span className="w-6 h-6 rounded-md bg-primary/15 text-primary inline-flex items-center justify-center">
+                  <Sparkles className="w-3.5 h-3.5" />
+                </span>
+                <span className="font-medium">
+                  {planStream.status === "streaming"
+                    ? "Drafting your plan…"
+                    : "Plan ready"}
+                </span>
+                {planStream.status === "streaming" && (
+                  <Loader2 className="w-3 h-3 animate-spin ml-1" />
+                )}
+              </div>
+
+              {/* The streamed plan body. PlanText handles headings, bold,
+                  bullets and inline code; while the stream is mid-flight
+                  the partial markdown still renders cleanly because the
+                  renderer is block-based and tolerates a trailing
+                  incomplete line. */}
+              <PlanText text={planStream.typed} />
+
+              {/* Action row only appears once the server emits its
+                  final `done` event (status flips to "ready") AND the
+                  structured plan arrived — without the structured plan
+                  we can't kick off a build. */}
+              {planStream.status === "ready" && planStream.plan && (
+                <div className="flex flex-wrap gap-2 pt-2 border-t border-border/60">
+                  <Button
+                    size="sm"
+                    onClick={onApprovePlan}
+                    className="h-8 text-xs"
+                  >
+                    <Check className="w-3.5 h-3.5 mr-1" />
+                    Build this
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={onEditPlan}
+                    className="h-8 text-xs border-border"
+                  >
+                    <Pencil className="w-3.5 h-3.5 mr-1" />
+                    Edit plan
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={onDismissPlan}
+                    className="h-8 text-xs text-secondary hover:text-foreground ml-auto"
+                  >
+                    <X className="w-3.5 h-3.5 mr-1" />
+                    Cancel
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
         )}
 

@@ -433,6 +433,54 @@ Copy tone: ${plan.copyTone}
 Implement this plan as one cohesive build. Skip any free-form planning preamble — the plan above IS the plan.`;
 }
 
+// Render a parsed plan into a friendly, conversational markdown narration
+// the client can stream into a chat bubble. Server-controlled formatting
+// keeps the look consistent regardless of which model variant produced
+// the underlying JSON.
+function renderPlanMarkdown(plan: ApprovedPlan): string {
+  const lines: string[] = [];
+  lines.push(`## ${plan.projectName || "Your project"}`);
+  lines.push("");
+  if (plan.summary) {
+    lines.push(plan.summary);
+    lines.push("");
+  }
+  if (plan.pages.length > 0) {
+    lines.push("**Pages**");
+    for (const p of plan.pages) lines.push(`- ${p}`);
+    lines.push("");
+  }
+  if (plan.sections.length > 0) {
+    lines.push("**Sections**");
+    for (const s of plan.sections) {
+      lines.push(`- **${s.name}** — ${s.description || "(no description)"}`);
+    }
+    lines.push("");
+  }
+  if (plan.colors.length > 0) {
+    lines.push("**Colors**");
+    for (const c of plan.colors) lines.push(`- ${c.name}: \`${c.hex}\``);
+    lines.push("");
+  }
+  if (plan.fonts.heading || plan.fonts.body) {
+    lines.push("**Fonts**");
+    lines.push(`- Heading: ${plan.fonts.heading}`);
+    lines.push(`- Body: ${plan.fonts.body}`);
+    lines.push("");
+  }
+  if (plan.features.length > 0) {
+    lines.push("**Key features**");
+    for (const f of plan.features) lines.push(`- ${f}`);
+    lines.push("");
+  }
+  if (plan.copyTone) {
+    lines.push("**Tone of voice**");
+    lines.push(plan.copyTone);
+    lines.push("");
+  }
+  return lines.join("\n").trim();
+}
+
 router.post(
   "/ai/plan/:username/:slug",
   // Same rate limiter as /ai/build so a planning loop can't be used to
@@ -450,16 +498,15 @@ router.post(
           .slice(0, 5)
       : [];
 
+    // Track client disconnects from the very top of the handler so a
+    // user closing the tab mid-plan stops billing immediately.
+    let clientGone = false;
+    req.on("close", () => {
+      clientGone = true;
+    });
+
     if (!prompt) {
       res.status(400).json({ status: "error", message: "prompt required" });
-      return;
-    }
-    if (!anthropic) {
-      res.status(503).json({
-        status: "error",
-        message:
-          "AI is not configured. ANTHROPIC_API_KEY is missing on the server.",
-      });
       return;
     }
 
@@ -476,14 +523,44 @@ router.post(
     const project = rows[0]?.project;
     const ownerId = rows[0]?.ownerId;
     if (!project) {
-      res.status(404).json({ status: "error", message: "Project not found" });
+      if (!clientGone) {
+        res.status(404).json({ status: "error", message: "Project not found" });
+      }
       return;
     }
     const authedUser = getAuthedUser(req);
     if (!authedUser || authedUser.id !== ownerId) {
-      res.status(403).json({ status: "error", message: "Forbidden" });
+      if (!clientGone) {
+        res.status(403).json({ status: "error", message: "Forbidden" });
+      }
       return;
     }
+
+    // Open the SSE channel up-front so the client can render its
+    // streaming bubble immediately, even if the underlying Haiku call
+    // takes a couple of seconds before the first byte.
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders?.();
+
+    const send = (event: string, data: unknown) => {
+      if (clientGone || res.writableEnded) return;
+      res.write(`event: ${event}\n`);
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
+    if (!anthropic) {
+      send("error", {
+        message:
+          "AI is not configured. ANTHROPIC_API_KEY is missing on the server.",
+      });
+      send("done", { ok: false });
+      res.end();
+      return;
+    }
+
+    send("start", { phase: "planning" });
 
     // Gather a tiny bit of project context so the planner knows whether
     // this is a first build or an iteration on an existing project. We
@@ -550,7 +627,9 @@ Output ONLY the JSON object. Nothing else.`;
     } catch (err) {
       const message = err instanceof Error ? err.message : "Plan request failed";
       req.log.error({ err }, "Plan generation failed");
-      res.status(502).json({ status: "error", message });
+      send("error", { message });
+      send("done", { ok: false });
+      res.end();
       return;
     }
 
@@ -569,10 +648,38 @@ Output ONLY the JSON object. Nothing else.`;
     const plan = parseApprovedPlan(parsed);
     if (!plan) {
       req.log.warn({ raw: cleaned.slice(0, 500) }, "Plan response was not valid JSON");
-      res.status(502).json({
-        status: "error",
+      send("error", {
         message: "Plan response was malformed. Try again or build without Plan Mode.",
       });
+      send("done", { ok: false });
+      res.end();
+      return;
+    }
+
+    // Stream the rendered markdown line-by-line so the user sees the
+    // plan unfold step-by-step in the chat — same UX feel as the build
+    // stream above. We chunk by single line with a short pause between
+    // chunks; total stream time is bounded (~50ms × ~25 lines ≈ 1.3s).
+    const markdown = renderPlanMarkdown(plan);
+    const chunks = markdown.split(/(\n)/); // keep newlines as their own chunks
+    for (const chunk of chunks) {
+      if (clientGone) break;
+      if (chunk.length === 0) continue;
+      send("delta", { text: chunk });
+      // 35ms between non-newline chunks gives the eye time to track each
+      // bullet without feeling laggy. Newlines flush instantly so the
+      // bullet pops as a unit rather than as fragments.
+      if (chunk !== "\n") {
+        await new Promise((r) => setTimeout(r, 35));
+      }
+    }
+
+    // If the client disconnected mid-stream, don't bill them and don't
+    // try to emit any further SSE events — the connection is dead. We
+    // eat the (tiny) Haiku token cost on our end rather than charging
+    // for output the user never saw.
+    if (clientGone) {
+      if (!res.writableEnded) res.end();
       return;
     }
 
@@ -606,8 +713,11 @@ Output ONLY the JSON object. Nothing else.`;
       }
     }
 
-    res.json({
-      plan,
+    // Final structured payload — the client uses this both to gate the
+    // "Build this" button and to seed the optional review modal.
+    send("plan", { plan });
+    send("done", {
+      ok: true,
       meta: {
         durationMs: Date.now() - startedAt,
         cost: Number(cost),
@@ -615,6 +725,7 @@ Output ONLY the JSON object. Nothing else.`;
         tokensOut: outputTokens,
       },
     });
+    res.end();
   },
 );
 
