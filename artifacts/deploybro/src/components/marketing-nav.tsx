@@ -38,7 +38,7 @@ export function MarketingNav() {
   return (
     <nav className={`sticky top-0 z-50 h-14 flex items-center justify-between px-6 transition-all duration-300 ${
       transparent
-        ? "bg-transparent border-b border-transparent"
+        ? "bg-transparent"
         : "bg-surface/80 backdrop-blur-md border-b border-border"
     }`}>
       <Link href="/" className="flex items-center hover:opacity-80 transition-opacity" aria-label="DeployBro">
