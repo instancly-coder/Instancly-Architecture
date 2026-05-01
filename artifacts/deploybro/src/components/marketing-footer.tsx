@@ -17,7 +17,6 @@ export function MarketingFooter() {
         <div>
           <h4 className="text-xs font-mono uppercase text-secondary mb-3 tracking-wider">Product</h4>
           <ul className="space-y-2 text-sm">
-            <li><Link href="/how-it-works" className="text-foreground/80 hover:text-primary transition-colors">How it works</Link></li>
             <li><Link href="/pricing" className="text-foreground/80 hover:text-primary transition-colors">Pricing</Link></li>
             <li><Link href="/explore" className="text-foreground/80 hover:text-primary transition-colors">Explore</Link></li>
             <li><Link href="/login" className="text-foreground/80 hover:text-primary transition-colors">Start building</Link></li>

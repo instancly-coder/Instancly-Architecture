@@ -8,7 +8,6 @@ import { useMobileUserMenu } from "./mobile-user-menu";
 
 const NAV_LINKS = [
   { label: "Skills", href: "/skills" },
-  { label: "How it works", href: "/how-it-works" },
   { label: "Pricing", href: "/pricing" },
 ];
 

@@ -3,7 +3,6 @@ import { Link, useLocation } from "wouter";
 import {
   ArrowRight,
   GitCommit,
-  LayoutTemplate,
   Activity as ActivityIcon,
   Building2,
   Briefcase,
@@ -27,7 +26,6 @@ import { SKILLS } from "@/skills";
 const MARKETING_LINKS = [
   { href: "/explore", label: "Explore", icon: Compass },
   { href: "/skills", label: "Skills", icon: Sparkles },
-  { href: "/how-it-works", label: "How it works", icon: LayoutTemplate },
   { href: "/changelog", label: "Changelog", icon: GitCommit },
   { href: "/status", label: "Status", icon: ActivityIcon },
   { href: "/about", label: "About", icon: Building2 },
@@ -275,30 +273,6 @@ export function Skills() {
           })}
         </div>
       )}
-      <CTA />
-    </Shell>
-  );
-}
-
-export function HowItWorks() {
-  return (
-    <Shell
-      eyebrow="How it works"
-      title="How DeployBro works"
-      intro="A simple path from prompt to published app."
-    >
-      <div className="space-y-6">
-        {[
-          ["Describe the app", "Tell DeployBro what you want in plain English."],
-          ["Watch it build", "The editor, preview, and data layer appear together."],
-          ["Publish it", "DeployBro provisions everything and gives you a live URL."],
-        ].map(([title, body]) => (
-          <div key={title} className="rounded-xl bg-surface p-6">
-            <h3 className="font-bold mb-2">{title}</h3>
-            <p className="text-secondary">{body}</p>
-          </div>
-        ))}
-      </div>
       <CTA />
     </Shell>
   );

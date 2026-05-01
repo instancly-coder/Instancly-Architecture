@@ -15,7 +15,6 @@ import {
   LayoutGrid,
   Compass,
   Folder,
-  BookOpen,
   Tag,
   Building2,
   Briefcase,
@@ -64,7 +63,6 @@ const PRIMARY: NavItem[] = [
 
 const SECONDARY: NavItem[] = [
   { href: "/explore", label: "Shared with you", icon: Folder },
-  { href: "/how-it-works", label: "Docs & Help center", icon: BookOpen },
 ];
 
 const TERTIARY: NavItem[] = [
