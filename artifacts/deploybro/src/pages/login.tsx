@@ -112,11 +112,11 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-background relative flex items-center justify-center p-6 overflow-hidden">
-      {/* Halo */}
-      <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-[50vh] z-0">
-        <div className="absolute inset-0 bg-[radial-gradient(70%_60%_at_50%_0%,hsl(var(--primary)/0.18)_0%,transparent_75%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(30%_25%_at_50%_0%,hsl(var(--primary)/0.35)_0%,transparent_70%)]" />
+    <div className="bg-background relative grid place-items-center p-6 overflow-hidden" style={{ minHeight: "100dvh" }}>
+      {/* Halo — centered behind the card */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 z-0">
+        <div className="absolute inset-0 bg-[radial-gradient(60%_50%_at_50%_45%,hsl(var(--primary)/0.18)_0%,transparent_75%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(28%_22%_at_50%_45%,hsl(var(--primary)/0.32)_0%,transparent_70%)]" />
       </div>
 
       <div className="relative z-10 w-full max-w-sm">
