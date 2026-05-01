@@ -1,0 +1,160 @@
+Here’s the plan:
+
+What Plan Mode Is
+
+Before the AI writes any code it thinks out loud. It shows the user exactly what it is going to build, gets approval, then executes. Like a architect showing blueprints before breaking ground.
+
+How It Works In DeployBro
+
+User completes wizard → AI generates plan → User reviews → AI builds
+
+
+The Two Stage Pipeline
+
+Stage 1 — Plan Generation (Haiku, cheap and fast)
+
+const generatePlan = async (wizardData) => {
+  const response = await anthropic.messages.create({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 1000,
+    messages: [{
+      role: "user",
+      content: `You are a senior web architect planning a professional website build.
+
+Based on this project brief:
+${JSON.stringify(wizardData, null, 2)}
+
+Generate a concise build plan in JSON:
+{
+  "projectName": "suggested name",
+  "summary": "one sentence description of what will be built",
+  "pages": ["list of pages"],
+  "sections": [
+    {
+      "name": "Hero",
+      "description": "what this section will contain",
+      "components": ["Navbar", "Headline", "CTA Button", "Hero Image"]
+    }
+  ],
+  "colorPalette": {
+    "primary": "#hex",
+    "accent": "#hex",
+    "background": "#hex"
+  },
+  "fonts": {
+    "heading": "font name",
+    "body": "font name"
+  },
+  "estimatedSections": 6,
+  "features": ["list of interactive features"],
+  "copyTone": "professional/playful/minimal etc"
+}
+
+Return JSON only.`
+    }]
+  })
+
+  return JSON.parse(response.content[0].text)
+}
+
+
+The Plan Mode UI
+
+Show this between the wizard and the build. Full screen card with:
+
+┌─────────────────────────────────────────┐
+│  📋 Your Build Plan                      │
+│  Review before we start building         │
+├─────────────────────────────────────────┤
+│                                         │
+│  🏗 SEO Agency Website                  │
+│  A modern dark-themed agency site        │
+│  targeting small businesses             │
+│                                         │
+│  PAGES                                  │
+│  ○ Home  ○ Services  ○ About  ○ Contact │
+│                                         │
+│  SECTIONS (6)                           │
+│  ✓ Hero — Full viewport with gradient   │
+│    headline and two CTAs               │
+│  ✓ Services — 3 column card grid        │
+│    with hover effects                  │
+│  ✓ Testimonials — Dark section with     │
+│    3 client quotes                     │
+│  ✓ Pricing — 3 tier comparison table   │
+│  ✓ FAQ — Accordion style               │
+│  ✓ Footer — Links, social, copyright   │
+│                                         │
+│  COLORS    FONTS                        │
+│  ■ ■ ■ ■   Space Grotesk / Inter       │
+│                                         │
+│  FEATURES                               │
+│  ✓ Mobile responsive                   │
+│  ✓ Smooth scroll animations            │
+│  ✓ Contact form                        │
+│  ✓ Stripe payment integration          │
+│                                         │
+├─────────────────────────────────────────┤
+│  [✏️ Edit Plan]    [🚀 Build This]      │
+└─────────────────────────────────────────┘
+
+
+Edit Plan Flow
+
+When user clicks Edit Plan show inline editable fields:
+
+	•	Toggle sections on and off
+	•	Edit section descriptions
+	•	Change color swatches
+	•	Add custom features via free text
+	•	Add or remove pages
+
+When they confirm edits the updated plan JSON gets passed to the builder not the original.
+
+Stage 2 — Build From Plan (Sonnet)
+
+const buildFromPlan = async (wizardData, approvedPlan) => {
+  const response = await anthropic.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 8096,
+    system: `You are an expert UI engineer building professional websites.
+You MUST follow the approved plan exactly.
+Do not add sections not in the plan.
+Do not remove sections from the plan.
+Match the colors and fonts exactly as specified.
+Write real copy tailored to the target audience.
+Every section must be fully designed, not placeholder.`,
+    messages: [{
+      role: "user",
+      content: `Build this exactly as planned:
+
+WIZARD DATA:
+${JSON.stringify(wizardData, null, 2)}
+
+APPROVED PLAN:
+${JSON.stringify(approvedPlan, null, 2)}
+
+Output a single complete HTML file. No markdown. No explanation. Code only.`
+    }]
+  })
+
+  return response.content[0].text
+}
+
+
+The Credit Cost Breakdown
+
+|Stage              |Model |Approx Cost|
+|-------------------|------|-----------|
+|Wizard processing  |Free  |$0         |
+|Plan generation    |Haiku |~$0.001    |
+|Build from plan    |Sonnet|~$0.08     |
+|**Total per build**|      |**~$0.081**|
+
+Plan mode adds less than $0.001 to your cost per build. Essentially free but dramatically improves output quality and user trust.
+
+Why This Wins
+
+Users who see and approve a plan before building have dramatically lower regeneration rates. They feel in control. The output matches expectations because they literally approved it first. That means fewer credit refund requests, lower churn and more shares because the first result is good enough to show people.
+
+It also looks incredibly professional compared to competitors. Showing a structured plan before building signals that DeployBro is a serious tool not just another prompt to HTML toy.
