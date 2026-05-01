@@ -59,6 +59,7 @@ import {
 } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { DeleteProjectDialog } from "@/components/delete-project-dialog";
+import { PlanReview, type Plan as ApprovedPlan } from "@/components/plan-review";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -775,9 +776,25 @@ export default function Builder() {
   // Default to Economy Bro by name (not by list index) so reordering the
   // picker never silently changes the default model.
   const [selectedModel, setSelectedModel] = useState<string>("Economy Bro");
-  // Plan mode: when ON, the AI prepends a numbered plan before any code, so
-  // big changes don't scroll past unexplained.
+  // Plan mode: when ON, the user's submit triggers a two-stage flow —
+  // first /ai/plan returns a structured JSON plan that we surface in a
+  // review modal, then on approval /ai/build runs locked to that plan.
   const [planMode, setPlanMode] = useState<boolean>(false);
+  // When the planning pass returns and we're waiting on the user to
+  // review/edit/approve, we stash the plan AND the original send args
+  // here. `null` means no plan in flight; setting this opens the modal.
+  const [pendingPlan, setPendingPlan] = useState<{
+    prompt: string;
+    plan: ApprovedPlan;
+    overrides: {
+      modelKey?: "haiku" | "sonnet" | "opus";
+      urls?: string[];
+      files?: File[];
+    };
+  } | null>(null);
+  // While /ai/plan is in flight (before the modal opens). Drives the
+  // checklist row + lets us disable the Send button.
+  const [isPlanning, setIsPlanning] = useState<boolean>(false);
   // Attachments + reference URLs are lifted here (rather than living inside
   // ChatPanel) so handleSend can include them in the build request body.
   const [attachments, setAttachments] = useState<File[]>([]);
@@ -947,9 +964,10 @@ export default function Builder() {
     document.body.style.userSelect = "none";
   };
 
-  // Optional `overrides` lets callers (specifically the rehydration effect)
-  // pass freshly-parsed composer settings without waiting for React state
-  // setters to flush — eliminates the timing race on first auto-send.
+  // Optional `overrides` lets callers (specifically the rehydration effect
+  // and the plan-review modal's "Build this" callback) pass freshly-parsed
+  // composer settings without waiting for React state setters to flush —
+  // eliminates the timing race on first auto-send.
   const handleSend = async (
     overridePrompt?: string,
     overrides?: {
@@ -957,13 +975,17 @@ export default function Builder() {
       planMode?: boolean;
       urls?: string[];
       files?: File[];
+      // Set by the plan-review modal once the user clicks "Build this".
+      // When present we skip the planning pass and POST straight to
+      // /ai/build with the plan as the locked spec.
+      approvedPlan?: ApprovedPlan;
     },
   ) => {
     // Defensive: callers like `<button onClick={handleSend}>` pass a
     // React event in the first slot, so guard against non-string args.
     const raw =
       typeof overridePrompt === "string" ? overridePrompt : chatInput;
-    if (!raw.trim() || isStreaming || !username || !slug) return;
+    if (!raw.trim() || isStreaming || isPlanning || !username || !slug) return;
     const prompt = raw.trim();
     // Cancel any pending cleanup timer from the previous run so it
     // can't fire 600ms into this new send and wipe the freshly-set
@@ -972,6 +994,60 @@ export default function Builder() {
       window.clearTimeout(cleanupTimerRef.current);
       cleanupTimerRef.current = null;
     }
+
+    // ─── Two-stage Plan Mode interception ────────────────────────────────
+    // When Plan Mode is on AND the user hasn't yet approved a plan, fire a
+    // cheap /ai/plan call instead of jumping straight to /ai/build. The
+    // returned structured plan opens the review modal; on "Build this" the
+    // modal re-enters handleSend with overrides.approvedPlan set, which
+    // skips this branch and falls through to the normal build path below.
+    const _effectivePlanMode = overrides?.planMode ?? planMode;
+    if (_effectivePlanMode && !overrides?.approvedPlan) {
+      const _modelKey =
+        overrides?.modelKey ??
+        AVAILABLE_MODELS.find((m) => m.name === selectedModel)?.key;
+      const _sendingUrls = overrides?.urls ?? refUrls;
+      const _sendingFiles = overrides?.files ?? attachments;
+      setChatInput("");
+      setIsPlanning(true);
+      try {
+        const planRes = await fetch(`/api/ai/plan/${username}/${slug}`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            prompt,
+            ...(_sendingUrls.length > 0 ? { urls: _sendingUrls } : {}),
+          }),
+        });
+        const data = await planRes.json().catch(() => ({}));
+        if (!planRes.ok) {
+          throw new Error(data?.message || `HTTP ${planRes.status}`);
+        }
+        if (!data?.plan) throw new Error("No plan returned");
+        setPendingPlan({
+          prompt,
+          plan: data.plan as ApprovedPlan,
+          overrides: {
+            modelKey: _modelKey,
+            urls: _sendingUrls,
+            files: _sendingFiles,
+          },
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Couldn't draft a plan";
+        toast.error(msg);
+        // Restore the prompt so the user can retry without retyping —
+        // but only if the composer is still empty. The user might have
+        // started typing a follow-up while the planner was in flight,
+        // and we shouldn't clobber their fresh draft.
+        setChatInput((cur) => (cur.trim().length === 0 ? prompt : cur));
+      } finally {
+        setIsPlanning(false);
+      }
+      return;
+    }
+
     setChatInput("");
     setIsStreaming(true);
     // Show the user's prompt as a bubble in the chat immediately so
@@ -1067,6 +1143,10 @@ export default function Builder() {
     if (effectivePlanMode) body.planMode = true;
     if (sendingUrls.length > 0) body.urls = sendingUrls;
     if (images.length > 0) body.images = images;
+    // Two-stage Plan Mode: when the user already approved a plan in the
+    // review modal, we ship it back to /ai/build as the locked spec and
+    // the server skips the legacy "write a plan first" instruction.
+    if (overrides?.approvedPlan) body.approvedPlan = overrides.approvedPlan;
 
     try {
       const res = await fetch(`/api/ai/build/${username}/${slug}`, {
@@ -1847,6 +1927,37 @@ export default function Builder() {
       {/* Mobile chat is handled inline by the aside above + the
           Chat ↔ Preview toggle in the topbar. The old floating FAB
           and bottom-sheet pattern has been removed. */}
+
+      {/* Plan Mode review modal. Opens once /ai/plan returns; the user
+          tweaks/approves the structured plan and "Build this" hands the
+          plan back to handleSend as the locked spec for /ai/build. */}
+      {pendingPlan && (
+        <PlanReview
+          open
+          plan={pendingPlan.plan}
+          onCancel={() => {
+            const restored = pendingPlan.prompt;
+            setPendingPlan(null);
+            // Put the original prompt back in the composer so the user
+            // can edit it and retry — unless they already started
+            // typing something new while the modal was open.
+            setChatInput((cur) => (cur.trim().length === 0 ? restored : cur));
+          }}
+          onApprove={(modifiedPlan) => {
+            const { prompt: planPrompt, overrides } = pendingPlan;
+            setPendingPlan(null);
+            // Re-enter handleSend with the approved plan attached. We
+            // keep planMode:true so the request body still carries the
+            // flag (server uses approvedPlan presence as the canonical
+            // signal, but the flag stays for UI/telemetry consistency).
+            void handleSend(planPrompt, {
+              ...overrides,
+              planMode: true,
+              approvedPlan: modifiedPlan,
+            });
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -70,14 +70,25 @@ const DEFAULT_MODEL: ModelKey = "haiku";
 // Resolve which Claude model to run for a given request.
 // Rules, in priority order:
 //   1. Free plan is locked to Economy Bro (Haiku) regardless of any other input.
-//   2. Plan mode auto-upgrades paid users to Power Bro (Opus) — planning benefits
-//      most from the strongest model, and the user explicitly opted in.
-//   3. Otherwise, honour the client's requested key, falling back to the default.
+//   2. If the user already approved a structured plan (two-stage Plan Mode
+//      pipeline), build with Smart Bro (Sonnet) — the heavy reasoning was
+//      already done in the planning pass, so we don't need Opus prices.
+//   3. Otherwise, legacy single-pass plan mode auto-upgrades paid users to
+//      Power Bro (Opus). Kept as a fallback for any client that still sends
+//      `planMode:true` without an `approvedPlan`.
+//   4. Honour the client's requested key, falling back to the default.
 function pickModel(
   requested: unknown,
   plan: string | null | undefined,
   planMode: boolean,
+  hasApprovedPlan: boolean,
 ): ModelKey {
+  // An approved plan trumps every other gate — if the user paid the
+  // Haiku planning cost AND went through the review modal, the build
+  // step must run on Sonnet locked to that plan, regardless of the
+  // user's billing plan. (Plan Mode itself is the gate that controls
+  // whether free users can reach this branch in the first place.)
+  if (hasApprovedPlan) return "sonnet";
   if ((plan ?? "Free").toLowerCase() === "free") return "haiku";
   if (planMode) return "opus";
   return typeof requested === "string" && requested in MODELS
@@ -296,6 +307,317 @@ async function fetchUrlForRedesign(rawUrl: string): Promise<{
   }
 }
 
+// ───────────────────────── Plan Mode (two-stage) ─────────────────────────
+// Stage 1: a cheap Haiku call that returns a structured JSON plan
+// (sections, colors, fonts, pages, features). The user reviews/edits
+// the plan in the UI, then submits to /ai/build with `approvedPlan`
+// attached, which becomes the LOCKED SPEC for the Sonnet build.
+
+type ApprovedPlan = {
+  projectName: string;
+  summary: string;
+  pages: string[];
+  sections: { name: string; description: string; enabled: boolean }[];
+  colors: { name: string; hex: string }[];
+  fonts: { heading: string; body: string };
+  features: string[];
+  copyTone: string;
+};
+
+// Best-effort parser for an `approvedPlan` body field. Tolerates missing
+// optional fields by filling defaults so a slightly-stale client schema
+// can't crash the build endpoint. Returns null only if the value isn't
+// even shaped like an object — in which case the caller falls back to
+// the legacy single-pass plan-mode behaviour.
+function parseApprovedPlan(value: unknown): ApprovedPlan | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const v = value as Record<string, unknown>;
+  const str = (x: unknown) => (typeof x === "string" ? x : "");
+  const arrStr = (x: unknown): string[] =>
+    Array.isArray(x) ? x.filter((s): s is string => typeof s === "string") : [];
+  const sections = Array.isArray(v.sections)
+    ? (v.sections as unknown[])
+        .filter((s): s is Record<string, unknown> => !!s && typeof s === "object")
+        .map((s) => ({
+          name: str(s.name),
+          description: str(s.description),
+          // default to enabled when the field is missing — matches what
+          // the planner emits and what the UI defaults look like.
+          enabled: s.enabled !== false,
+        }))
+        .filter((s) => s.name.length > 0)
+    : [];
+  // Normalise to `#RRGGBB`. The `<input type="color">` control in the
+  // review modal silently ignores anything that isn't 6-char hex (it
+  // shows black instead), so expand 3-char shorthand and reject any
+  // exotic format the planner might emit (`#RRGGBBAA`, `rgb(...)`, …).
+  const normaliseHex = (raw: string): string => {
+    const m3 = /^#([0-9a-fA-F]{3})$/.exec(raw);
+    if (m3) {
+      const [r, g, b] = m3[1];
+      return `#${r}${r}${g}${g}${b}${b}`.toLowerCase();
+    }
+    const m6 = /^#([0-9a-fA-F]{6})$/.exec(raw);
+    return m6 ? `#${m6[1].toLowerCase()}` : "";
+  };
+  const colors = Array.isArray(v.colors)
+    ? (v.colors as unknown[])
+        .filter((c): c is Record<string, unknown> => !!c && typeof c === "object")
+        .map((c) => ({ name: str(c.name), hex: normaliseHex(str(c.hex)) }))
+        .filter((c) => c.name.length > 0 && c.hex.length > 0)
+    : [];
+  const fontsRaw =
+    v.fonts && typeof v.fonts === "object" && !Array.isArray(v.fonts)
+      ? (v.fonts as Record<string, unknown>)
+      : {};
+  const fonts = {
+    heading: str(fontsRaw.heading) || "Inter",
+    body: str(fontsRaw.body) || "Inter",
+  };
+  return {
+    projectName: str(v.projectName),
+    summary: str(v.summary),
+    pages: arrStr(v.pages),
+    sections,
+    colors,
+    fonts,
+    features: arrStr(v.features),
+    copyTone: str(v.copyTone),
+  };
+}
+
+// Render the approved plan into the system prompt as a locked spec the
+// model must conform to. Disabled sections are explicitly listed under
+// "DO NOT INCLUDE" so the model never silently re-adds them.
+function buildApprovedPlanInstruction(plan: ApprovedPlan): string {
+  const enabled = plan.sections.filter((s) => s.enabled);
+  const disabled = plan.sections.filter((s) => !s.enabled);
+  const colorLines = plan.colors
+    .map((c) => `  - ${c.name}: ${c.hex}`)
+    .join("\n");
+  const sectionLines = enabled
+    .map((s) => `  - ${s.name}: ${s.description}`)
+    .join("\n");
+  const disabledLine =
+    disabled.length > 0
+      ? `\nDO NOT INCLUDE these sections (the user explicitly turned them off): ${disabled
+          .map((s) => s.name)
+          .join(", ")}.`
+      : "";
+  const pagesLine =
+    plan.pages.length > 0 ? `Pages: ${plan.pages.join(", ")}.\n` : "";
+  const featuresLine =
+    plan.features.length > 0
+      ? `\nKey features to highlight:\n${plan.features.map((f) => `  - ${f}`).join("\n")}`
+      : "";
+  return `
+
+PLAN MODE — APPROVED BUILD PLAN. The user reviewed and approved this exact plan in the UI. Build to it precisely. Do NOT add extra pages, sections, or features that aren't listed. Do NOT change the colour palette, fonts, or copy tone unless the user's prompt overrides them.
+
+Project: ${plan.projectName || "Untitled"}
+Summary: ${plan.summary}
+${pagesLine}
+Sections (in order, only the ones listed):
+${sectionLines}${disabledLine}
+
+Colour palette (use these exact hex values for the corresponding roles):
+${colorLines}
+
+Typography:
+  - Heading: ${plan.fonts.heading}
+  - Body: ${plan.fonts.body}
+${featuresLine}
+
+Copy tone: ${plan.copyTone}
+
+Implement this plan as one cohesive build. Skip any free-form planning preamble — the plan above IS the plan.`;
+}
+
+router.post(
+  "/ai/plan/:username/:slug",
+  // Same rate limiter as /ai/build so a planning loop can't be used to
+  // dodge the AI cap. Planning costs are tiny (~1¢) but still real Anthropic
+  // tokens, so we bill the user just like a build.
+  aiLimiter,
+  requireAuth,
+  async (req: Request, res: Response): Promise<void> => {
+    const username = String(req.params.username);
+    const slug = String(req.params.slug);
+    const prompt = String(req.body?.prompt ?? "").trim();
+    const urls: string[] = Array.isArray(req.body?.urls)
+      ? (req.body.urls as unknown[])
+          .filter((u): u is string => typeof u === "string" && u.trim() !== "")
+          .slice(0, 5)
+      : [];
+
+    if (!prompt) {
+      res.status(400).json({ status: "error", message: "prompt required" });
+      return;
+    }
+    if (!anthropic) {
+      res.status(503).json({
+        status: "error",
+        message:
+          "AI is not configured. ANTHROPIC_API_KEY is missing on the server.",
+      });
+      return;
+    }
+
+    const rows = await db
+      .select({
+        project: projectsTable,
+        ownerId: usersTable.id,
+      })
+      .from(projectsTable)
+      .innerJoin(usersTable, eq(usersTable.id, projectsTable.userId))
+      .where(and(eq(usersTable.username, username), eq(projectsTable.slug, slug)))
+      .limit(1);
+
+    const project = rows[0]?.project;
+    const ownerId = rows[0]?.ownerId;
+    if (!project) {
+      res.status(404).json({ status: "error", message: "Project not found" });
+      return;
+    }
+    const authedUser = getAuthedUser(req);
+    if (!authedUser || authedUser.id !== ownerId) {
+      res.status(403).json({ status: "error", message: "Forbidden" });
+      return;
+    }
+
+    // Gather a tiny bit of project context so the planner knows whether
+    // this is a first build or an iteration on an existing project. We
+    // don't send file contents (Haiku doesn't need them to draw a plan)
+    // — just paths and the project's framework.
+    const existingPaths = await db
+      .select({ path: projectFilesTable.path })
+      .from(projectFilesTable)
+      .where(eq(projectFilesTable.projectId, project.id))
+      .orderBy(asc(projectFilesTable.path));
+    const isFirstBuild = existingPaths.length === 0;
+    const refsLine =
+      urls.length > 0
+        ? `\n\nReference URLs the user wants to draw inspiration from: ${urls.join(", ")}`
+        : "";
+
+    const planSystemPrompt = `You are a senior product designer drafting a build plan for a website. Output STRICT JSON only — no prose before or after, no markdown fences, no comments. The JSON must match this exact shape:
+
+{
+  "projectName": string,           // a short, human-readable name for the project (2-4 words)
+  "summary": string,               // 1-2 sentence summary of what we're building
+  "pages": string[],               // top-level pages, e.g. ["Home", "About", "Pricing"]. 1-5 pages.
+  "sections": [                    // sections of the primary page in render order
+    { "name": string, "description": string, "enabled": true }
+  ],
+  "colors": [                      // 4-6 named brand colors
+    { "name": string, "hex": "#RRGGBB" }
+  ],
+  "fonts": { "heading": string, "body": string },   // Google Fonts names
+  "features": string[],            // 3-6 short bullet points describing the headline features
+  "copyTone": string               // e.g. "Confident, plain-spoken, slightly playful"
+}
+
+Rules:
+- Sections should cover the primary landing page comprehensively (Hero, Features, Social proof, Pricing, FAQ, CTA, Footer, etc — pick the ones that fit the brief). Default ALL sections to "enabled": true; the user can toggle individual ones off in the UI.
+- Color hex values MUST be valid #RRGGBB strings. Pick a real, on-brief palette — no placeholder greys.
+- Keep descriptions concrete and short (one sentence each).
+- ${isFirstBuild ? "This is the FIRST build — include a complete page structure." : `This is an ITERATION on an existing project (${existingPaths.length} files already). Plan ONLY for what the user is asking to add or change. Existing paths: ${existingPaths.slice(0, 30).map((f) => f.path).join(", ")}.`}
+
+Output ONLY the JSON object. Nothing else.`;
+
+    const userPrompt = `User request:\n${prompt}${refsLine}`;
+
+    const startedAt = Date.now();
+    let inputTokens = 0;
+    let outputTokens = 0;
+    let raw = "";
+
+    try {
+      const result = await anthropic.messages.create({
+        model: MODELS.haiku.id,
+        max_tokens: 2_000,
+        system: planSystemPrompt,
+        messages: [{ role: "user", content: userPrompt }],
+      });
+      inputTokens = result.usage?.input_tokens ?? 0;
+      outputTokens = result.usage?.output_tokens ?? 0;
+      // Concatenate any text blocks the model returned. Haiku basically
+      // always returns a single text block here, but defend against the
+      // shape changing.
+      raw = result.content
+        .map((b) => (b.type === "text" ? b.text : ""))
+        .join("");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Plan request failed";
+      req.log.error({ err }, "Plan generation failed");
+      res.status(502).json({ status: "error", message });
+      return;
+    }
+
+    // Strip any accidental markdown fences and locate the JSON object.
+    const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
+    const start = cleaned.indexOf("{");
+    const end = cleaned.lastIndexOf("}");
+    let parsed: unknown = null;
+    if (start >= 0 && end > start) {
+      try {
+        parsed = JSON.parse(cleaned.slice(start, end + 1));
+      } catch {
+        parsed = null;
+      }
+    }
+    const plan = parseApprovedPlan(parsed);
+    if (!plan) {
+      req.log.warn({ raw: cleaned.slice(0, 500) }, "Plan response was not valid JSON");
+      res.status(502).json({
+        status: "error",
+        message: "Plan response was malformed. Try again or build without Plan Mode.",
+      });
+      return;
+    }
+
+    // Bill the small Haiku token cost. Same per-million pricing as the build
+    // path. Round to whole cents so the ledger stays consistent with the
+    // 2dp transactions table.
+    const rawCost = Math.max(
+      0,
+      (inputTokens / 1_000_000) * MODELS.haiku.rates.input +
+        (outputTokens / 1_000_000) * MODELS.haiku.rates.output,
+    );
+    const cost = (Math.round(rawCost * 100) / 100).toFixed(2);
+    if (ownerId && Number(cost) > 0) {
+      try {
+        await db.transaction(async (tx) => {
+          await tx
+            .update(usersTable)
+            .set({ balance: sql`${usersTable.balance} - ${cost}` })
+            .where(eq(usersTable.id, ownerId));
+          await tx.insert(transactionsTable).values({
+            userId: ownerId,
+            amount: `-${cost}`,
+            method: "Plan generation",
+            status: "Success",
+          });
+        });
+      } catch (err) {
+        // Billing failure shouldn't block the user — log and continue. The
+        // ops team can reconcile from Anthropic invoices if needed.
+        req.log.error({ err }, "Failed to bill for plan generation");
+      }
+    }
+
+    res.json({
+      plan,
+      meta: {
+        durationMs: Date.now() - startedAt,
+        cost: Number(cost),
+        tokensIn: inputTokens,
+        tokensOut: outputTokens,
+      },
+    });
+  },
+);
+
 router.post(
   "/ai/build/:username/:slug",
   // aiLimiter is keyed by user id (with IP fallback) so a logged-in
@@ -311,6 +633,14 @@ router.post(
     const slug = String(req.params.slug);
     const prompt = String(req.body?.prompt ?? "").trim();
     const planMode = Boolean(req.body?.planMode);
+    // Two-stage Plan Mode: when the client already ran /ai/plan and the
+    // user approved (and possibly edited) the structured plan, it comes
+    // back here as `approvedPlan`. We accept any object shape — the
+    // planning endpoint produces it and we just stringify it back into
+    // the system prompt as the locked spec. We coerce to null on any
+    // shape mismatch so a malformed payload can never silently change
+    // the build behaviour.
+    const approvedPlan: ApprovedPlan | null = parseApprovedPlan(req.body?.approvedPlan);
     const urls: string[] = Array.isArray(req.body?.urls)
       ? (req.body.urls as unknown[])
           .filter((u): u is string => typeof u === "string" && u.trim() !== "")
@@ -421,7 +751,12 @@ router.post(
     // plan mode auto-upgrades paid users to Power Bro; otherwise we honour
     // the client's choice. The chosen model also determines the per-token
     // rates used to bill the user's balance after the build.
-    const modelKey = pickModel(req.body?.model, ownerPlan, planMode);
+    const modelKey = pickModel(
+      req.body?.model,
+      ownerPlan,
+      planMode,
+      approvedPlan !== null,
+    );
     const modelInfo = MODELS[modelKey];
 
     // Pull existing project files so the model can reason about prior code.
@@ -645,14 +980,25 @@ router.post(
         urlContext = `\n\n---\n\nReference website(s) the user wants to redesign or draw inspiration from. Use these as the visual/structural starting point — copy the information architecture and content where helpful, but apply your own modern design judgement:\n${urlContext}`;
       }
 
-      // PLAN MODE: AI plans first, then implements in the same response. The
-      // user sees a clear plan before code blocks scroll past — useful for
-      // bigger changes where you want to know what's about to happen.
+      // PLAN MODE composition.
+      //
+      //   • TWO-STAGE pipeline (preferred, when an `approvedPlan` is
+      //     attached): the user already reviewed and approved a structured
+      //     plan in the UI. We inject that plan as a LOCKED SPEC and tell
+      //     the model to conform to it — no need for a free-form plan in
+      //     the response.
+      //
+      //   • LEGACY single-pass plan mode (when only `planMode:true`,
+      //     no plan attached): keeps the older "write a numbered plan
+      //     before code" behaviour as a fallback for any client that
+      //     hasn't been updated.
       const systemPrompt =
         buildSystemPrompt(project.name, project.framework) +
-        (planMode
-          ? "\n\nPLAN MODE IS ON: Begin your response with a numbered plan (3 to 7 short bullet points) describing exactly which files you will create or change and why. After the plan, write a line containing only '---' and then proceed with the implementation as normal."
-          : "");
+        (approvedPlan
+          ? buildApprovedPlanInstruction(approvedPlan)
+          : planMode
+            ? "\n\nPLAN MODE IS ON: Begin your response with a numbered plan (3 to 7 short bullet points) describing exactly which files you will create or change and why. After the plan, write a line containing only '---' and then proceed with the implementation as normal."
+            : "");
 
       // ── Two-stage prompt enhancement ──────────────────────────────────────
       //
