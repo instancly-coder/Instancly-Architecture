@@ -137,7 +137,7 @@ export function Section({ title, children }: { title: string; children: ReactNod
 
 export function CTA() {
   return (
-    <div className="mt-12 rounded-xl border border-border bg-surface p-6 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+    <div className="mt-12 rounded-xl bg-surface p-6 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
       <div>
         <h3 className="text-lg font-bold mb-1">Got an idea? Build it now.</h3>
         <p className="text-sm text-secondary">Free to start. No card required.</p>
@@ -155,7 +155,7 @@ const LEGAL_EFFECTIVE = "April 1, 2026";
 
 function LegalMeta({ effective = LEGAL_EFFECTIVE }: { effective?: string }) {
   return (
-    <div className="mb-10 rounded-lg border border-border bg-surface/60 p-4 text-xs font-mono text-secondary flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-6">
+    <div className="mb-10 rounded-lg bg-surface/60 p-4 text-xs font-mono text-secondary flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-6">
       <span>Effective: {effective}</span>
       <span className="hidden sm:inline">·</span>
       <span>Version 2.0</span>
@@ -219,7 +219,7 @@ export function Skills() {
       </div>
 
       {filtered.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border bg-surface p-10 text-center">
+        <div className="rounded-xl bg-surface p-10 text-center">
           <div className="text-sm text-foreground mb-1">No matching skills</div>
           <div className="text-xs text-secondary">
             Try a different keyword, or clear the search to see them all.
@@ -231,7 +231,7 @@ export function Skills() {
             return (
               <div
                 key={s.slug}
-                className="group rounded-xl border border-border bg-surface p-5 flex flex-col gap-3 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5 transition-all"
+                className="group rounded-xl bg-surface p-5 flex flex-col gap-3 hover:shadow-lg hover:shadow-primary/5 transition-all"
               >
                 <div className="min-w-0">
                   <div className="text-[10px] uppercase tracking-wider font-mono text-secondary mb-1">
@@ -257,7 +257,7 @@ export function Skills() {
 
                 <Link
                   href={`/?skill=${encodeURIComponent(s.slug)}`}
-                  className="mt-1 inline-flex items-center justify-center gap-1.5 h-9 rounded-lg border text-sm font-medium bg-background border-border text-foreground hover:border-primary/40 hover:bg-surface-raised transition-colors"
+                  className="mt-1 inline-flex items-center justify-center gap-1.5 h-9 rounded-lg text-sm font-medium bg-surface-raised text-foreground hover:bg-surface transition-colors"
                   aria-label={`Add ${s.name} skill to your prompt`}
                 >
                   <Plus className="w-4 h-4" />
@@ -286,7 +286,7 @@ export function HowItWorks() {
           ["Watch it build", "The editor, preview, and data layer appear together."],
           ["Publish it", "DeployBro provisions everything and gives you a live URL."],
         ].map(([title, body]) => (
-          <div key={title} className="rounded-xl border border-border bg-surface p-6">
+          <div key={title} className="rounded-xl bg-surface p-6">
             <h3 className="font-bold mb-2">{title}</h3>
             <p className="text-secondary">{body}</p>
           </div>
@@ -333,7 +333,7 @@ export function Changelog() {
     >
       <div className="space-y-8">
         {entries.map((e) => (
-          <div key={e.version} className="rounded-xl border border-border bg-surface p-6">
+          <div key={e.version} className="rounded-xl bg-surface p-6">
             <div className="flex items-baseline gap-3 mb-3">
               <span className="text-sm font-mono text-primary">{e.version}</span>
               <span className="text-xs text-secondary">{e.date}</span>
@@ -367,11 +367,11 @@ export function Status() {
       title="System status"
       intro="Real-time health of the DeployBro platform."
     >
-      <div className="rounded-xl border border-border bg-surface p-6 mb-8 flex items-center gap-3">
+      <div className="rounded-xl bg-surface p-6 mb-8 flex items-center gap-3">
         <span className="w-2.5 h-2.5 rounded-full bg-primary" />
         <span className="font-medium">All systems operational</span>
       </div>
-      <div className="rounded-xl border border-border bg-surface divide-y divide-border">
+      <div className="rounded-xl bg-surface divide-y divide-border">
         {services.map((s) => (
           <div key={s.name} className="px-6 py-4 flex items-center justify-between">
             <span className="text-sm">{s.name}</span>

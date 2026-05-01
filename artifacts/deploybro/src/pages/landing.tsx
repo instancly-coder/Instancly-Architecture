@@ -625,7 +625,7 @@ export default function Landing() {
                       key={idea.label}
                       type="button"
                       onClick={() => fillPromptFromIdea(idea.prompt)}
-                      className="px-3 py-1.5 rounded-full border border-border bg-surface hover:bg-surface-raised hover:border-primary/50 text-xs font-medium text-foreground/80 hover:text-foreground transition-colors"
+                      className="px-3 py-1.5 rounded-full bg-surface hover:bg-surface-raised text-xs font-medium text-foreground/80 hover:text-foreground transition-colors"
                     >
                       {idea.label}
                     </button>
@@ -636,7 +636,7 @@ export default function Landing() {
                   onClick={() => setIdeaIndices(pickIdeas())}
                   aria-label="Show different ideas"
                   title="Show different ideas"
-                  className="p-1.5 rounded-full border border-border bg-surface hover:bg-surface-raised hover:border-primary/50 text-secondary hover:text-foreground transition-colors"
+                  className="p-1.5 rounded-full bg-surface hover:bg-surface-raised text-secondary hover:text-foreground transition-colors"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                 </button>
@@ -670,7 +670,7 @@ export default function Landing() {
               {STEPS.map((s) => (
                 <div
                   key={s.step}
-                  className="rounded-xl border border-border bg-surface p-6 md:p-7 hover-elevate transition-colors"
+                  className="rounded-xl bg-surface p-6 md:p-7 hover-elevate transition-colors"
                 >
                   <div className="text-xs font-mono text-primary mb-3">STEP {s.step}</div>
                   <h3 className="text-xl md:text-2xl font-bold mb-3 tracking-tight">{s.title}</h3>
@@ -698,11 +698,11 @@ export default function Landing() {
             {isLoading ? (
               <div className="text-sm text-secondary">Loading templates…</div>
             ) : templates.length === 0 ? (
-              <div className="rounded-2xl border border-border bg-surface p-8 text-center text-sm text-secondary">No templates yet.</div>
+              <div className="rounded-2xl bg-surface p-8 text-center text-sm text-secondary">No templates yet.</div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {templates.slice(0, 4).map((t) => (
-                  <Link key={t.id} href={`/${t.author}/${t.slug}`} className="group rounded-xl border border-border bg-surface hover-elevate overflow-hidden flex flex-col">
+                  <Link key={t.id} href={`/${t.author}/${t.slug}`} className="group rounded-xl bg-surface hover-elevate overflow-hidden flex flex-col">
                     {/* aspect-[16/10] matches the 1280×800 capture viewport
                         so `object-cover object-top` paints the page header
                         full-width with no side cropping. */}
