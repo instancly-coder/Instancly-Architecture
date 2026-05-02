@@ -1217,7 +1217,19 @@ export default function Builder() {
   };
 
   const sendPlanReply = (text?: string) => {
-    if (!planConversation || planConversation.status !== "asking") return;
+    // Accept replies from both "asking" (the model just posed a
+    // question and is waiting for an answer) and "ready" (the user
+    // already has a finished plan but wants to refine it before
+    // building — e.g. "actually use a darker blue", "add a settings
+    // page"). In the ready case we re-open the conversation by
+    // flipping back to "thinking" and re-streaming, which the
+    // server treats as another planning turn.
+    if (
+      !planConversation ||
+      (planConversation.status !== "asking" &&
+        planConversation.status !== "ready")
+    )
+      return;
     // Lock against double-submit (rapid Enter, chip double-click). A
     // turn is in flight whenever planAbortRef.current is set; until it
     // completes we silently drop additional sends rather than firing
@@ -2054,7 +2066,15 @@ export default function Builder() {
               // assistant is awaiting a reply, route the user's send
               // into the conversation (sendPlanReply). Otherwise fall
               // through to a normal build.
-              if (planConversation?.status === "asking") {
+              // Both "asking" (mid-interview) and "ready" (plan is
+              // finalised but user wants to refine before building)
+              // route the typed input back into the plan conversation
+              // — that's the "or enter something in the prompt box"
+              // path that pairs with the inline color picker.
+              if (
+                planConversation?.status === "asking" ||
+                planConversation?.status === "ready"
+              ) {
                 sendPlanReply();
               } else {
                 void handleSend();
@@ -2064,6 +2084,9 @@ export default function Builder() {
             onPlanSuggestionClick={(text) => sendPlanReply(text)}
             onApprovePlan={approvePlan}
             onCancelPlan={cancelPlanConversation}
+            onUpdatePlan={(plan) =>
+              setPlanConversation((cur) => (cur ? { ...cur, plan } : cur))
+            }
             openBuildId={openBuildId}
             setOpenBuildId={setOpenBuildId}
             pastBuilds={pastBuilds}
@@ -2267,6 +2290,7 @@ function ChatPanel({
   onPlanSuggestionClick,
   onApprovePlan,
   onCancelPlan,
+  onUpdatePlan,
   openBuildId,
   setOpenBuildId,
   pastBuilds,
@@ -2317,6 +2341,10 @@ function ChatPanel({
   // Cancel button on the conversation card — aborts the in-flight SSE
   // turn and restores the original prompt to the composer.
   onCancelPlan: () => void;
+  // In-place plan edits (currently the palette color picker). Mutates
+  // `planConversation.plan` so the change ships when the user clicks
+  // "Build this".
+  onUpdatePlan: (plan: ApprovedPlan) => void;
   openBuildId: string | null;
   setOpenBuildId: (id: string | null) => void;
   pastBuilds: PastBuild[];
@@ -2651,6 +2679,7 @@ function ChatPanel({
             onSuggestionClick={onPlanSuggestionClick}
             onApprovePlan={onApprovePlan}
             onCancelPlan={onCancelPlan}
+            onUpdatePlan={onUpdatePlan}
           />
         )}
 
@@ -3036,11 +3065,15 @@ function PlanBox({
   onSuggestionClick,
   onApprovePlan,
   onCancelPlan,
+  onUpdatePlan,
 }: {
   conversation: PlanConversation;
   onSuggestionClick: (text: string) => void;
   onApprovePlan: () => void;
   onCancelPlan: () => void;
+  // Forwarded to <PlanSummary> as `onChange` so palette swatches
+  // are interactive once the plan is ready.
+  onUpdatePlan: (plan: ApprovedPlan) => void;
 }) {
   const { messages, status, plan } = conversation;
   const isReady = status === "ready" && plan !== null;
@@ -3219,7 +3252,7 @@ function PlanBox({
       {isReady && plan && (
         <>
           <div className="border-t border-border/60 pt-3">
-            <PlanSummary plan={plan} />
+            <PlanSummary plan={plan} onChange={onUpdatePlan} />
           </div>
           <div className="flex flex-wrap gap-2">
             <Button size="sm" onClick={onApprovePlan} className="h-8 text-xs">

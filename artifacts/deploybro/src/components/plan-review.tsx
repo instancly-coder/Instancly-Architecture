@@ -17,13 +17,39 @@ export type Plan = {
   copyTone: string;
 };
 
-// Read-only structured summary of the final approved plan. Designed to
-// fit inside the plan-conversation card in the chat panel — dense but
+// Structured summary of the final approved plan. Designed to fit
+// inside the plan-conversation card in the chat panel — dense but
 // scannable, no horizontal scroll. Omits sections the model didn't
 // populate so an iteration plan with no colors/sections still renders
 // cleanly.
-export function PlanSummary({ plan }: { plan: Plan }) {
+//
+// The palette is interactive when an `onChange` prop is supplied: up
+// to four swatches are shown side-by-side and each one opens a native
+// color picker on click. Picking a color fires `onChange` with the
+// plan mutated in place. Pages / sections / typography / features
+// stay read-only — they're better edited via a follow-up chat turn.
+const PALETTE_LIMIT = 4;
+
+export function PlanSummary({
+  plan,
+  onChange,
+}: {
+  plan: Plan;
+  onChange?: (next: Plan) => void;
+}) {
   const enabledSections = plan.sections.filter((s) => s.enabled);
+  const editable = typeof onChange === "function";
+  // Show the first PALETTE_LIMIT colors. The model occasionally
+  // suggests 5–6 — we keep the chat surface tight by truncating.
+  const visibleColors = plan.colors.slice(0, PALETTE_LIMIT);
+
+  const handleColorChange = (idx: number, hex: string) => {
+    if (!onChange) return;
+    const nextColors = plan.colors.map((c, i) =>
+      i === idx ? { ...c, hex } : c,
+    );
+    onChange({ ...plan, colors: nextColors });
+  };
   return (
     <div className="space-y-3 text-sm">
       <div>
@@ -68,23 +94,58 @@ export function PlanSummary({ plan }: { plan: Plan }) {
         </Section>
       )}
 
-      {plan.colors.length > 0 && (
+      {visibleColors.length > 0 && (
         <Section label="Palette">
-          <div className="flex flex-wrap gap-1.5">
-            {plan.colors.map((c, i) => (
-              <span
-                key={`col-${i}`}
-                className="inline-flex items-center gap-1.5 pl-1 pr-2 py-0.5 rounded-md bg-surface-raised text-[11px] font-mono"
-                title={`${c.name} · ${c.hex}`}
-              >
+          <div className="flex flex-wrap gap-2">
+            {visibleColors.map((c, i) =>
+              editable ? (
+                // The label wraps a hidden native color input, so the
+                // entire chip — swatch + hex label — is the click
+                // target that opens the OS color picker. `onInput`
+                // fires continuously while the user drags inside the
+                // picker, giving them a live preview against the rest
+                // of the plan summary.
+                <label
+                  key={`col-${i}`}
+                  className="group inline-flex items-center gap-1.5 pl-1 pr-2 py-0.5 rounded-md bg-surface text-[11px] font-mono cursor-pointer hover:ring-1 hover:ring-primary/40 transition-all"
+                  title={`${c.name} · ${c.hex} · click to change`}
+                >
+                  <span
+                    className="inline-block w-4 h-4 rounded-sm shadow-inner"
+                    style={{ backgroundColor: c.hex }}
+                  />
+                  <span className="uppercase">{c.hex}</span>
+                  <input
+                    type="color"
+                    value={normalizeHex(c.hex)}
+                    onInput={(e) =>
+                      handleColorChange(i, e.currentTarget.value)
+                    }
+                    className="sr-only"
+                    aria-label={`Change ${c.name} color`}
+                  />
+                </label>
+              ) : (
                 <span
-                  className="inline-block w-3 h-3 rounded-sm border border-border/60"
-                  style={{ backgroundColor: c.hex }}
-                />
-                {c.hex}
-              </span>
-            ))}
+                  key={`col-${i}`}
+                  className="inline-flex items-center gap-1.5 pl-1 pr-2 py-0.5 rounded-md bg-surface text-[11px] font-mono"
+                  title={`${c.name} · ${c.hex}`}
+                >
+                  <span
+                    className="inline-block w-4 h-4 rounded-sm shadow-inner"
+                    style={{ backgroundColor: c.hex }}
+                  />
+                  <span className="uppercase">{c.hex}</span>
+                </span>
+              ),
+            )}
           </div>
+          {editable && (
+            <p className="text-[10px] text-secondary mt-1.5 leading-relaxed">
+              Click a swatch to change it, or describe the palette you
+              want in the chat.
+            </p>
+          )}
         </Section>
       )}
 
@@ -140,4 +201,19 @@ function Section({
       {children}
     </div>
   );
+}
+
+// `<input type="color">` only accepts 7-character `#rrggbb` strings.
+// The model occasionally emits 3-digit shorthand or names ("blue"),
+// which would silently render as black in the picker. Normalise to a
+// safe value the picker can paint, falling back to mid-grey when the
+// input is unparseable so the user can still pick a new color.
+function normalizeHex(input: string): string {
+  const v = input.trim().toLowerCase();
+  if (/^#[0-9a-f]{6}$/.test(v)) return v;
+  if (/^#[0-9a-f]{3}$/.test(v)) {
+    const [, r, g, b] = v;
+    return `#${r}${r}${g}${g}${b}${b}`;
+  }
+  return "#888888";
 }
