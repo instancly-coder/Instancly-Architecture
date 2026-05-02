@@ -3095,7 +3095,38 @@ function ChatPanel({
           );
         })}
 
-        {/* Live streaming status (latest, in-progress turn) */}
+        {/* Plan-mode interview — rendered as a single multi-step
+            "plan box" instead of alternating chat bubbles. Each
+            assistant question + the user's reply collapses into one
+            numbered step on a vertical stepper; the most recent
+            unanswered question is the current step and shows
+            suggestion chips. When the conversation reaches the
+            ready state the same box swaps its body for the
+            structured plan summary + Build/Cancel actions, so the
+            whole planning flow lives inside one consistent
+            container in the chat.
+
+            Rendered BEFORE the live streaming block so once the
+            user clicks "Send to build", the in-flight feedback
+            (their prompt bubble + Thinking shimmer + AI prose) sits
+            directly above the input where the auto-scroll lands —
+            otherwise PlanBox's full Q&A stepper + plan summary push
+            the streaming block off the top of the visible area and
+            the user sees no feedback during the 1-3 minute build. */}
+        {planConversation && (
+          <PlanBox
+            conversation={planConversation}
+            onSuggestionClick={onPlanSuggestionClick}
+            onApprovePlan={onApprovePlan}
+            onCancelPlan={onCancelPlan}
+            onUpdatePlan={onUpdatePlan}
+          />
+        )}
+
+        {/* Live streaming status (latest, in-progress turn). MUST be
+            placed below PlanBox above so the auto-scroll-to-bottom
+            keeps it visible during a build kicked off from an
+            approved plan — see comment on PlanBox for context. */}
         {(isStreaming || currentPhase || pendingPrompt) && (
           <div className="space-y-3">
             {/* The user's prompt for this in-flight turn, shown
@@ -3132,26 +3163,6 @@ function ChatPanel({
                 narrative above already tells the user what's happening — the
                 redundant labels added noise without adding information. */}
           </div>
-        )}
-
-        {/* Plan-mode interview — rendered as a single multi-step
-            "plan box" instead of alternating chat bubbles. Each
-            assistant question + the user's reply collapses into one
-            numbered step on a vertical stepper; the most recent
-            unanswered question is the current step and shows
-            suggestion chips. When the conversation reaches the
-            ready state the same box swaps its body for the
-            structured plan summary + Build/Cancel actions, so the
-            whole planning flow lives inside one consistent
-            container in the chat. */}
-        {planConversation && (
-          <PlanBox
-            conversation={planConversation}
-            onSuggestionClick={onPlanSuggestionClick}
-            onApprovePlan={onApprovePlan}
-            onCancelPlan={onCancelPlan}
-            onUpdatePlan={onUpdatePlan}
-          />
         )}
 
         {/* Stage 1 — clarification bubble. Pauses the pipeline with
