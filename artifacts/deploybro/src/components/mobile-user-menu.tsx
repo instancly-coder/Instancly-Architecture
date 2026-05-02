@@ -74,7 +74,34 @@ const TERTIARY: NavItem[] = [
   { href: "/status", label: "Status", icon: Activity },
 ];
 
-function MobileUserDrawer({ onClose }: { onClose: () => void }) {
+/**
+ * The shared body of the side navigation — used by both the desktop
+ * persistent sidebar and the mobile slide-in drawer.
+ *
+ * Pure content + behaviour (search, account expand/collapse, nav links).
+ * The outer chrome (overlay backdrop, drawer animation, body-scroll lock)
+ * is owned by whichever wrapper renders this — see `MobileUserDrawer`
+ * for the mobile drawer chrome and `DesktopSideNav` for the persistent
+ * desktop chrome.
+ *
+ * Props:
+ * - `onItemClick`: fired after the user picks a nav item or sub-item.
+ *   On mobile we close the drawer; on desktop it's a no-op (the
+ *   sidebar is always visible).
+ * - `showCloseButton`: render the X in the header. True for the mobile
+ *   drawer, false for the desktop persistent panel.
+ * - `onClose`: fires when the X is pressed. Only consulted when
+ *   `showCloseButton` is true.
+ */
+function SideNavContent({
+  onItemClick,
+  showCloseButton,
+  onClose,
+}: {
+  onItemClick: () => void;
+  showCloseButton: boolean;
+  onClose: () => void;
+}) {
   const [location, navigate] = useLocation();
   const { data: me } = useMe();
   const [accountOpen, setAccountOpen] = useState(false);
@@ -85,24 +112,6 @@ function MobileUserDrawer({ onClose }: { onClose: () => void }) {
   const username = me?.username ?? "";
   const plan = me?.plan ?? "Free";
   const initial = (displayName[0] ?? "?").toUpperCase();
-
-  // Lock body scroll while open.
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, []);
-
-  // Close on Escape.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
 
   const isActive = (href: string) => {
     if (href === "/dashboard") return location === "/dashboard";
@@ -127,8 +136,213 @@ function MobileUserDrawer({ onClose }: { onClose: () => void }) {
     const q = search.trim();
     if (!q) return;
     navigate(`/explore?q=${encodeURIComponent(q)}`);
-    onClose();
+    onItemClick();
   };
+
+  return (
+    <>
+      {/* Top bar: logo (+ optional close button on mobile) */}
+      <div className="h-14 flex items-center justify-between px-5 shrink-0">
+        <Link
+          href={me ? "/dashboard" : "/"}
+          onClick={onItemClick}
+          className="flex items-center"
+          aria-label="DeployBro"
+        >
+          <BrandLogo className="h-5 w-auto text-foreground" />
+        </Link>
+        {showCloseButton ? (
+          <button
+            onClick={onClose}
+            className="w-9 h-9 rounded-md flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
+            aria-label="Close menu"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        ) : null}
+      </div>
+
+      {/* Search */}
+      <div className="px-4 pb-3 shrink-0">
+        <form onSubmit={onSearchSubmit} className="relative">
+          <Search
+            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary pointer-events-none"
+            aria-hidden
+          />
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search"
+            aria-label="Search"
+            className="w-full h-11 pl-10 pr-3 rounded-lg bg-surface-raised border border-border text-sm placeholder:text-secondary focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30"
+          />
+        </form>
+      </div>
+
+      {/* Account chip */}
+      {me ? (
+        <div className="px-4 pb-3 shrink-0">
+          <button
+            onClick={() => setAccountOpen((v) => !v)}
+            aria-expanded={accountOpen}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg bg-surface-raised border border-border hover:border-primary/30 transition-colors text-left"
+          >
+            <div className="w-7 h-7 rounded-md bg-border flex items-center justify-center text-xs font-bold shrink-0">
+              {initial}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-medium truncate">{email || displayName}</div>
+            </div>
+            <span
+              className={`text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-md border shrink-0 ${
+                plan.toLowerCase() === "free"
+                  ? "border-border text-secondary bg-surface"
+                  : "border-primary/40 text-primary bg-primary/10"
+              }`}
+            >
+              {plan}
+            </span>
+            <ChevronDown
+              className={`w-4 h-4 text-secondary shrink-0 transition-transform ${
+                accountOpen ? "rotate-180" : ""
+              }`}
+            />
+          </button>
+
+          {accountOpen && (
+            <div className="mt-2 ml-1 border-l border-border pl-3 py-1 space-y-0.5">
+              <Link
+                href={`/${username}`}
+                onClick={onItemClick}
+                className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
+              >
+                <UserIcon className="w-4 h-4" />
+                View public profile
+              </Link>
+              <Link
+                href="/dashboard/billing"
+                onClick={onItemClick}
+                className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
+              >
+                <CreditCard className="w-4 h-4" />
+                Billing
+              </Link>
+              <Link
+                href="/dashboard/earnings"
+                onClick={onItemClick}
+                className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
+              >
+                <Coins className="w-4 h-4" />
+                Earnings
+              </Link>
+              <Link
+                href="/dashboard/settings"
+                onClick={onItemClick}
+                className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
+              >
+                <SettingsIcon className="w-4 h-4" />
+                Settings
+              </Link>
+              <button
+                onClick={() => {
+                  onItemClick();
+                  signOut();
+                }}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-error hover:bg-error/10 transition-colors text-left"
+              >
+                <LogOut className="w-4 h-4" />
+                Log out
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="px-4 pb-3 shrink-0">
+          <Link
+            href="/login"
+            onClick={onItemClick}
+            className="flex items-center justify-center w-full h-10 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
+          >
+            Log in / Sign up
+          </Link>
+        </div>
+      )}
+
+      {/* Scrollable nav */}
+      <div className="flex-1 overflow-y-auto px-2 pb-4">
+        <NavSection items={PRIMARY} isActive={isActive} onItemClick={onItemClick} />
+        <Divider />
+        <NavSection items={SECONDARY} isActive={isActive} onItemClick={onItemClick} />
+        <Divider />
+        <NavSection items={TERTIARY} isActive={isActive} onItemClick={onItemClick} />
+      </div>
+
+      {/* Footer */}
+      <div className="border-t border-border px-4 py-3 flex items-center justify-between shrink-0">
+        {me ? (
+          <Link
+            href={`/${username}`}
+            onClick={onItemClick}
+            aria-label="Profile"
+            className="w-9 h-9 rounded-md flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
+          >
+            <UserIcon className="w-4 h-4" />
+          </Link>
+        ) : (
+          <span className="w-9 h-9" aria-hidden />
+        )}
+        <div className="text-xs text-secondary font-mono">
+          DeployBro
+        </div>
+      </div>
+    </>
+  );
+}
+
+/**
+ * Persistent desktop sidebar. Renders the same `SideNavContent` as
+ * the mobile drawer so the IA stays in lock-step across breakpoints
+ * — there's no separate "desktop nav" to drift out of sync.
+ *
+ * `hidden md:flex` so it disappears on small screens, where the
+ * mobile drawer takes over (triggered by the hamburger in
+ * `DashboardLayout`).
+ */
+export function DesktopSideNav() {
+  const noop = useCallback(() => {}, []);
+  return (
+    <aside
+      className="hidden md:flex fixed inset-y-0 left-0 z-40 w-72 bg-surface text-foreground border-r border-border flex-col"
+      aria-label="Main navigation"
+    >
+      <SideNavContent onItemClick={noop} showCloseButton={false} onClose={noop} />
+    </aside>
+  );
+}
+
+/**
+ * Mobile slide-in drawer. Adds the overlay backdrop, drawer chrome,
+ * body-scroll lock, and Escape-to-close on top of `SideNavContent`.
+ */
+function MobileUserDrawer({ onClose }: { onClose: () => void }) {
+  // Lock body scroll while open.
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
+  // Close on Escape.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   return (
     <>
@@ -143,159 +357,11 @@ function MobileUserDrawer({ onClose }: { onClose: () => void }) {
         aria-modal="true"
         aria-label="User menu"
       >
-        {/* Top bar: logo + close */}
-        <div className="h-14 flex items-center justify-between px-5 shrink-0">
-          <Link
-            href={me ? "/dashboard" : "/"}
-            onClick={onClose}
-            className="flex items-center"
-            aria-label="DeployBro"
-          >
-            <BrandLogo className="h-5 w-auto text-foreground" />
-          </Link>
-          <button
-            onClick={onClose}
-            className="w-9 h-9 rounded-md flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
-            aria-label="Close menu"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Search */}
-        <div className="px-4 pb-3 shrink-0">
-          <form onSubmit={onSearchSubmit} className="relative">
-            <Search
-              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary pointer-events-none"
-              aria-hidden
-            />
-            <input
-              type="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search"
-              aria-label="Search"
-              className="w-full h-11 pl-10 pr-3 rounded-lg bg-surface-raised border border-border text-sm placeholder:text-secondary focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30"
-            />
-          </form>
-        </div>
-
-        {/* Account chip */}
-        {me ? (
-          <div className="px-4 pb-3 shrink-0">
-            <button
-              onClick={() => setAccountOpen((v) => !v)}
-              aria-expanded={accountOpen}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg bg-surface-raised border border-border hover:border-primary/30 transition-colors text-left"
-            >
-              <div className="w-7 h-7 rounded-md bg-border flex items-center justify-center text-xs font-bold shrink-0">
-                {initial}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium truncate">{email || displayName}</div>
-              </div>
-              <span
-                className={`text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-md border shrink-0 ${
-                  plan.toLowerCase() === "free"
-                    ? "border-border text-secondary bg-surface"
-                    : "border-primary/40 text-primary bg-primary/10"
-                }`}
-              >
-                {plan}
-              </span>
-              <ChevronDown
-                className={`w-4 h-4 text-secondary shrink-0 transition-transform ${
-                  accountOpen ? "rotate-180" : ""
-                }`}
-              />
-            </button>
-
-            {accountOpen && (
-              <div className="mt-2 ml-1 border-l border-border pl-3 py-1 space-y-0.5">
-                <Link
-                  href={`/${username}`}
-                  onClick={onClose}
-                  className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
-                >
-                  <UserIcon className="w-4 h-4" />
-                  View public profile
-                </Link>
-                <Link
-                  href="/dashboard/billing"
-                  onClick={onClose}
-                  className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
-                >
-                  <CreditCard className="w-4 h-4" />
-                  Billing
-                </Link>
-                <Link
-                  href="/dashboard/earnings"
-                  onClick={onClose}
-                  className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
-                >
-                  <Coins className="w-4 h-4" />
-                  Earnings
-                </Link>
-                <Link
-                  href="/dashboard/settings"
-                  onClick={onClose}
-                  className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
-                >
-                  <SettingsIcon className="w-4 h-4" />
-                  Settings
-                </Link>
-                <button
-                  onClick={() => {
-                    onClose();
-                    signOut();
-                  }}
-                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-error hover:bg-error/10 transition-colors text-left"
-                >
-                  <LogOut className="w-4 h-4" />
-                  Log out
-                </button>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="px-4 pb-3 shrink-0">
-            <Link
-              href="/login"
-              onClick={onClose}
-              className="flex items-center justify-center w-full h-10 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
-            >
-              Log in / Sign up
-            </Link>
-          </div>
-        )}
-
-        {/* Scrollable nav */}
-        <div className="flex-1 overflow-y-auto px-2 pb-4">
-          <NavSection items={PRIMARY} location={location} isActive={isActive} onClose={onClose} />
-          <Divider />
-          <NavSection items={SECONDARY} location={location} isActive={isActive} onClose={onClose} />
-          <Divider />
-          <NavSection items={TERTIARY} location={location} isActive={isActive} onClose={onClose} />
-        </div>
-
-        {/* Footer */}
-        <div className="border-t border-border px-4 py-3 flex items-center justify-between shrink-0">
-          {me ? (
-            <Link
-              href={`/${username}`}
-              onClick={onClose}
-              aria-label="Profile"
-              className="w-9 h-9 rounded-md flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
-            >
-              <UserIcon className="w-4 h-4" />
-            </Link>
-          ) : (
-            <span className="w-9 h-9" aria-hidden />
-          )}
-          <div className="text-xs text-secondary font-mono">
-            DeployBro
-          </div>
-        </div>
+        <SideNavContent
+          onItemClick={onClose}
+          showCloseButton
+          onClose={onClose}
+        />
       </aside>
     </>
   );
@@ -307,14 +373,12 @@ function Divider() {
 
 function NavSection({
   items,
-  location: _loc,
   isActive,
-  onClose,
+  onItemClick,
 }: {
   items: NavItem[];
-  location: string;
   isActive: (href: string) => boolean;
-  onClose: () => void;
+  onItemClick: () => void;
 }) {
   return (
     <nav className="space-y-0.5 py-1">
@@ -325,7 +389,7 @@ function NavSection({
           <Link
             key={`${item.label}-${idx}`}
             href={item.href}
-            onClick={onClose}
+            onClick={onItemClick}
             className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-[15px] font-medium transition-colors ${
               active
                 ? "bg-surface-raised text-foreground"
