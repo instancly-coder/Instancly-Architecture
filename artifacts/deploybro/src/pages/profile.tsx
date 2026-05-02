@@ -221,26 +221,25 @@ export default function Profile() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-5xl mx-auto p-4 md:p-8 w-full">
-        {/* Page header — mirrors the title-block pattern on the
-            other dashboard sub-pages (Billing / Earnings / Settings)
-            so signed-in owners get the same "where am I" rhythm
-            across their account surface. The title links to the
-            canonical /:username path. The right side carries a
-            copy-the-public-URL chip for owners so they can share
-            their profile without hunting through the address bar. */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6 md:mb-8 pb-4 border-b border-border">
-          <div className="min-w-0">
-            <h1 className="text-2xl font-bold tracking-tight truncate">
-              {isOwner ? "Your profile" : `${user.displayName}'s profile`}
-            </h1>
-            <div className="text-secondary text-sm font-mono truncate">
-              @{user.username}
-            </div>
+      {/* Full-bleed top header — same shape as the one on the main
+          /dashboard page (px-4 md:px-8, md:h-20, border-b) so the
+          profile reads as another tab in the same shell, instead of
+          a narrow centered card floating in the content well. The
+          right side carries the canonical share URL + copy button
+          for owners. */}
+      <header className="px-4 md:px-8 py-5 md:h-20 md:py-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border">
+        <div className="min-w-0">
+          <h1 className="text-xl md:text-2xl font-bold tracking-tight truncate">
+            {isOwner ? "Your profile" : `${user.displayName}'s profile`}
+          </h1>
+          <div className="text-secondary text-xs md:text-sm font-mono truncate">
+            @{user.username}
           </div>
-          {isOwner && <PublicProfileUrl username={user.username} />}
         </div>
+        {isOwner && <PublicProfileUrl username={user.username} />}
+      </header>
 
+      <div className="max-w-5xl mx-auto p-4 md:p-8 w-full">
         <div className="flex flex-col md:flex-row gap-12">
           <div className="w-full md:w-64 shrink-0">
             <div
