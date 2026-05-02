@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/carousel";
 import { Shell } from "@/pages/info";
 import { DashboardLayout } from "@/components/dashboard-layout";
-import { BrandLogo } from "@/components/brand-logo";
+import deploybroLogoUrl from "@assets/deploybro.svg";
 import { PROJECT_CATEGORIES } from "@/lib/categories";
 
 // Small avatar + "by @username" row used by every flavour of explore card
@@ -47,13 +47,25 @@ function AuthorBadge({
   const text = size === "sm" ? "text-xs" : "text-[11px]";
 
   if (isDeployBro) {
+    // Logo SVG is solid white (#ffffff). The shared <BrandLogo /> uses
+    // `brightness-0 dark:brightness-100` to flip black/white based on
+    // theme — but we want the mark to stay white in BOTH themes here,
+    // because we sit it on a fixed dark blue→black gradient circle so
+    // it reads cleanly regardless of the surrounding light/dark
+    // background. Using the raw asset bypasses BrandLogo's theme
+    // brightness flip.
     return (
       <span className={`inline-flex items-center gap-1.5 min-w-0 ${text} text-secondary`}>
         <span
-          className={`${dim} rounded-full bg-foreground flex items-center justify-center shrink-0 overflow-hidden`}
+          className={`${dim} rounded-full bg-gradient-to-br from-blue-500 via-blue-900 to-black flex items-center justify-center shrink-0 overflow-hidden`}
           aria-hidden
         >
-          <BrandLogo className="h-2.5 w-auto" />
+          <img
+            src={deploybroLogoUrl}
+            alt=""
+            draggable={false}
+            className="h-2.5 w-auto select-none"
+          />
         </span>
         <span className="truncate">by DeployBro</span>
       </span>
