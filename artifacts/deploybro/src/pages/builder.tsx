@@ -1388,12 +1388,37 @@ export default function Builder() {
     }
   };
 
-  // Click handler for "Apply fix" on a verification check. Hands the
-  // server's pre-baked fixPrompt back to /ai/build via handleSend, with
-  // skipClarify=true so we don't re-prompt the user mid-fix.
+  // Click handler for "Apply fix" on a verification check. Loads the
+  // server's pre-baked fixPrompt into the chat composer so the user
+  // can review/edit it before sending — auto-firing the build felt
+  // pushy and also wiped quick-task chips and stream steps mid-flow.
+  // We also flip plan mode OFF since fixes are concrete patches that
+  // should go straight through the build pipeline (not a fresh plan
+  // interview), and focus the composer so Send is one keypress away.
   const applyVerificationFix = (check: VerificationCheck) => {
     if (!check.fixPrompt) return;
-    void handleSend(check.fixPrompt, { skipClarify: true });
+    setChatInput(check.fixPrompt);
+    if (planMode) setPlanMode(false);
+    // Focus + scroll the composer on the next tick so the just-set
+    // value is already painted when the textarea takes focus. The
+    // data-composer="chat" hook is set on the textarea inside
+    // ChatPanel; querying the DOM is simpler than threading a ref
+    // up through three component layers for one focus call.
+    requestAnimationFrame(() => {
+      const ta = document.querySelector<HTMLTextAreaElement>(
+        'textarea[data-composer="chat"]',
+      );
+      if (ta) {
+        ta.focus();
+        // Move the caret to the end so the user can keep typing or
+        // edit from where the prompt naturally ends.
+        ta.setSelectionRange(ta.value.length, ta.value.length);
+        ta.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+    });
+    toast.message("Fix request loaded into chat", {
+      description: "Review or edit it, then hit Send to apply.",
+    });
   };
 
   // Click handler for the clarification chip / Submit button. Merges
@@ -3115,6 +3140,7 @@ function ChatPanel({
 
           <textarea
             ref={inputRef}
+            data-composer="chat"
             value={chatInput}
             onChange={(e) => setChatInput(e.target.value)}
             onKeyDown={(e) => {
