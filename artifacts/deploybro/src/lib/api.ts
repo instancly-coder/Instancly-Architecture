@@ -552,6 +552,10 @@ export function useRenameProject() {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["me", "projects"] });
+      // The same card is now used on the public profile, which has
+      // its own list cache keyed by username. Invalidate both so a
+      // rename from either surface refreshes the other.
+      qc.invalidateQueries({ queryKey: ["users"] });
     },
   });
 }
@@ -563,6 +567,7 @@ export function useDeleteProject() {
       request<void>(`/me/projects/${slug}`, { method: "DELETE" }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["me", "projects"] });
+      qc.invalidateQueries({ queryKey: ["users"] });
     },
   });
 }

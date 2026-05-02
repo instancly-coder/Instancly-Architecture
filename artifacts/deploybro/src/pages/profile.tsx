@@ -1,17 +1,14 @@
 import { useState } from "react";
-import { Link, useParams } from "wouter";
-import { Calendar, Globe, Lock, Loader2, Pencil, Copy, Check } from "lucide-react";
+import { useParams } from "wouter";
+import { Calendar, Globe, Copy, Check } from "lucide-react";
 import { toast } from "sonner";
 import {
   useUser,
   useUserProjects,
   useMe,
-  useUpdateProject,
-  type ApiProjectListItem,
 } from "@/lib/api";
 import { DashboardLayout } from "@/components/dashboard-layout";
-import { Button } from "@/components/ui/button";
-import { PublishDetailsDialog } from "@/components/publish-details-dialog";
+import { ProjectCard } from "@/components/project-card";
 
 function formatJoined(iso: string | undefined): string {
   if (!iso) return "";
@@ -19,172 +16,6 @@ function formatJoined(iso: string | undefined): string {
   return d.toLocaleDateString(undefined, { month: "short", year: "numeric" });
 }
 
-function timeAgo(iso: string): string {
-  const ms = Date.now() - new Date(iso).getTime();
-  const m = Math.floor(ms / 60000);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  return `${d}d ago`;
-}
-
-function OwnerProjectActions({
-  username,
-  project,
-}: {
-  username: string;
-  project: ApiProjectListItem;
-}) {
-  const update = useUpdateProject(username, project.slug);
-  // The "publish" path opens the details dialog so the user can fill in
-  // a title / about / features / sections / setup before the project
-  // becomes visible publicly. The "make private" and "edit details"
-  // paths don't need that confirmation step.
-  const [publishOpen, setPublishOpen] = useState(false);
-  const [editOpen, setEditOpen] = useState(false);
-
-  const stop = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
-
-  if (project.isPublic) {
-    return (
-      <>
-        <div className="flex gap-1.5">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            disabled={update.isPending}
-            onClick={(e) => {
-              stop(e);
-              setEditOpen(true);
-            }}
-          >
-            <Pencil className="w-3.5 h-3.5" />
-            Edit details
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={update.isPending}
-            onClick={(e) => {
-              stop(e);
-              update.mutate(
-                { isPublic: false },
-                {
-                  onSuccess: () =>
-                    toast.success(`Made ${project.name} private`),
-                  onError: (err) =>
-                    toast.error(
-                      err instanceof Error ? err.message : "Update failed",
-                    ),
-                },
-              );
-            }}
-          >
-            {update.isPending ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <Lock className="w-3.5 h-3.5" />
-            )}
-            Make private
-          </Button>
-        </div>
-        <PublishDetailsDialog
-          open={editOpen}
-          onOpenChange={setEditOpen}
-          username={username}
-          project={project}
-        />
-      </>
-    );
-  }
-
-  return (
-    <>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={(e) => {
-          stop(e);
-          setPublishOpen(true);
-        }}
-      >
-        <Globe className="w-3.5 h-3.5" />
-        Publish
-      </Button>
-      <PublishDetailsDialog
-        open={publishOpen}
-        onOpenChange={setPublishOpen}
-        username={username}
-        project={project}
-        publishOnSave
-      />
-    </>
-  );
-}
-
-function ProjectCard({
-  username,
-  project,
-  isOwner,
-}: {
-  username: string;
-  project: ApiProjectListItem;
-  isOwner: boolean;
-}) {
-  return (
-    <div className="border border-border bg-surface rounded-xl p-5 hover-elevate h-full flex flex-col">
-      <Link
-        href={`/${username}/${project.slug}`}
-        className="flex-1 flex flex-col"
-      >
-        <div className="flex items-start justify-between mb-2 gap-2">
-          <h3 className="font-bold text-lg">{project.name}</h3>
-          <div className="flex items-center gap-1.5 shrink-0">
-            {isOwner && (
-              <div
-                className={`text-xs px-2 py-0.5 rounded inline-flex items-center gap-1 ${
-                  project.isPublic
-                    ? "bg-background border border-border text-secondary"
-                    : "bg-background border border-border text-secondary"
-                }`}
-                title={project.isPublic ? "Public" : "Private"}
-              >
-                {project.isPublic ? (
-                  <Globe className="w-3 h-3" />
-                ) : (
-                  <Lock className="w-3 h-3" />
-                )}
-                {project.isPublic ? "Public" : "Private"}
-              </div>
-            )}
-            <div className="text-xs px-2 py-0.5 rounded bg-background border border-border">
-              {project.framework}
-            </div>
-          </div>
-        </div>
-        <div className="text-sm text-secondary mb-6 flex-1">
-          {project.description}
-        </div>
-        <div className="flex items-center justify-between text-xs text-secondary mt-auto pt-4 border-t border-border/50">
-          <span>{project.clones} clones</span>
-          <span>Updated {timeAgo(project.lastBuiltAt)}</span>
-        </div>
-      </Link>
-      {isOwner && (
-        <div className="mt-3 pt-3 border-t border-border/50 flex justify-end">
-          <OwnerProjectActions username={username} project={project} />
-        </div>
-      )}
-    </div>
-  );
-}
 
 export default function Profile() {
   const { username } = useParams();
@@ -293,8 +124,8 @@ export default function Profile() {
                 {visibleProjects.map((project) => (
                   <ProjectCard
                     key={project.id}
-                    username={user.username}
                     project={project}
+                    ownerUsername={user.username}
                     isOwner={isOwner}
                   />
                 ))}
