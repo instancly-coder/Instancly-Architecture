@@ -502,7 +502,14 @@ router.post(
   async (req: Request, res: Response): Promise<void> => {
     const username = String(req.params.username);
     const slug = String(req.params.slug);
-    const originalPrompt = String(req.body?.originalPrompt ?? "").trim();
+    // Accept legacy `prompt` as a fallback for `originalPrompt`. Older
+    // cached client bundles (pre-conversational refactor) sent the
+    // one-shot shape `{ prompt, urls? }`; without this fallback those
+    // clients hard-fail with a 400 the moment they hit the new
+    // endpoint, even though the server can otherwise handle the turn.
+    const originalPrompt = String(
+      req.body?.originalPrompt ?? req.body?.prompt ?? "",
+    ).trim();
     const urls: string[] = Array.isArray(req.body?.urls)
       ? (req.body.urls as unknown[])
           .filter((u): u is string => typeof u === "string" && u.trim() !== "")
@@ -535,9 +542,11 @@ router.post(
     });
 
     if (!originalPrompt) {
-      res
-        .status(400)
-        .json({ status: "error", message: "originalPrompt required" });
+      res.status(400).json({
+        status: "error",
+        message:
+          "Couldn't read your prompt — please refresh the page and try again.",
+      });
       return;
     }
 
