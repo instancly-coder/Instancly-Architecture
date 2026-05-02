@@ -180,96 +180,8 @@ function SideNavContent({
         </form>
       </div>
 
-      {/* Account chip */}
-      {me ? (
-        <div className="px-4 pb-3 shrink-0">
-          <button
-            onClick={() => setAccountOpen((v) => !v)}
-            aria-expanded={accountOpen}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg bg-surface-raised border border-border hover:border-primary/30 transition-colors text-left"
-          >
-            <div className="w-7 h-7 rounded-md bg-border flex items-center justify-center text-xs font-bold shrink-0">
-              {initial}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium truncate">{email || displayName}</div>
-            </div>
-            <span
-              className={`text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-md border shrink-0 ${
-                plan.toLowerCase() === "free"
-                  ? "border-border text-secondary bg-surface"
-                  : "border-primary/40 text-primary bg-primary/10"
-              }`}
-            >
-              {plan}
-            </span>
-            <ChevronDown
-              className={`w-4 h-4 text-secondary shrink-0 transition-transform ${
-                accountOpen ? "rotate-180" : ""
-              }`}
-            />
-          </button>
-
-          {accountOpen && (
-            <div className="mt-2 ml-1 border-l border-border pl-3 py-1 space-y-0.5">
-              <Link
-                href={`/${username}`}
-                onClick={onItemClick}
-                className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
-              >
-                <UserIcon className="w-4 h-4" />
-                View public profile
-              </Link>
-              <Link
-                href="/dashboard/billing"
-                onClick={onItemClick}
-                className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
-              >
-                <CreditCard className="w-4 h-4" />
-                Billing
-              </Link>
-              <Link
-                href="/dashboard/earnings"
-                onClick={onItemClick}
-                className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
-              >
-                <Coins className="w-4 h-4" />
-                Earnings
-              </Link>
-              <Link
-                href="/dashboard/settings"
-                onClick={onItemClick}
-                className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
-              >
-                <SettingsIcon className="w-4 h-4" />
-                Settings
-              </Link>
-              <button
-                onClick={() => {
-                  onItemClick();
-                  signOut();
-                }}
-                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-error hover:bg-error/10 transition-colors text-left"
-              >
-                <LogOut className="w-4 h-4" />
-                Log out
-              </button>
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="px-4 pb-3 shrink-0">
-          <Link
-            href="/login"
-            onClick={onItemClick}
-            className="flex items-center justify-center w-full h-10 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
-          >
-            Log in / Sign up
-          </Link>
-        </div>
-      )}
-
-      {/* Scrollable nav */}
+      {/* Scrollable nav — fills everything between the search input
+          at the top and the account chip pinned to the bottom. */}
       <div className="flex-1 overflow-y-auto px-2 pb-4">
         <NavSection items={PRIMARY} isActive={isActive} onItemClick={onItemClick} />
         <Divider />
@@ -278,23 +190,99 @@ function SideNavContent({
         <NavSection items={TERTIARY} isActive={isActive} onItemClick={onItemClick} />
       </div>
 
-      {/* Footer */}
-      <div className="border-t border-border px-4 py-3 flex items-center justify-between shrink-0">
+      {/* Footer = account chip. Pinned to the bottom of the rail and
+          expands UPWARD so the menu items don't get pushed off-screen
+          (clicking the chip pops billing/earnings/settings/sign-out
+          above the chip itself, much like a desktop status bar). */}
+      <div className="border-t border-border px-4 py-3 shrink-0">
         {me ? (
-          <Link
-            href={`/${username}`}
-            onClick={onItemClick}
-            aria-label="Profile"
-            className="w-9 h-9 rounded-md flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
-          >
-            <UserIcon className="w-4 h-4" />
-          </Link>
+          <>
+            {accountOpen && (
+              <div className="mb-2 ml-1 border-l border-border pl-3 py-1 space-y-0.5 animate-in fade-in slide-in-from-bottom-1 duration-150">
+                <Link
+                  href={`/${username}`}
+                  onClick={onItemClick}
+                  className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
+                >
+                  <UserIcon className="w-4 h-4" />
+                  View public profile
+                </Link>
+                <Link
+                  href="/dashboard/billing"
+                  onClick={onItemClick}
+                  className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
+                >
+                  <CreditCard className="w-4 h-4" />
+                  Billing
+                </Link>
+                <Link
+                  href="/dashboard/earnings"
+                  onClick={onItemClick}
+                  className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
+                >
+                  <Coins className="w-4 h-4" />
+                  Earnings
+                </Link>
+                <Link
+                  href="/dashboard/settings"
+                  onClick={onItemClick}
+                  className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
+                >
+                  <SettingsIcon className="w-4 h-4" />
+                  Settings
+                </Link>
+                <button
+                  onClick={() => {
+                    onItemClick();
+                    signOut();
+                  }}
+                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-error hover:bg-error/10 transition-colors text-left"
+                >
+                  <LogOut className="w-4 h-4" />
+                  Log out
+                </button>
+              </div>
+            )}
+
+            <button
+              onClick={() => setAccountOpen((v) => !v)}
+              aria-expanded={accountOpen}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg bg-surface-raised border border-border hover:border-primary/30 transition-colors text-left"
+            >
+              <div className="w-7 h-7 rounded-md bg-border flex items-center justify-center text-xs font-bold shrink-0">
+                {initial}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium truncate">{email || displayName}</div>
+              </div>
+              <span
+                className={`text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-md border shrink-0 ${
+                  plan.toLowerCase() === "free"
+                    ? "border-border text-secondary bg-surface"
+                    : "border-primary/40 text-primary bg-primary/10"
+                }`}
+              >
+                {plan}
+              </span>
+              {/* Chevron points UP when collapsed (signalling "the
+                  menu opens upward") and rotates to DOWN when open
+                  (signalling "click to collapse back down"). */}
+              <ChevronDown
+                className={`w-4 h-4 text-secondary shrink-0 transition-transform ${
+                  accountOpen ? "" : "rotate-180"
+                }`}
+              />
+            </button>
+          </>
         ) : (
-          <span className="w-9 h-9" aria-hidden />
+          <Link
+            href="/login"
+            onClick={onItemClick}
+            className="flex items-center justify-center w-full h-10 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
+          >
+            Log in / Sign up
+          </Link>
         )}
-        <div className="text-xs text-secondary font-mono">
-          DeployBro
-        </div>
       </div>
     </>
   );
