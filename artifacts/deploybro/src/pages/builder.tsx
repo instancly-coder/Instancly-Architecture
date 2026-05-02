@@ -1522,7 +1522,10 @@ export default function Builder() {
     const c = pendingClarification;
     setPendingClarification(null);
     // Restore the original prompt to the composer so the user can
-    // edit and re-send without re-typing the whole thing.
+    // edit and re-send without re-typing the whole thing. Also
+    // clear pendingPrompt — the in-handleSend early bubble may
+    // still be visible if cancel races the clarify response.
+    setPendingPrompt(null);
     if (c) setChatInput((cur) => (cur.trim().length === 0 ? c.prompt : cur));
   };
 
@@ -1574,6 +1577,24 @@ export default function Builder() {
       cleanupTimerRef.current = null;
     }
 
+    // Show the user's prompt bubble + clear the input IMMEDIATELY for
+    // build-mode sends (plan mode handles its own placeholder via the
+    // PlanBox stepper below). Without this the textarea empties on
+    // send but no chat feedback appears for the 1-3s while clarify
+    // is in flight, then again until the SSE "start" event lands —
+    // it reads as if their message was eaten. The streaming-block
+    // render condition `(isStreaming || currentPhase || pendingPrompt)`
+    // already keys off pendingPrompt, so this single line is enough
+    // to surface the user bubble + a "Thinking…" shimmer instantly.
+    // We restore the input on early-exit paths below (clarification
+    // needed, validation failure) so we never lose the user's text.
+    const _willStartPlanInterview =
+      (overrides?.planMode ?? planMode) && !overrides?.approvedPlan;
+    if (!_willStartPlanInterview) {
+      setChatInput("");
+      setPendingPrompt(prompt);
+    }
+
     // ─── Plan Mode interception — kicks off the conversational interview ──
     // When Plan Mode is on AND no plan has been approved yet, hand
     // control to startPlanConversation. The interview runs as a chat
@@ -1598,6 +1619,19 @@ export default function Builder() {
       return;
     }
 
+    // ─── Defensive: clarification gate is about to fire, but if the
+    // user already has a clarification on screen or one is racing us,
+    // bail and put the prompt back in the composer so it isn't lost.
+    if (
+      !overrides?.approvedPlan &&
+      !overrides?.skipClarify &&
+      (clarifyInFlightRef.current || pendingClarification)
+    ) {
+      setPendingPrompt(null);
+      setChatInput((cur) => (cur.trim().length === 0 ? prompt : cur));
+      return;
+    }
+
     // ─── Clarification gate (Stage 1) — fires before the build ──────────
     // Quick Haiku check: is the prompt detailed enough to build well, or
     // would ONE specific question dramatically lift quality? Only runs
@@ -1612,12 +1646,6 @@ export default function Builder() {
       !overrides?.approvedPlan &&
       !overrides?.skipClarify
     ) {
-      // Don't fire a parallel clarify check while one is already in
-      // flight or a bubble is already on screen — both indicate the
-      // user is mid-clarification and a second request would race.
-      if (clarifyInFlightRef.current || pendingClarification) {
-        return;
-      }
       clarifyInFlightRef.current = true;
       try {
         const clarifyRes = await fetch(
@@ -1646,10 +1674,15 @@ export default function Builder() {
           if (j && j.ok === false && typeof j.question === "string") {
             // Pause here. The bubble takes over from the user's POV;
             // on submit we re-enter handleSend with the answer merged
-            // into the prompt and skipClarify=true.
+            // into the prompt and skipClarify=true. We also drop the
+            // pendingPrompt bubble we set up at the top of handleSend
+            // — the clarification UI will own the conversation slot
+            // until the user responds, and the prompt will be re-set
+            // when the merged version flows back through handleSend.
             const _modelKey =
               overrides?.modelKey ??
               AVAILABLE_MODELS.find((m) => m.name === selectedModel)?.key;
+            setPendingPrompt(null);
             setPendingClarification({
               prompt,
               question: j.question,
@@ -1664,7 +1697,6 @@ export default function Builder() {
                 files: overrides?.files ?? attachments,
               },
             });
-            setChatInput("");
             return;
           }
         }
@@ -1679,14 +1711,12 @@ export default function Builder() {
       }
     }
 
-    setChatInput("");
     setIsStreaming(true);
-    // Show the user's prompt as a bubble in the chat immediately so
-    // they can see what they sent — without it, the textbox empties
-    // but their words don't appear until the build is recorded
-    // ~10–60s later. Cleared after the build is persisted (or kept
-    // visible if the build errors so the user can retry).
-    setPendingPrompt(prompt);
+    // Note: pendingPrompt + chatInput clearing already happened at the
+    // top of handleSend so the user got immediate chat feedback during
+    // the clarify round-trip. Setting them again here would be a
+    // no-op for the bubble (still showing the same prompt) and is
+    // intentionally not repeated.
     setPhase("Thinking");
     setTyped("");
     // Clear any chips from the previous turn the moment a new send fires —
@@ -3084,9 +3114,18 @@ function ChatPanel({
             {/* The AI's prose — muted, with a left-to-right shimmer
                 applied to the in-flight tail (last paragraph and any
                 currently-writing file label) so the user can see at
-                a glance which line is "working" right now. */}
+                a glance which line is "working" right now. Before
+                any deltas land — i.e. while clarify is in flight or
+                we're waiting on the SSE "start" event — surface a
+                shimmer "Thinking…" placeholder so the user gets
+                immediate feedback that we're working, instead of an
+                empty min-h slot that reads as nothing happening. */}
             <div className="text-sm leading-relaxed min-h-[1.4em] whitespace-pre-wrap break-words text-muted-foreground">
-              <FileNoticeText text={typed} streaming={isStreaming} />
+              {typed.length === 0 ? (
+                <span className="shimmer-text">Thinking…</span>
+              ) : (
+                <FileNoticeText text={typed} streaming={isStreaming} />
+              )}
             </div>
 
             {/* The per-step icon list used to live here, but the AI's prose
@@ -3943,21 +3982,17 @@ function PlanBox({
         })}
       </ol>
 
-      {/* Typing indicator while the next assistant turn is in flight
-          (i.e. user just sent a reply, server hasn't pushed the new
-          assistant placeholder yet). Sits flush with the stepper
-          rail so it reads as the next step taking shape. */}
+      {/* "Thinking…" indicator while the next assistant turn is in
+          flight (i.e. user just sent a reply, server hasn't pushed
+          the new assistant placeholder yet). Uses the same
+          shimmer-text treatment as the build-mode streaming block
+          so plan mode and build mode share one consistent
+          "we're working on it" cue, instead of mixing dots here
+          with shimmer there. Sits flush with the stepper rail so
+          it reads as the next step taking shape. */}
       {isAwaitingAssistant && (
-        <div className="pl-9 inline-flex items-center gap-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse" />
-          <span
-            className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse"
-            style={{ animationDelay: "120ms" }}
-          />
-          <span
-            className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse"
-            style={{ animationDelay: "240ms" }}
-          />
+        <div className="pl-9 text-sm leading-snug">
+          <span className="shimmer-text">Thinking…</span>
         </div>
       )}
 
