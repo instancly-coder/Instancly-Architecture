@@ -975,7 +975,19 @@ router.post(
     // Parse out any complete file blocks from the streamed text and write
     // them to the database. All writes for a single build are wrapped in
     // a transaction so partial failures don't leave the project half-updated.
-    const persistFiles = async (): Promise<string[]> => {
+    //
+    // When `autoFillCtx` is provided (success path only — not aborted /
+    // errored runs) and the AI shipped script tags that point at files it
+    // forgot to emit, we run ONE targeted follow-up Claude call to
+    // actually fill in those files instead of saving useless `return null`
+    // stubs. Token cost from the second call is added to the same build
+    // row so billing still reflects total spend. The user only sees a
+    // status message ("Filling in 11 missing components…") — they never
+    // see the broken intermediate state.
+    const persistFiles = async (autoFillCtx?: {
+      systemPrompt: string;
+      userContent: Anthropic.Messages.MessageParam["content"];
+    }): Promise<string[]> => {
       const parsed = parseFileBlocks(fullText);
       if (parsed.length === 0) return [];
 
@@ -985,10 +997,9 @@ router.post(
       // slip and forget one (e.g. `components/Nav.jsx`). The preview
       // route's on-the-fly fallback handles the missing fetch, but the
       // user still sees an unpolished result and the project tree
-      // doesn't reflect what's actually loading. We fix this by
-      // synthesising a real persisted no-op stub for every missing
-      // script src, BEFORE the transaction commits — guaranteeing the
-      // saved project is structurally complete on every build.
+      // doesn't reflect what's actually loading. The auto-fill pass
+      // below tries to recover; any files it can't recover get a
+      // persisted no-op stub so the build stays structurally complete.
       //
       // We pass the existing project's stored index.html so we still
       // catch missing refs when the AI didn't re-emit index.html in
@@ -998,11 +1009,168 @@ router.post(
       const existingPaths = existingFiles.map((f) => f.path);
       const existingIndexHtml =
         existingFiles.find((f) => f.path === "index.html")?.content ?? null;
-      const stubs = auditMissingScriptTargets(
+      let stubs = auditMissingScriptTargets(
         parsed,
         existingPaths,
         existingIndexHtml,
       );
+
+      // ── Auto-fill pass ───────────────────────────────────────────────
+      // The model promised these files in <script src="..."> tags but
+      // didn't emit them. Rather than persisting empty `return null`
+      // placeholders, ask the model to actually deliver the missing
+      // files now. We continue the same conversation (system + user +
+      // assistant-so-far + new instruction) so the model keeps full
+      // context — design palette, plan, brief, prior file decisions —
+      // and produces components that match the rest of the build.
+      //
+      // Hardening (in order of importance):
+      //   • PATH WHITELIST — we only accept file blocks whose path is
+      //     in the original missing set. A misbehaving second pass
+      //     can't rewrite components/Hero.jsx that the first pass
+      //     already shipped correctly.
+      //   • DIRECTIVE ISOLATION — fill response text is NOT appended
+      //     to `fullText`. Suggestion / open-tab / request-secret /
+      //     provision-db scans further downstream parse `fullText`
+      //     directly, and we must not let a second-pass repair call
+      //     trigger privileged side effects (database provisioning,
+      //     secret prompts, suggestion overrides) the user never
+      //     intended.
+      //   • TIMEOUT + ABORT — explicit 60s timeout plus an
+      //     AbortController tied to the request's `close` event so a
+      //     hung upstream call can't stall the build indefinitely or
+      //     keep burning tokens after the client walked away.
+      if (autoFillCtx && stubs.length > 0 && anthropic && !aborted) {
+        send("status", {
+          message: `Filling in ${stubs.length} missing component${
+            stubs.length === 1 ? "" : "s"
+          }…`,
+        });
+
+        const requestedPaths = new Set(stubs.map((s) => s.path));
+        const missingList = stubs.map((s) => `- ${s.path}`).join("\n");
+        const fillInstruction = [
+          `Your previous reply listed these files in index.html via <script src="…"> tags but did NOT emit a <file path="…"> block for them:`,
+          "",
+          missingList,
+          "",
+          `Emit ONLY those files now. For each one:`,
+          `- Wrap in a <file path="..."> ... </file> block, exact path as listed.`,
+          `- Define a top-level \`function ComponentName() { return ( ... ); }\` whose name matches the file's basename in PascalCase (e.g. components/Footer.jsx → \`function Footer()\`).`,
+          `- Render real, on-brief content matching the rest of this build's design system, palette, and tone — no placeholders, no Lorem Ipsum, no \`return null\`, no TODO comments.`,
+          `- Use the same global libraries as the rest of the build (React, ReactRouterDOM, LucideReact, ShadcnUI, Recharts).`,
+          `- Do NOT re-emit index.html and do NOT emit any other file. Any file block whose path is not in the list above will be discarded.`,
+          `- Do NOT include a <suggestions> block, <deploybro:...> control directives, or any wrap-up prose — just the <file> blocks. The server discards everything else.`,
+        ].join("\n");
+
+        // Tie the upstream call to both an explicit timeout and the
+        // request-level abort signal. The Anthropic SDK accepts an
+        // AbortSignal in its second-arg options, AND a `timeout` in
+        // ms — passing both gives us belt-and-suspenders coverage.
+        const fillAbort = new AbortController();
+        const onClientClose = () => fillAbort.abort();
+        req.on("close", onClientClose);
+
+        try {
+          const fillResult = await anthropic.messages.create(
+            {
+              model: modelInfo.id,
+              max_tokens: 16_384,
+              system: autoFillCtx.systemPrompt,
+              messages: [
+                { role: "user", content: autoFillCtx.userContent },
+                { role: "assistant", content: fullText },
+                { role: "user", content: fillInstruction },
+              ],
+            },
+            {
+              signal: fillAbort.signal,
+              // 60s is generous for one targeted "emit N components"
+              // call against Sonnet — typical ~10-25s, P99 well under
+              // a minute. Anything past that is almost certainly a
+              // hung connection rather than legitimately slow output.
+              timeout: 60_000,
+            },
+          );
+
+          // Roll the second-pass token spend into the same build row.
+          inputTokens += fillResult.usage?.input_tokens ?? 0;
+          outputTokens += fillResult.usage?.output_tokens ?? 0;
+
+          const fillText = fillResult.content
+            .map((b) => (b.type === "text" ? b.text : ""))
+            .join("");
+
+          // Parse and HARD-FILTER to the requested missing paths only.
+          // Anything else the model snuck in (an "improved" Hero,
+          // a re-emitted index.html, a brand-new file we never asked
+          // for) gets discarded. Logged so operators can spot drift.
+          const allFilled = parseFileBlocks(fillText);
+          const filledFiles = allFilled.filter((f) =>
+            requestedPaths.has(f.path),
+          );
+          const discardedCount = allFilled.length - filledFiles.length;
+          if (discardedCount > 0) {
+            req.log.warn(
+              {
+                discardedCount,
+                discardedPaths: allFilled
+                  .filter((f) => !requestedPaths.has(f.path))
+                  .map((f) => f.path),
+              },
+              "Auto-fill pass returned files outside the requested set; discarding",
+            );
+          }
+
+          if (filledFiles.length > 0) {
+            // Replace the in-progress `parsed` list with a merged view:
+            // since `filledFiles` is whitelisted to paths that were
+            // missing, this is guaranteed to only ADD new entries
+            // (or overwrite a pre-existing same-path entry the audit
+            // had already classified as missing).
+            const byPath = new Map(parsed.map((f) => [f.path, f]));
+            for (const f of filledFiles) byPath.set(f.path, f);
+            parsed.length = 0;
+            parsed.push(...byPath.values());
+            // Re-audit against the new union — any path the second pass
+            // STILL didn't deliver remains as a real stub so the build
+            // is at least structurally complete.
+            stubs = auditMissingScriptTargets(
+              parsed,
+              existingPaths,
+              existingIndexHtml,
+            );
+            req.log.info(
+              {
+                filled: filledFiles.length,
+                stillMissing: stubs.length,
+              },
+              "Auto-fill pass completed",
+            );
+          }
+          // NOTE: we deliberately do NOT append `fillText` to
+          // `fullText`. Downstream code (parseSuggestions,
+          // hasProvisionDbDirective, parseOpenTabDirective,
+          // parseRequestSecretDirectives) all scan `fullText` after
+          // persistFiles returns, and a repair sub-call must not
+          // be allowed to mutate control-plane behaviour the user
+          // never asked for. The persisted file list is the only
+          // legitimate side effect of an auto-fill pass.
+        } catch (err) {
+          // Auto-fill is best-effort. If it errors (rate limit,
+          // network, billing, timeout, client disconnect), we fall
+          // through to the original stub-creation path so the build
+          // still saves successfully — the user gets a complete
+          // (if partly empty) project rather than a 500.
+          req.log.warn(
+            { err, count: stubs.length },
+            "Auto-fill pass failed; falling back to no-op stubs",
+          );
+        } finally {
+          req.off("close", onClientClose);
+        }
+      }
+
       if (stubs.length > 0) {
         req.log.warn(
           {
@@ -1310,7 +1478,7 @@ router.post(
       }
 
       send("status", { message: "Saving generated files…" });
-      const written = await persistFiles();
+      const written = await persistFiles({ systemPrompt, userContent });
 
       // If the model emitted `<deploybro:provision-db />` we provision a
       // Neon branch + role + database for this project right here, before

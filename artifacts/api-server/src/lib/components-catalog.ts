@@ -240,7 +240,12 @@ This is the single most common cause of "broken-looking" previews. Two parts to 
 
 **Part B: every \`<PascalCaseComponent />\` you reference in JSX must be defined in a file that's loaded.** If \`app/page.jsx\` renders \`<Hero />\` and \`<PricingTable />\` and \`<Footer />\`, then in this same reply you need (a) the actual \`components/Hero.jsx\`, \`components/PricingTable.jsx\`, \`components/Footer.jsx\` files, AND (b) an \`index.html\` whose script tags include all three. A reference without a definition crashes the React mount with "X is not defined" → blank preview.
 
-The system will detect script-src targets you forgot and auto-create no-op stub files so the build doesn't outright break, but those stubs render as **nothing** — the section just disappears from the page. Same for missing components: even if the script src is correct, if you never emit the file the section is empty. The user's experience in both cases is "the AI's build looks broken / sections are missing", which is exactly what this contract exists to prevent. Treat the auto-stub as an emergency safety net you should never trigger, not a tool you can rely on.
+The system has a TWO-LAYER safety net for this mistake, and you should treat both as last-resort emergency catches you must never rely on:
+
+1. If you forget to emit a file referenced by a script-src, the server fires a SECOND Claude call asking you to fill in just the missing files. You will burn the user's tokens TWICE for the same build, and the second call has less context (it's appended to your transcript with a corrective instruction), so the filled-in components often feel disconnected from the rest of the build.
+2. If the second call also fails to deliver a file, the server persists a no-op stub (\`function Foo() { return null }\`). The script-src loads, the page doesn't crash, but the section renders as **empty space** — invisible to the user.
+
+Both layers are bug-mitigation, not features. The user paid for Sonnet, expects every component to be a real, designed, on-brief implementation, and will be unhappy if the second pass triggers (slower + more expensive) or if any stub survives (visibly broken section). Get every file right in the FIRST reply.
 
 Practical rules:
 - When you \`<file path="components/Foo.jsx">\` a NEW file, you MUST also re-emit \`index.html\` with the matching \`<script>\` tag in canonical load order.
