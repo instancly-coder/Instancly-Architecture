@@ -2886,30 +2886,8 @@ function ChatPanel({
     }
   };
 
-  // Pipeline stage indicator state. Drives the small stepper at the
-  // top of the chat — collapses out when nothing's happening so it
-  // doesn't take up space in the empty state. Order maps to the four
-  // pipeline stages defined in build.md: clarify → plan → build → verify.
-  const pipelineStage: "idle" | "clarify" | "plan" | "build" | "verify" =
-    pendingClarification
-      ? "clarify"
-      : planConversation
-        ? "plan"
-        : isStreaming
-          ? "build"
-          : (() => {
-              // If the most recent build has a running verification, show
-              // "verify". Otherwise idle.
-              const latest = pastBuilds[pastBuilds.length - 1];
-              if (latest && verifications[latest.id]?.status === "running") {
-                return "verify";
-              }
-              return "idle";
-            })();
-
   return (
     <>
-      <PipelineIndicator stage={pipelineStage} />
       <div
         ref={scrollRef}
         onScroll={onScroll}
@@ -3468,68 +3446,6 @@ function ChatPanel({
         </div>
       </div>
     </>
-  );
-}
-
-// ─── PipelineIndicator ──────────────────────────────────────────────────
-// Compact 4-dot stepper at the top of the chat panel that lights up the
-// active pipeline stage. Collapses to nothing when idle so the empty
-// state stays clean. Order matches build.md: Clarify → Plan → Build →
-// Verify. Past stages get a faded check, the current stage gets the
-// brand color + a soft pulse, future stages stay muted.
-function PipelineIndicator({
-  stage,
-}: {
-  stage: "idle" | "clarify" | "plan" | "build" | "verify";
-}) {
-  if (stage === "idle") return null;
-  const steps: Array<{ key: typeof stage; label: string }> = [
-    { key: "clarify", label: "Clarify" },
-    { key: "plan", label: "Plan" },
-    { key: "build", label: "Build" },
-    { key: "verify", label: "Verify" },
-  ];
-  const activeIdx = steps.findIndex((s) => s.key === stage);
-  return (
-    <div className="px-4 pt-3 shrink-0">
-      <div className="flex items-center gap-1.5 text-[10px] font-mono">
-        {steps.map((s, i) => {
-          const isPast = i < activeIdx;
-          const isActive = i === activeIdx;
-          return (
-            <div key={s.key} className="flex items-center gap-1.5">
-              <div
-                className={`flex items-center gap-1 px-1.5 py-0.5 rounded transition-colors ${
-                  isActive
-                    ? "bg-primary/15 text-primary"
-                    : isPast
-                      ? "text-secondary/80"
-                      : "text-secondary/50"
-                }`}
-              >
-                <span
-                  className={`w-1.5 h-1.5 rounded-full transition-colors ${
-                    isActive
-                      ? "bg-primary animate-pulse"
-                      : isPast
-                        ? "bg-success"
-                        : "bg-secondary/30"
-                  }`}
-                />
-                <span className="uppercase tracking-wider">{s.label}</span>
-              </div>
-              {i < steps.length - 1 && (
-                <ChevronRight
-                  className={`w-3 h-3 ${
-                    isPast ? "text-secondary/60" : "text-secondary/30"
-                  }`}
-                />
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
   );
 }
 
