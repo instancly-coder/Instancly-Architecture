@@ -1,4 +1,5 @@
 import { pgTable, text, timestamp, numeric, uuid, integer } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 export const usersTable = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -6,6 +7,23 @@ export const usersTable = pgTable("users", {
   displayName: text("display_name").notNull(),
   email: text("email").notNull().unique(),
   bio: text("bio").default("").notNull(),
+  // Short one-line headline shown under the display name on the
+  // public profile (e.g. "Designer — Building Next-Level Sites").
+  // Distinct from `bio` (paragraph) so the profile sidebar can
+  // render the two with different typography.
+  tagline: text("tagline").default("").notNull(),
+  // Free-form profile metadata surfaced as icon rows on the public
+  // profile sidebar. Empty string = "not set" (the row is hidden).
+  // `websiteUrl` is rendered as a link if it parses; we don't try to
+  // validate it on insert beyond a length check so users can paste
+  // partials like "moyin.design" and we'll still show them.
+  location: text("location").default("").notNull(),
+  websiteUrl: text("website_url").default("").notNull(),
+  // Skill / topic chips shown at the bottom of the profile sidebar.
+  // Free-form strings; the UI caps the count and length on input but
+  // the column itself is permissive so historical data isn't lost
+  // if those caps shift later.
+  skills: text("skills").array().default(sql`'{}'::text[]`).notNull(),
   avatarUrl: text("avatar_url"),
   plan: text("plan").default("Free").notNull(),
   balance: numeric("balance", { precision: 12, scale: 2 }).default("0").notNull(),

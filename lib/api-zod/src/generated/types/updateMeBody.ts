@@ -10,4 +10,8 @@ export interface UpdateMeBody {
   username?: string;
   displayName?: string;
   bio?: string;
+  tagline?: string;
+  location?: string;
+  websiteUrl?: string;
+  skills?: string[];
 }

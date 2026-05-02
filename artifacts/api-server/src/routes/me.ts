@@ -127,6 +127,10 @@ function toMe(user: typeof usersTable.$inferSelect): typeof GetMeResponse._type 
     displayName: user.displayName,
     email: user.email,
     bio: user.bio,
+    tagline: user.tagline,
+    location: user.location,
+    websiteUrl: user.websiteUrl,
+    skills: user.skills,
     plan: user.plan,
     balance: Number(user.balance),
     status: user.status,
@@ -661,7 +665,8 @@ router.patch("/me", async (req: Request, res: Response): Promise<void> => {
     res.status(401).json({ status: "error", message: "Unauthenticated" });
     return;
   }
-  const { username, displayName, bio } = req.body ?? {};
+  const { username, displayName, bio, tagline, location, websiteUrl, skills } =
+    req.body ?? {};
   const updates: Record<string, unknown> = {};
 
   if (typeof displayName === "string") {
@@ -674,11 +679,78 @@ router.patch("/me", async (req: Request, res: Response): Promise<void> => {
   }
 
   if (typeof bio === "string") {
-    if (bio.length > 280) {
+    // Trim & canonicalize like the other free-form fields so that
+    // a whitespace-only payload collapses to "" — the UI uses an
+    // empty-string sentinel to hide the bio paragraph.
+    const trimmed = bio.trim();
+    if (trimmed.length > 280) {
       res.status(400).json({ status: "error", message: "Bio must be at most 280 chars." });
       return;
     }
-    updates.bio = bio;
+    updates.bio = trimmed;
+  }
+
+  // The next four fields are all "free-form profile metadata" with the
+  // same shape: trim, length-cap, store as-is. Empty string is the
+  // canonical "unset" — that's what the column defaults to and what the
+  // UI uses to hide the corresponding row on the public profile.
+  if (typeof tagline === "string") {
+    const trimmed = tagline.trim();
+    if (trimmed.length > 120) {
+      res.status(400).json({ status: "error", message: "Tagline must be at most 120 chars." });
+      return;
+    }
+    updates.tagline = trimmed;
+  }
+
+  if (typeof location === "string") {
+    const trimmed = location.trim();
+    if (trimmed.length > 80) {
+      res.status(400).json({ status: "error", message: "Location must be at most 80 chars." });
+      return;
+    }
+    updates.location = trimmed;
+  }
+
+  if (typeof websiteUrl === "string") {
+    const trimmed = websiteUrl.trim();
+    if (trimmed.length > 200) {
+      res.status(400).json({ status: "error", message: "Website URL must be at most 200 chars." });
+      return;
+    }
+    updates.websiteUrl = trimmed;
+  }
+
+  // Skills is the chip list at the bottom of the profile sidebar. We
+  // accept an array, dedupe, drop blanks, and cap to 12 chips of 32
+  // chars each so a hostile client can't blow up the column.
+  if (Array.isArray(skills)) {
+    const cleaned: string[] = [];
+    const seen = new Set<string>();
+    for (const raw of skills) {
+      if (typeof raw !== "string") continue;
+      const v = raw.trim();
+      if (!v) continue;
+      if (v.length > 32) {
+        res.status(400).json({
+          status: "error",
+          message: "Each skill must be at most 32 chars.",
+        });
+        return;
+      }
+      const key = v.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      cleaned.push(v);
+      if (cleaned.length > 12) {
+        res.status(400).json({
+          status: "error",
+          message: "At most 12 skills allowed.",
+        });
+        return;
+      }
+    }
+    updates.skills = cleaned;
   }
 
   if (typeof username === "string" && username !== user.username) {

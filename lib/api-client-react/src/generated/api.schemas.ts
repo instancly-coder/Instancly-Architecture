@@ -28,6 +28,14 @@ export interface Me {
   displayName: string;
   email: string;
   bio: string;
+  /** Short one-line headline shown under the display name. */
+  tagline: string;
+  /** Free-form location string (e.g. "London, UK"). Empty = unset. */
+  location: string;
+  /** Personal website URL. Empty = unset. */
+  websiteUrl: string;
+  /** Profile skill / topic chips. */
+  skills: string[];
   plan: string;
   balance: number;
   status: string;
@@ -47,6 +55,14 @@ export interface User {
   displayName: string;
   email: string;
   bio: string;
+  /** Short one-line headline shown under the display name. */
+  tagline: string;
+  /** Free-form location string (e.g. "London, UK"). Empty = unset. */
+  location: string;
+  /** Personal website URL. Empty = unset. */
+  websiteUrl: string;
+  /** Profile skill / topic chips. */
+  skills: string[];
   avatarUrl: string | null;
   plan: string;
   balance: number;
@@ -60,6 +76,10 @@ export interface UpdateMeBody {
   username?: string;
   displayName?: string;
   bio?: string;
+  tagline?: string;
+  location?: string;
+  websiteUrl?: string;
+  skills?: string[];
 }
 
 /**

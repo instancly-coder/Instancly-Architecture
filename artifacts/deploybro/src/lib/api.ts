@@ -515,6 +515,13 @@ export function useUpdateMe() {
       request<ApiMe>(`/me`, { method: "PATCH", body: JSON.stringify(body) }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["me"] });
+      // The public profile page reads from `useUser(username)` which is
+      // keyed by `["users", username]`. Owners editing their profile
+      // expect the change to appear immediately on /:username, so we
+      // refresh that family too. We don't know the username here
+      // without re-reading state, but invalidating the whole `users`
+      // family is cheap (it's just one query at a time anyway).
+      qc.invalidateQueries({ queryKey: ["users"] });
     },
   });
 }

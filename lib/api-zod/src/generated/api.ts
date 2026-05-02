@@ -46,6 +46,16 @@ export const GetMeResponse = zod.object({
   displayName: zod.string(),
   email: zod.string(),
   bio: zod.string(),
+  tagline: zod
+    .string()
+    .describe("Short one-line headline shown under the display name."),
+  location: zod
+    .string()
+    .describe(
+      'Free-form location string (e.g. \"London, UK\"). Empty = unset.',
+    ),
+  websiteUrl: zod.string().describe("Personal website URL. Empty = unset."),
+  skills: zod.array(zod.string()).describe("Profile skill \/ topic chips."),
   plan: zod.string(),
   balance: zod.number(),
   status: zod.string(),
@@ -74,6 +84,10 @@ export const UpdateMeBody = zod.object({
   username: zod.string().optional(),
   displayName: zod.string().optional(),
   bio: zod.string().optional(),
+  tagline: zod.string().optional(),
+  location: zod.string().optional(),
+  websiteUrl: zod.string().optional(),
+  skills: zod.array(zod.string()).optional(),
 });
 
 export const UpdateMeResponse = zod.object({
@@ -82,6 +96,16 @@ export const UpdateMeResponse = zod.object({
   displayName: zod.string(),
   email: zod.string(),
   bio: zod.string(),
+  tagline: zod
+    .string()
+    .describe("Short one-line headline shown under the display name."),
+  location: zod
+    .string()
+    .describe(
+      'Free-form location string (e.g. \"London, UK\"). Empty = unset.',
+    ),
+  websiteUrl: zod.string().describe("Personal website URL. Empty = unset."),
+  skills: zod.array(zod.string()).describe("Profile skill \/ topic chips."),
   plan: zod.string(),
   balance: zod.number(),
   status: zod.string(),
@@ -153,6 +177,16 @@ export const CompleteOnboardingResponse = zod.object({
   displayName: zod.string(),
   email: zod.string(),
   bio: zod.string(),
+  tagline: zod
+    .string()
+    .describe("Short one-line headline shown under the display name."),
+  location: zod
+    .string()
+    .describe(
+      'Free-form location string (e.g. \"London, UK\"). Empty = unset.',
+    ),
+  websiteUrl: zod.string().describe("Personal website URL. Empty = unset."),
+  skills: zod.array(zod.string()).describe("Profile skill \/ topic chips."),
   plan: zod.string(),
   balance: zod.number(),
   status: zod.string(),
@@ -277,6 +311,16 @@ export const GetUserResponse = zod.object({
   displayName: zod.string(),
   email: zod.string(),
   bio: zod.string(),
+  tagline: zod
+    .string()
+    .describe("Short one-line headline shown under the display name."),
+  location: zod
+    .string()
+    .describe(
+      'Free-form location string (e.g. \"London, UK\"). Empty = unset.',
+    ),
+  websiteUrl: zod.string().describe("Personal website URL. Empty = unset."),
+  skills: zod.array(zod.string()).describe("Profile skill \/ topic chips."),
   avatarUrl: zod.string().nullable(),
   plan: zod.string(),
   balance: zod.number(),

@@ -12,6 +12,14 @@ export interface User {
   displayName: string;
   email: string;
   bio: string;
+  /** Short one-line headline shown under the display name. */
+  tagline: string;
+  /** Free-form location string (e.g. "London, UK"). Empty = unset. */
+  location: string;
+  /** Personal website URL. Empty = unset. */
+  websiteUrl: string;
+  /** Profile skill / topic chips. */
+  skills: string[];
   avatarUrl: string | null;
   plan: string;
   balance: number;

@@ -1139,6 +1139,19 @@ components:
         displayName: { type: string }
         email: { type: string }
         bio: { type: string }
+        tagline:
+          type: string
+          description: Short one-line headline shown under the display name.
+        location:
+          type: string
+          description: Free-form location string (e.g. "London, UK"). Empty = unset.
+        websiteUrl:
+          type: string
+          description: Personal website URL. Empty = unset.
+        skills:
+          type: array
+          items: { type: string }
+          description: Profile skill / topic chips.
         plan: { type: string }
         balance: { type: number }
         status: { type: string }
@@ -1164,6 +1177,10 @@ components:
         - displayName
         - email
         - bio
+        - tagline
+        - location
+        - websiteUrl
+        - skills
         - plan
         - balance
         - status
@@ -1179,6 +1196,19 @@ components:
         displayName: { type: string }
         email: { type: string }
         bio: { type: string }
+        tagline:
+          type: string
+          description: Short one-line headline shown under the display name.
+        location:
+          type: string
+          description: Free-form location string (e.g. "London, UK"). Empty = unset.
+        websiteUrl:
+          type: string
+          description: Personal website URL. Empty = unset.
+        skills:
+          type: array
+          items: { type: string }
+          description: Profile skill / topic chips.
         avatarUrl:
           type: string
           nullable: true
@@ -1194,6 +1224,10 @@ components:
         - displayName
         - email
         - bio
+        - tagline
+        - location
+        - websiteUrl
+        - skills
         - avatarUrl
         - plan
         - balance
@@ -1207,6 +1241,12 @@ components:
         username: { type: string }
         displayName: { type: string }
         bio: { type: string }
+        tagline: { type: string }
+        location: { type: string }
+        websiteUrl: { type: string }
+        skills:
+          type: array
+          items: { type: string }
     CompleteOnboardingBody:
       type: object
       properties:
