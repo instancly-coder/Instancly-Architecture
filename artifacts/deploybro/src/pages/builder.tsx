@@ -2635,129 +2635,23 @@ function ChatPanel({
           </div>
         )}
 
-        {/* Plan-mode interview — renders as plain chat messages with no
-            card wrapper or header, so the bubbles flow inline with the
-            rest of the conversation. The user replies via the regular
-            composer below; the dispatcher (parent's onSend) routes
-            their reply to sendPlanReply while the conversation is
-            open. The ready-state Build/Cancel row is the only chrome
-            that survived. */}
+        {/* Plan-mode interview — rendered as a single multi-step
+            "plan box" instead of alternating chat bubbles. Each
+            assistant question + the user's reply collapses into one
+            numbered step on a vertical stepper; the most recent
+            unanswered question is the current step and shows
+            suggestion chips. When the conversation reaches the
+            ready state the same box swaps its body for the
+            structured plan summary + Build/Cancel actions, so the
+            whole planning flow lives inside one consistent
+            container in the chat. */}
         {planConversation && (
-          <div className="space-y-2.5">
-            {planConversation.messages.map((m, i) => {
-              const isLast = i === planConversation.messages.length - 1;
-              if (m.role === "user") {
-                return (
-                  <div key={`pm-${i}`} className="flex justify-end">
-                    <div className="max-w-[88%] px-3 py-1.5 rounded-2xl rounded-br-md bg-primary/15 text-primary text-sm leading-snug whitespace-pre-wrap break-words">
-                      {m.content}
-                    </div>
-                  </div>
-                );
-              }
-              // Assistant bubble. While text is mid-stream the
-              // content grows word-by-word; we still render it as
-              // a normal bubble so the user sees it land in place.
-              const showChips =
-                isLast &&
-                planConversation.status === "asking" &&
-                m.suggestions.length > 0;
-              // Mid-stream shimmer: the last assistant message is
-              // "working" until either suggestion chips arrive (for a
-              // question turn) or the conversation flips to "ready"
-              // (for the final plan turn). Either signal means the
-              // SSE turn event has landed and the text is final.
-              const isMidStream =
-                isLast &&
-                planConversation.status !== "ready" &&
-                m.suggestions.length === 0 &&
-                m.content.length > 0;
-              return (
-                <div key={`pm-${i}`} className="space-y-1.5">
-                  <div className="flex justify-start">
-                    <div className="max-w-[88%] px-3 py-1.5 rounded-2xl rounded-bl-md bg-background border border-border/70 text-sm leading-snug text-foreground whitespace-pre-wrap break-words">
-                      {m.content ? (
-                        <span className={isMidStream ? "shimmer-text" : ""}>
-                          {m.content}
-                        </span>
-                      ) : (
-                        <span className="text-secondary italic">…</span>
-                      )}
-                    </div>
-                  </div>
-                  {showChips && (
-                    <div className="flex flex-wrap gap-1.5 pl-1">
-                      {m.suggestions.map((s, j) => (
-                        <button
-                          key={`pmc-${i}-${j}`}
-                          onClick={() => onPlanSuggestionClick(s)}
-                          className="inline-flex items-center px-2.5 py-1 rounded-full border border-border bg-surface-raised hover:bg-background hover:border-primary/40 text-[11px] text-foreground transition-colors text-left"
-                          title={s}
-                        >
-                          {s}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-
-            {/* Typing indicator while the next assistant turn is
-                in flight. We show this whenever status==="thinking"
-                AND the most recent message is from the user — that
-                is, after they've sent a reply but before the new
-                assistant placeholder has been pushed by the SSE
-                `start` event. */}
-            {planConversation.status === "thinking" &&
-              (planConversation.messages.length === 0 ||
-                planConversation.messages[
-                  planConversation.messages.length - 1
-                ].role === "user") && (
-                <div className="flex justify-start">
-                  <div className="px-3 py-2 rounded-2xl rounded-bl-md bg-background border border-border/70 text-sm leading-snug inline-flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse" />
-                    <span
-                      className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse"
-                      style={{ animationDelay: "120ms" }}
-                    />
-                    <span
-                      className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse"
-                      style={{ animationDelay: "240ms" }}
-                    />
-                  </div>
-                </div>
-              )}
-
-            {/* Final plan summary + action row. Only appears once the
-                server emits a kind:"plan" turn (status flips to
-                "ready" AND `plan` is populated). Sits inline with the
-                other bubbles — no card edge to separate from. */}
-            {planConversation.status === "ready" && planConversation.plan && (
-              <div className="space-y-3 pt-1">
-                <PlanSummary plan={planConversation.plan} />
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    onClick={onApprovePlan}
-                    className="h-8 text-xs"
-                  >
-                    <Check className="w-3.5 h-3.5 mr-1" />
-                    Build this
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={onCancelPlan}
-                    className="h-8 text-xs text-secondary hover:text-foreground ml-auto"
-                  >
-                    <X className="w-3.5 h-3.5 mr-1" />
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
+          <PlanBox
+            conversation={planConversation}
+            onSuggestionClick={onPlanSuggestionClick}
+            onApprovePlan={onApprovePlan}
+            onCancelPlan={onCancelPlan}
+          />
         )}
 
         {/* Empty state — only after we've actually confirmed the
@@ -3105,6 +2999,245 @@ function Stat({ label, value }: { label: string; value: string }) {
         {label}
       </div>
       <div className="font-mono text-xs text-foreground">{value}</div>
+    </div>
+  );
+}
+
+/* -------------------------------- PlanBox -------------------------------- */
+
+// PlanBox renders the entire plan-mode interview as a single
+// multi-step container instead of alternating chat bubbles. The
+// design treats each AI question + the user's reply as one "step" on
+// a vertical stepper:
+//
+//   ✓ 1. What kind of app?
+//        > A todo list for teams
+//   ✓ 2. Who's it for?
+//        > Engineering managers
+//   ● 3. What's the main feature?      ← current step
+//        [chip] [chip] [chip]
+//
+// When the conversation reaches the "ready" state the same box
+// re-skins as the approved plan summary with Build / Cancel actions,
+// so the entire planning flow lives in one consistent surface (no
+// per-message chrome floating around the chat).
+type PlanConversation = {
+  originalPrompt: string;
+  messages: Array<
+    | { role: "user"; content: string }
+    | { role: "assistant"; content: string; suggestions: string[] }
+  >;
+  status: "thinking" | "asking" | "ready";
+  plan: ApprovedPlan | null;
+};
+
+function PlanBox({
+  conversation,
+  onSuggestionClick,
+  onApprovePlan,
+  onCancelPlan,
+}: {
+  conversation: PlanConversation;
+  onSuggestionClick: (text: string) => void;
+  onApprovePlan: () => void;
+  onCancelPlan: () => void;
+}) {
+  const { messages, status, plan } = conversation;
+  const isReady = status === "ready" && plan !== null;
+
+  // Pair every assistant question with its (optional) following user
+  // reply so we can render the conversation as a numbered list of
+  // steps. The interview always starts with an assistant turn (the
+  // server seeds it), so the loop is straightforward — but we still
+  // tolerate a leading orphan user message defensively.
+  type Step = {
+    question: { content: string; suggestions: string[] } | null;
+    answer: string | null;
+  };
+  const steps: Step[] = [];
+  for (let i = 0; i < messages.length; i++) {
+    const m = messages[i];
+    if (m.role === "assistant") {
+      const next = messages[i + 1];
+      const answer = next && next.role === "user" ? next.content : null;
+      steps.push({
+        question: { content: m.content, suggestions: m.suggestions },
+        answer,
+      });
+      if (answer !== null) i++;
+    } else {
+      // Orphan user message at the head — render as an "answer"
+      // with no question above it.
+      steps.push({ question: null, answer: m.content });
+    }
+  }
+
+  // The current step is the last one without a user reply. While
+  // the conversation is "thinking" before the next assistant turn
+  // arrives, the last step DOES have a reply — we surface the typing
+  // indicator below the steps in that case instead of inside one.
+  const lastStepIdx = steps.length - 1;
+  const lastMsg = messages[messages.length - 1];
+  const isAwaitingAssistant =
+    status === "thinking" && lastMsg?.role === "user";
+
+  return (
+    <div className="bg-surface-raised rounded-xl p-4 space-y-3">
+      {/* Header — swaps label/icon when the plan is ready. */}
+      <div className="flex items-center gap-2">
+        {isReady ? (
+          <Check className="w-4 h-4 text-success" />
+        ) : (
+          <Sparkles
+            className={`w-4 h-4 text-primary ${
+              status === "thinking" ? "animate-pulse" : ""
+            }`}
+          />
+        )}
+        <div className="text-sm font-semibold text-foreground">
+          {isReady ? "Plan ready" : "Planning your app"}
+        </div>
+        {!isReady && steps.length > 0 && (
+          <div className="ml-auto text-[10px] font-mono uppercase tracking-wider text-secondary">
+            Step {lastStepIdx + 1}
+          </div>
+        )}
+      </div>
+
+      {/* Vertical stepper. The connecting line lives on each row
+          (except the last) so steps can grow/shrink without breaking
+          the rail. */}
+      <ol className="space-y-3">
+        {steps.map((step, idx) => {
+          const isLastStep = idx === lastStepIdx;
+          const isCurrent = !isReady && isLastStep && step.answer === null;
+          const isCompleted = isReady || step.answer !== null;
+          // Mid-stream shimmer — the current question is "writing"
+          // until either the suggestions chips arrive (asking turn)
+          // or the conversation flips to ready (final plan turn).
+          const isMidStream =
+            isCurrent &&
+            status !== "asking" &&
+            (step.question?.suggestions.length ?? 0) === 0 &&
+            (step.question?.content.length ?? 0) > 0;
+
+          return (
+            <li key={`step-${idx}`} className="relative pl-9">
+              {/* Connecting rail to the next step. */}
+              {!isLastStep && (
+                <span
+                  className="absolute left-3 top-7 bottom-[-12px] w-px bg-border/70"
+                  aria-hidden
+                />
+              )}
+              {/* Step indicator badge. */}
+              <span
+                className={`absolute left-0 top-0 inline-flex items-center justify-center w-6 h-6 rounded-full text-[10px] font-mono ${
+                  isCompleted
+                    ? "bg-primary/15 text-primary"
+                    : isCurrent
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-surface text-secondary"
+                }`}
+                aria-label={
+                  isCompleted
+                    ? `Step ${idx + 1} complete`
+                    : `Step ${idx + 1} current`
+                }
+              >
+                {isCompleted ? (
+                  <Check className="w-3.5 h-3.5" />
+                ) : (
+                  idx + 1
+                )}
+              </span>
+
+              {/* Step body — the question, then the answer (or chips
+                  if it's the current unanswered step). */}
+              <div className="space-y-1.5 min-w-0">
+                {step.question && (
+                  <div className="text-sm leading-snug text-foreground whitespace-pre-wrap break-words">
+                    {step.question.content ? (
+                      <span className={isMidStream ? "shimmer-text" : ""}>
+                        {step.question.content}
+                      </span>
+                    ) : (
+                      <span className="text-secondary italic">…</span>
+                    )}
+                  </div>
+                )}
+
+                {step.answer !== null && (
+                  <div className="text-xs leading-snug text-secondary whitespace-pre-wrap break-words pl-2 border-l-2 border-border/50">
+                    {step.answer}
+                  </div>
+                )}
+
+                {isCurrent &&
+                  status === "asking" &&
+                  (step.question?.suggestions.length ?? 0) > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {step.question!.suggestions.map((s, j) => (
+                        <button
+                          key={`sug-${idx}-${j}`}
+                          onClick={() => onSuggestionClick(s)}
+                          className="inline-flex items-center px-2.5 py-1 rounded-full bg-surface hover:bg-background hover:text-primary text-[11px] text-foreground transition-colors text-left"
+                          title={s}
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+
+      {/* Typing indicator while the next assistant turn is in flight
+          (i.e. user just sent a reply, server hasn't pushed the new
+          assistant placeholder yet). Sits flush with the stepper
+          rail so it reads as the next step taking shape. */}
+      {isAwaitingAssistant && (
+        <div className="pl-9 inline-flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse" />
+          <span
+            className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse"
+            style={{ animationDelay: "120ms" }}
+          />
+          <span
+            className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse"
+            style={{ animationDelay: "240ms" }}
+          />
+        </div>
+      )}
+
+      {/* Final approved plan + actions. Replaces no part of the
+          stepper — the completed steps stay visible above as the
+          paper trail of how we got here. */}
+      {isReady && plan && (
+        <>
+          <div className="border-t border-border/60 pt-3">
+            <PlanSummary plan={plan} />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" onClick={onApprovePlan} className="h-8 text-xs">
+              <Check className="w-3.5 h-3.5 mr-1" />
+              Build this
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={onCancelPlan}
+              className="h-8 text-xs text-secondary hover:text-foreground ml-auto"
+            >
+              <X className="w-3.5 h-3.5 mr-1" />
+              Cancel
+            </Button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
