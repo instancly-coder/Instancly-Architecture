@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useLocation } from "wouter";
 import {
   FolderTree,
@@ -677,14 +677,19 @@ export default function Builder() {
   const [viewport, setViewport] = useState<"desktop" | "tablet" | "mobile">("desktop");
 
   const liveUrl = `https://${slug}.deploybro.app`;
-  const [urlValue, setUrlValue] = useState(liveUrl);
   const [iframeKey, setIframeKey] = useState(0);
   // URL bar is hidden on mobile by default; the 3-dots menu lets users toggle it on.
   const [showUrlBar, setShowUrlBar] = useState(false);
 
-  useEffect(() => {
-    setUrlValue(liveUrl);
-  }, [liveUrl]);
+  // The URL bar shows the in-app pathname the iframe is currently
+  // sitting at, NOT the full published origin. Default to "/" so a
+  // freshly opened project reads as "you're on the homepage" rather
+  // than dumping the user a long, mostly-irrelevant deploy URL.
+  // Two-way bound: dropdown clicks set this and the PreviewPane
+  // imperatively navigates the iframe; iframe-internal navigation
+  // (Next router push, <a href>) is polled inside PreviewPane and
+  // pushed back up via onPathChange.
+  const [previewPath, setPreviewPath] = useState("/");
 
   // ---------- Publish (Vercel + Neon) ----------
   // `activeDeploymentId` drives the polling hook. When the row hits a
@@ -2131,9 +2136,49 @@ export default function Builder() {
   }, [isStreaming, chatInput]);
 
   const copyUrl = () => {
-    navigator.clipboard.writeText(`${slug}.deploybro.app`);
+    const suffix = previewPath === "/" ? "" : previewPath;
+    navigator.clipboard.writeText(`${slug}.deploybro.app${suffix}`);
     toast.success("URL copied");
   };
+
+  // Derive the page list shown in the URL-bar dropdown from whatever
+  // routing convention the generated app happens to use. We support
+  //   • Next.js App Router  →  app/**/page.{j,t}sx
+  //   • Next.js Pages Router →  pages/<name>.{j,t}sx
+  //   • Plain static HTML    →  <name>.html at the project root
+  // and always seed "/" so the homepage is reachable even before any
+  // files exist. Routes are de-duped via a Set, then sorted with the
+  // homepage pinned to the top so it reads top-to-bottom like a
+  // typical site map.
+  const previewPagesList = useMemo<string[]>(() => {
+    const set = new Set<string>(["/"]);
+    for (const f of projectFiles) {
+      const p = f.path;
+      let m = p.match(/^app\/(.+)\/page\.[jt]sx?$/i);
+      if (m) {
+        // Skip dynamic / route-group / private segments — they don't
+        // map cleanly to a clickable URL in the dropdown.
+        const seg = m[1];
+        if (!/[[\](){}@_]/.test(seg)) set.add("/" + seg);
+        continue;
+      }
+      m = p.match(/^([a-z0-9][a-z0-9_-]*)\.html$/i);
+      if (m && m[1].toLowerCase() !== "index") {
+        set.add("/" + m[1]);
+        continue;
+      }
+      m = p.match(/^pages\/([a-z0-9][a-z0-9_-]*)\.[jt]sx?$/i);
+      if (
+        m &&
+        !["index", "_app", "_document", "_error"].includes(m[1].toLowerCase())
+      ) {
+        set.add("/" + m[1]);
+      }
+    }
+    return Array.from(set).sort((a, b) =>
+      a === "/" ? -1 : b === "/" ? 1 : a.localeCompare(b),
+    );
+  }, [projectFiles]);
 
   const currentStep = phase ? { phase, text: "" } : null;
 
@@ -2585,13 +2630,40 @@ export default function Builder() {
                 </button>
               </div>
 
-              {/* Center: URL input */}
+              {/* Center: URL pill — shows the in-app pathname and opens
+                  a dropdown of every routable page so the user can jump
+                  around the preview without hunting for links inside
+                  the iframe. */}
               <div className="flex justify-center min-w-0 px-2">
-                <input
-                  value={urlValue}
-                  onChange={(e) => setUrlValue(e.target.value)}
-                  className="w-full max-w-[520px] h-7 bg-background border border-border rounded-md px-3 text-xs font-mono text-foreground text-center outline-none focus:ring-1 focus:ring-primary truncate"
-                />
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="w-full max-w-[520px] h-7 inline-flex items-center justify-center gap-2 bg-background border border-border rounded-md px-3 text-xs font-mono text-foreground hover:border-primary/40 outline-none focus:ring-1 focus:ring-primary"
+                      title="Jump to a page"
+                    >
+                      <span className="truncate">{previewPath}</span>
+                      <ChevronDown className="w-3 h-3 opacity-60 shrink-0" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="center"
+                    className="min-w-[240px]"
+                  >
+                    {previewPagesList.map((p) => (
+                      <DropdownMenuItem
+                        key={p}
+                        onSelect={() => setPreviewPath(p)}
+                        className="font-mono text-xs"
+                      >
+                        <span className="truncate">{p}</span>
+                        {p === previewPath && (
+                          <Check className="w-3 h-3 ml-auto opacity-70" />
+                        )}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
 
               {/* Right: viewport dropdown + actions */}
@@ -2627,6 +2699,8 @@ export default function Builder() {
                 setViewport={setViewport}
                 isBuilding={isStreaming}
                 iframeRef={previewIframeRef}
+                previewPath={previewPath}
+                onPathChange={setPreviewPath}
               />
             )}
             {activeTab === "files" && (
