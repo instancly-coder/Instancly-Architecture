@@ -96,6 +96,12 @@ router.get("/users/:username/projects", async (req: Request, res: Response): Pro
     ListUserProjectsResponse.parse(
       rows.map((r) => ({
         ...r,
+        // The schema requires `ownerUsername` on every row so the
+        // client can build links/badges without a second lookup.
+        // Since this endpoint is scoped to a single user, every row
+        // shares the same owner — pull it from the user we already
+        // fetched above.
+        ownerUsername: user.username,
         lastBuiltAt: r.lastBuiltAt.toISOString(),
         createdAt: r.createdAt.toISOString(),
         buildsCount: Number(r.buildsCount),

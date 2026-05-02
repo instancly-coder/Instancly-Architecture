@@ -195,7 +195,7 @@ export default function Profile() {
   if (isLoading) {
     return (
       <DashboardLayout>
-        <div className="max-w-5xl mx-auto p-8 text-secondary">Loading…</div>
+        <div className="p-4 md:p-8 text-secondary">Loading…</div>
       </DashboardLayout>
     );
   }
@@ -203,7 +203,7 @@ export default function Profile() {
   if (isError || !user) {
     return (
       <DashboardLayout>
-        <div className="max-w-5xl mx-auto p-8">
+        <div className="p-4 md:p-8">
           <h1 className="text-2xl font-bold mb-2">User not found</h1>
           <p className="text-secondary">No user with the handle @{username}.</p>
         </div>
@@ -239,7 +239,7 @@ export default function Profile() {
         {isOwner && <PublicProfileUrl username={user.username} />}
       </header>
 
-      <div className="max-w-5xl mx-auto p-4 md:p-8 w-full">
+      <div className="p-4 md:p-8 w-full">
         <div className="flex flex-col md:flex-row gap-12">
           <div className="w-full md:w-64 shrink-0">
             <div
