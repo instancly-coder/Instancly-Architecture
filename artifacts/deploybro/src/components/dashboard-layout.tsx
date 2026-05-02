@@ -19,6 +19,7 @@ import {
 import { BrandLogo } from "./brand-logo";
 import { useMe } from "@/lib/api";
 import { authClient, authConfigured } from "@/auth";
+import { clearDevBypass } from "@/lib/dev-bypass";
 import { useMobileUserMenu } from "./mobile-user-menu";
 
 const NAV = [
@@ -38,6 +39,11 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
   const username = me?.username ?? "loading";
 
   const signOut = async () => {
+    // Clear the dev-mode bypass FIRST so a stale localStorage flag /
+    // cookie can't keep the user silently signed in as the demo user
+    // after they explicitly chose to sign out. No-op outside dev
+    // builds, safe to call unconditionally.
+    clearDevBypass();
     if (authConfigured && authClient) {
       await authClient.signOut().catch(() => {});
     }

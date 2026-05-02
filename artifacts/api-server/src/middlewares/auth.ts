@@ -205,34 +205,83 @@ async function ensureUser(
 
 /**
  * Dev-only "demo" user fallback so the product is exercisable when no
- * upstream auth provider is wired up at all. The bypass is gated on
- * BOTH conditions:
- *   1. We're not in production.
- *   2. JWKS is unconfigured (i.e. `AUTH_JWKS_URL` was not set on boot).
+ * upstream auth provider is wired up at all. There are two flavours of
+ * the bypass, both gated on `NODE_ENV !== "production"` so they are
+ * physically incapable of activating in a deployed build:
  *
- * The moment real auth is configured — even in development — we MUST
- * stop silently signing requests in as the demo user, otherwise a
- * transient cookie-sync race (e.g. right after a Google OAuth callback)
- * would resolve `/api/me` to "demo" instead of the real account, and
- * the homepage prompt would create the user's project under the wrong
- * owner.
+ *   1. **Auto** — JWKS is unconfigured (`AUTH_JWKS_URL` not set). Every
+ *      request with no token gets the demo user. This is the
+ *      "I just cloned the repo and want to click around" mode.
+ *   2. **Opt-in** — JWKS *is* configured (real auth is wired up) but
+ *      the request carries a `dev_bypass=1` cookie. Set by the
+ *      "Developer mode" button on /login. Lets a dev with real auth
+ *      configured still skip OAuth on demand without breaking the
+ *      normal authenticated flow for everyone else on the same instance.
+ *
+ * The opt-in flavour is only consulted *after* JWT verification has
+ * been attempted, so a real signed-in user is never silently demoted
+ * to the demo account by a stray cookie — the cookie just lets an
+ * unauthenticated browser pretend to be signed in.
  */
-const DEV_BYPASS_ENABLED =
-  process.env.NODE_ENV !== "production" && !jwks;
+const DEV_BYPASS_ALLOWED = process.env.NODE_ENV !== "production";
+const DEV_BYPASS_AUTO_ENABLED = DEV_BYPASS_ALLOWED && !jwks;
+const DEV_BYPASS_COOKIE = "dev_bypass";
+
+function hasDevBypassCookie(req: Request): boolean {
+  if (!DEV_BYPASS_ALLOWED) return false;
+  const cookies = (req as Request & { cookies?: Record<string, string> })
+    .cookies;
+  return cookies?.[DEV_BYPASS_COOKIE] === "1";
+}
+
 const DEV_BYPASS_EMAIL = "demo@deploybro.local";
 
 let devUserCache: AuthedUser | null = null;
 let devUserPromise: Promise<AuthedUser> | null = null;
 
 async function provisionDevUser(): Promise<AuthedUser> {
-  // Race-safe: try insert, ignore unique-violations, then re-select the
-  // canonical row by email. This handles concurrent first-requests after a
-  // cold start without producing duplicate users *or* spurious 401s.
+  // Fast path: the demo row already exists from a previous run. Skip the
+  // insert entirely so we don't have to think about either unique
+  // constraint (email OR username) on the happy path.
+  const existing = (
+    await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.email, DEV_BYPASS_EMAIL))
+      .limit(1)
+  )[0];
+  if (existing) {
+    return {
+      id: existing.id,
+      sub: `dev:${existing.id}`,
+      email: existing.email,
+      username: existing.username,
+      displayName: existing.displayName,
+    };
+  }
+
+  // First-time provisioning. The username "demo" is the natural pick but
+  // it's not reserved — a real user may already have claimed it. We can't
+  // express "ON CONFLICT (email OR username) DO NOTHING" in a single
+  // statement, so probe the username and pick a unique fallback before
+  // inserting. The remaining insert race is handled by onConflictDoNothing
+  // on the email target plus a re-select.
+  const desiredUsernameTaken = (
+    await db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(eq(usersTable.username, "demo"))
+      .limit(1)
+  )[0];
+  const username = desiredUsernameTaken
+    ? `demo-${Math.random().toString(36).slice(2, 8)}`
+    : "demo";
+
   await db
     .insert(usersTable)
     .values({
       email: DEV_BYPASS_EMAIL,
-      username: "demo",
+      username,
       displayName: "Demo User",
       avatarUrl: null,
     })
@@ -350,7 +399,12 @@ export async function tryAuth(
     );
   }
 
-  if (DEV_BYPASS_ENABLED) {
+  // Activate the demo-user bypass when EITHER the environment has no
+  // real auth configured (auto mode) OR the request explicitly opted
+  // in via the dev-mode cookie. Both paths are gated on
+  // `NODE_ENV !== "production"` upstream — there is no code path that
+  // attaches the demo user in a production build.
+  if (DEV_BYPASS_AUTO_ENABLED || hasDevBypassCookie(req)) {
     try {
       const user = await getOrCreateDevUser();
       (req as AuthedRequest).auth = { payload: { sub: user.sub }, user };

@@ -2,8 +2,9 @@ import { Link, useLocation } from "wouter";
 import { useState } from "react";
 import { BrandLogo } from "@/components/brand-logo";
 import { authClient, authConfigured } from "@/auth";
-import { Loader2 } from "lucide-react";
+import { Loader2, Wrench } from "lucide-react";
 import { toast } from "sonner";
+import { enableDevBypass } from "@/lib/dev-bypass";
 
 type Provider = "google" | "apple" | "github";
 
@@ -24,6 +25,17 @@ export default function Login() {
       }
     } catch {}
     return "/dashboard";
+  };
+
+  // "Developer mode" entry point. Only rendered when Vite is running in
+  // dev (`import.meta.env.DEV` — true under `vite dev`, false in any
+  // built/published bundle). `enableDevBypass()` sets both pieces of
+  // state (localStorage flag for AuthGate, cookie for the API server)
+  // atomically; see `lib/dev-bypass.ts` for the safety gates.
+  const handleDevBypass = () => {
+    enableDevBypass();
+    toast.success("Developer mode on — signed in as demo user.");
+    setLocation(consumeAfterLogin());
   };
 
   const handleClick = async (provider: Provider) => {
@@ -161,6 +173,28 @@ export default function Login() {
             <Link href="/terms" className="underline hover:text-foreground">Terms</Link> and{" "}
             <Link href="/privacy" className="underline hover:text-foreground">Privacy Policy</Link>.
           </p>
+
+          {/* Developer-mode bypass — only present in dev builds. Lets
+              the developer click straight through to /dashboard as
+              the seeded demo user without going through OAuth. The
+              button itself is stripped from production bundles
+              because `import.meta.env.DEV` is statically false there
+              and Vite tree-shakes the dead branch. */}
+          {import.meta.env.DEV && (
+            <div className="mt-6 pt-4 border-t border-border/40">
+              <button
+                type="button"
+                onClick={handleDevBypass}
+                className="w-full h-9 inline-flex items-center justify-center gap-2 rounded-md text-xs font-medium text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
+              >
+                <Wrench className="w-3.5 h-3.5" />
+                <span>Developer mode — skip login</span>
+              </button>
+              <p className="mt-1.5 text-[10px] text-secondary/70 text-center">
+                Dev builds only · signs you in as the demo user
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>

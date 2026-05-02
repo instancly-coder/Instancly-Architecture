@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { authClient, authConfigured } from "@/auth";
 import type { ApiMe } from "@/lib/api";
+import { isDevBypassActive } from "@/lib/dev-bypass";
 
 // Routes that ARE part of the post-signup flow. The onboarding-redirect
 // effect below skips these so we don't create a redirect loop on the
@@ -13,9 +14,18 @@ const PRE_ONBOARDING_PATHS = new Set(["/onboarding", "/signup/username"]);
  * Wrap any page that requires the user to be signed in.
  * If auth is not configured at all (no Neon Auth base URL), the gate is
  * bypassed and we let the existing dev fallback (`demo`) take over server-side.
+ *
+ * The developer-mode bypass (set from /login) takes the same
+ * pass-through path: API calls carry a `dev_bypass=1` cookie that the
+ * server-side `tryAuth` middleware swaps for the seeded demo user.
+ * `isDevBypassActive` requires BOTH the localStorage flag and the cookie
+ * — if either is missing (e.g. cookie expired) the bypass is considered
+ * inactive and the stale half-state is cleared as a side effect, so the
+ * dev sees /login again instead of a half-broken /dashboard.
  */
 export function AuthGate({ children }: { children: React.ReactNode }) {
   if (!authConfigured) return <>{children}</>;
+  if (isDevBypassActive()) return <>{children}</>;
   return <AuthGateInner>{children}</AuthGateInner>;
 }
 

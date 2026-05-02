@@ -31,6 +31,7 @@ import {
 import { BrandLogo } from "./brand-logo";
 import { useMe } from "@/lib/api";
 import { authClient, authConfigured } from "@/auth";
+import { clearDevBypass } from "@/lib/dev-bypass";
 
 type MobileUserMenuContextValue = {
   open: boolean;
@@ -109,6 +110,11 @@ function MobileUserDrawer({ onClose }: { onClose: () => void }) {
   };
 
   const signOut = async () => {
+    // Clear the dev-mode bypass FIRST so a stale localStorage flag /
+    // cookie can't keep the user silently signed in as the demo user
+    // after they explicitly chose to sign out. No-op outside dev
+    // builds, safe to call unconditionally.
+    clearDevBypass();
     if (authConfigured && authClient) {
       await authClient.signOut().catch(() => {});
     }
