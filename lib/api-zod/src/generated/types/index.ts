@@ -18,6 +18,8 @@ export * from "./adminUser";
 export * from "./appConfig";
 export * from "./build";
 export * from "./captureProjectScreenshotResponse";
+export * from "./cloneProjectResponse";
+export * from "./cloneProjectResponseStatus";
 export * from "./completeOnboardingBody";
 export * from "./completeOnboardingBodyPlan";
 export * from "./completeOnboardingBodyRole";

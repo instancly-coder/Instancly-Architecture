@@ -9,3 +9,4 @@ export * from "./referral-earnings";
 export * from "./payouts";
 export * from "./payout-settings";
 export * from "./project-env-vars";
+export * from "./template-clones";

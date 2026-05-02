@@ -6,17 +6,20 @@ import {
   usersTable,
   projectsTable,
   buildsTable,
+  templateClonesTable,
 } from "@workspace/db";
 import {
   GetProjectResponse,
   ListProjectBuildsResponse,
   CreateProjectBuildResponse,
+  CloneProjectResponse,
 } from "@workspace/api-zod";
 import { requireAuth, getAuthedUser } from "../middlewares/auth";
 import { setReferralCookieIfAbsent } from "../lib/referral-attribution";
 import { decryptSecret, encryptSecret } from "../lib/secret-cipher";
 import { provisionAppDatabase, parentProjectId } from "../lib/neon";
 import { logger } from "../lib/logger";
+import { resolveTemplateCloneCommissionPct } from "../lib/template-clone-commission";
 
 const router: IRouter = Router();
 
@@ -545,6 +548,143 @@ router.post(
         message: message.slice(0, 400),
       });
     }
+  },
+);
+
+/**
+ * Record that the authed user cloned this template. Two-fold purpose:
+ *   1. Bump the `clones` counter visible on the public template card
+ *      (only on FIRST clone per user → counter stays a true "unique
+ *      cloners" count, not an inflatable click count).
+ *   2. Insert/refresh a `template_clones` attribution row so the
+ *      Stripe webhook can credit the original author with a
+ *      `kind: "template_clone"` earning on this cloner's future
+ *      payments. Re-clicking Clone refreshes the timestamp so the
+ *      most-recent-clone-wins payout rule moves with the user.
+ *
+ * Self-clones (author === cloner) are accepted (so the UX stays
+ * symmetric — the button doesn't act broken on your own templates)
+ * but the webhook short-circuits the credit so users can never pay
+ * themselves.
+ *
+ * Auth required: we need a real user id to credit; an anonymous
+ * "clone" can't be attributed to anything.
+ */
+router.post(
+  "/projects/:username/:slug/clone",
+  requireAuth,
+  async (req: Request, res: Response): Promise<void> => {
+    const auth = getAuthedUser(req);
+    if (!auth) {
+      res.status(401).json({ status: "error", message: "Unauthenticated" });
+      return;
+    }
+    const username = String(req.params.username);
+    const slug = String(req.params.slug);
+    const row = await loadProject(username, slug);
+    if (!row) {
+      res.status(404).json({ status: "error", message: "Project not found" });
+      return;
+    }
+    const { project, user: author } = row;
+
+    // You can't clone a private project — it's not yours to clone, and
+    // the public "Clone" CTA only renders on public listings anyway.
+    if (!project.isPublic) {
+      res.status(404).json({ status: "error", message: "Project not found" });
+      return;
+    }
+
+    // Look up the author's per-user commission % override (snapshot
+    // it onto the event row so a later change doesn't retroactively
+    // re-price the cloner's earnings).
+    const authorRow = (
+      await db
+        .select({
+          id: usersTable.id,
+          username: usersTable.username,
+          displayName: usersTable.displayName,
+          templateAuthorCommissionPct: usersTable.templateAuthorCommissionPct,
+        })
+        .from(usersTable)
+        .where(eq(usersTable.id, author.id))
+        .limit(1)
+    )[0];
+    if (!authorRow) {
+      res.status(404).json({ status: "error", message: "Project not found" });
+      return;
+    }
+    const commissionPct = resolveTemplateCloneCommissionPct(
+      authorRow.templateAuthorCommissionPct,
+    );
+
+    // Upsert in a single statement so two concurrent first-clone
+    // requests can't both think they're the first and double-bump
+    // the counter. We use the Postgres-internal `xmax = 0` trick on
+    // RETURNING: when a row is freshly INSERTed, xmax is 0; when it
+    // came from the ON CONFLICT DO UPDATE branch, xmax is non-zero
+    // (it's the locking xact id). That gives us an authoritative
+    // insert-vs-conflict signal directly from the row Postgres just
+    // wrote — no race window between a pre-SELECT and the upsert.
+    //
+    // We set just `createdAt` on conflict because the commission
+    // snapshot intentionally STAYS frozen at the original clone time
+    // (later commission changes don't shift earnings). The timestamp
+    // refresh is what keeps the "most recent clone wins" attribution
+    // rule moving with the user's latest engagement.
+    const upserted = await db
+      .insert(templateClonesTable)
+      .values({
+        clonerUserId: auth.id,
+        sourceProjectId: project.id,
+        authorUserId: author.id,
+        commissionPct,
+        sourceProjectName: project.name,
+      })
+      .onConflictDoUpdate({
+        target: [
+          templateClonesTable.clonerUserId,
+          templateClonesTable.sourceProjectId,
+        ],
+        set: { createdAt: new Date() },
+      })
+      .returning({
+        id: templateClonesTable.id,
+        wasInserted: sql<boolean>`xmax = 0`,
+      });
+    const alreadyCloned = !upserted[0]?.wasInserted;
+
+    if (!alreadyCloned) {
+      // Bump the public counter only on true first clones — keeps it
+      // a real "unique cloners" number, not a click count. Atomic
+      // SQL increment so concurrent first clones (each writing their
+      // own row before reading) can't lose updates.
+      await db
+        .update(projectsTable)
+        .set({ clones: sql`${projectsTable.clones} + 1` })
+        .where(eq(projectsTable.id, project.id));
+    }
+
+    logger.info(
+      {
+        clonerId: auth.id,
+        authorId: author.id,
+        sourceProjectId: project.id,
+        alreadyCloned,
+        commissionPct,
+      },
+      "Recorded template clone",
+    );
+
+    res.json(
+      CloneProjectResponse.parse({
+        status: "ok",
+        alreadyCloned,
+        commissionPct,
+        authorUsername: authorRow.username,
+        authorDisplayName: authorRow.displayName,
+      }),
+    );
   },
 );
 

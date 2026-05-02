@@ -316,6 +316,26 @@ export interface AdminTemplateItem {
   createdAt: string;
 }
 
+export type CloneProjectResponseStatus =
+  (typeof CloneProjectResponseStatus)[keyof typeof CloneProjectResponseStatus];
+
+export const CloneProjectResponseStatus = {
+  ok: "ok",
+} as const;
+
+/**
+ * Result of recording a template-clone attribution.
+ */
+export interface CloneProjectResponse {
+  status: CloneProjectResponseStatus;
+  /** True if the (cloner, source) pair already had a row — the timestamp was refreshed but the clones counter was not bumped. */
+  alreadyCloned: boolean;
+  /** The author's commission % snapshot used for any future earnings on this attribution. */
+  commissionPct: number;
+  authorUsername: string;
+  authorDisplayName: string;
+}
+
 export interface SetFeaturedTemplateBody {
   isFeaturedTemplate: boolean;
 }

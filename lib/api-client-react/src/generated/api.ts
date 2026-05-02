@@ -27,6 +27,7 @@ import type {
   AdminUser,
   AppConfig,
   Build,
+  CloneProjectResponse,
   CompleteOnboardingBody,
   CreateBuildBody,
   CreateOnboardingLinkBody,
@@ -1209,6 +1210,100 @@ export const useUpdateProject = <
   TContext
 > => {
   return useMutation(getUpdateProjectMutationOptions(options));
+};
+
+/**
+ * Records an attribution event in `template_clones` and bumps
+the source project's `clones` counter. Idempotent per
+(cloner, source project): re-clicking Clone refreshes the
+attribution timestamp (so the most-recent-clone-wins payout
+rule moves with the user) but does NOT re-bump the counter.
+Self-clones are accepted but not credited. Returns the
+commission % the author will earn on any of the cloner's
+future spend.
+
+ * @summary Record that the authed user cloned this template
+ */
+export const getCloneProjectUrl = (username: string, slug: string) => {
+  return `/api/projects/${username}/${slug}/clone`;
+};
+
+export const cloneProject = async (
+  username: string,
+  slug: string,
+  options?: RequestInit,
+): Promise<CloneProjectResponse> => {
+  return customFetch<CloneProjectResponse>(getCloneProjectUrl(username, slug), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getCloneProjectMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof cloneProject>>,
+    TError,
+    { username: string; slug: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof cloneProject>>,
+  TError,
+  { username: string; slug: string },
+  TContext
+> => {
+  const mutationKey = ["cloneProject"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof cloneProject>>,
+    { username: string; slug: string }
+  > = (props) => {
+    const { username, slug } = props ?? {};
+
+    return cloneProject(username, slug, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CloneProjectMutationResult = NonNullable<
+  Awaited<ReturnType<typeof cloneProject>>
+>;
+
+export type CloneProjectMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Record that the authed user cloned this template
+ */
+export const useCloneProject = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof cloneProject>>,
+    TError,
+    { username: string; slug: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof cloneProject>>,
+  TError,
+  { username: string; slug: string },
+  TContext
+> => {
+  return useMutation(getCloneProjectMutationOptions(options));
 };
 
 /**

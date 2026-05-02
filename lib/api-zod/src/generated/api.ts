@@ -487,6 +487,41 @@ export const UpdateProjectResponse = zod.object({
 });
 
 /**
+ * Records an attribution event in `template_clones` and bumps
+the source project's `clones` counter. Idempotent per
+(cloner, source project): re-clicking Clone refreshes the
+attribution timestamp (so the most-recent-clone-wins payout
+rule moves with the user) but does NOT re-bump the counter.
+Self-clones are accepted but not credited. Returns the
+commission % the author will earn on any of the cloner's
+future spend.
+
+ * @summary Record that the authed user cloned this template
+ */
+export const CloneProjectParams = zod.object({
+  username: zod.string(),
+  slug: zod.string(),
+});
+
+export const CloneProjectResponse = zod
+  .object({
+    status: zod.enum(["ok"]),
+    alreadyCloned: zod
+      .boolean()
+      .describe(
+        "True if the (cloner, source) pair already had a row — the timestamp was refreshed but the clones counter was not bumped.",
+      ),
+    commissionPct: zod
+      .number()
+      .describe(
+        "The author's commission % snapshot used for any future earnings on this attribution.",
+      ),
+    authorUsername: zod.string(),
+    authorDisplayName: zod.string(),
+  })
+  .describe("Result of recording a template-clone attribution.");
+
+/**
  * @summary List builds for a project
  */
 export const ListProjectBuildsParams = zod.object({

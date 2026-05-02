@@ -1,13 +1,14 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import express from "express";
 import crypto from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq, desc, ne } from "drizzle-orm";
 import {
   db,
   usersTable,
   transactionsTable,
   referralEarningsTable,
   payoutsTable,
+  templateClonesTable,
 } from "@workspace/db";
 import { logger } from "../lib/logger";
 import {
@@ -330,7 +331,45 @@ async function processPaymentSuccess(event: StripeChargeEvent): Promise<void> {
     throw err;
   }
 
-  if (!user.referredByUserId) return;
+  // Referrer (invite) credit and template-clone (author) credit are
+  // INDEPENDENT and both run for every payment. A given payment can
+  // produce zero, one, or both credit rows. They live side-by-side in
+  // referral_earnings, discriminated by `kind`, and the composite
+  // unique index on (transaction_id, kind) keeps the two from
+  // colliding. We run the referrer path first only because it's the
+  // older code path; ordering doesn't matter for correctness.
+  if (user.referredByUserId) {
+    await creditReferrerIfApplicable({
+      eventId: event.id,
+      payer: user,
+      transactionId,
+      amount,
+    });
+  }
+
+  await creditTemplateAuthorIfApplicable({
+    eventId: event.id,
+    payerId: user.id,
+    transactionId,
+    amount,
+  });
+}
+
+/**
+ * Credit the inviter (`user.referredByUserId`) for this payment. The
+ * old inline code from processPaymentSuccess, hoisted into its own
+ * function so the two credit kinds are visually symmetric and so
+ * processPaymentSuccess doesn't have a misleading early-return that
+ * skips the template-clone credit.
+ */
+async function creditReferrerIfApplicable(opts: {
+  eventId: string;
+  payer: typeof usersTable.$inferSelect;
+  transactionId: string;
+  amount: number;
+}): Promise<void> {
+  const { payer } = opts;
+  if (!payer.referredByUserId) return;
 
   // Look up the referrer's commission % override. Falls back to the
   // platform default if they haven't been touched by an admin.
@@ -341,30 +380,34 @@ async function processPaymentSuccess(event: StripeChargeEvent): Promise<void> {
         referralCommissionPct: usersTable.referralCommissionPct,
       })
       .from(usersTable)
-      .where(eq(usersTable.id, user.referredByUserId))
+      .where(eq(usersTable.id, payer.referredByUserId))
       .limit(1)
   )[0];
   if (!referrer) {
     logger.warn(
-      { eventId: event.id, referrerId: user.referredByUserId, payerId: user.id },
+      {
+        eventId: opts.eventId,
+        referrerId: payer.referredByUserId,
+        payerId: payer.id,
+      },
       "Stripe webhook: payer's referrer no longer exists, skipping commission",
     );
     return;
   }
   const pct = resolveCommissionPct(referrer.referralCommissionPct);
   // Round to two decimals to keep DB-side numeric values clean.
-  const earned = Math.round(amount * pct) / 100;
+  const earned = Math.round(opts.amount * pct) / 100;
 
   try {
     await db.insert(referralEarningsTable).values({
       referrerUserId: referrer.id,
-      referredUserId: user.id,
-      sourceProjectId: user.referredViaProjectId ?? null,
-      transactionId,
+      referredUserId: payer.id,
+      sourceProjectId: payer.referredViaProjectId ?? null,
+      transactionId: opts.transactionId,
       // Stamp the event id here too so the unique index on
       // `referral_earnings.stripe_event_id` blocks a duplicate credit
       // even if the transaction-id dedup is somehow bypassed.
-      stripeEventId: event.id ?? null,
+      stripeEventId: opts.eventId ?? null,
       amount: earned.toFixed(2),
       commissionPct: pct,
       status: "pending",
@@ -379,7 +422,7 @@ async function processPaymentSuccess(event: StripeChargeEvent): Promise<void> {
     ) {
       // Already credited via another delivery — safe to ignore.
       logger.info(
-        { eventId: event.id, transactionId },
+        { eventId: opts.eventId, transactionId: opts.transactionId },
         "Stripe webhook: referral earning already exists for this transaction",
       );
       return;
@@ -389,15 +432,146 @@ async function processPaymentSuccess(event: StripeChargeEvent): Promise<void> {
 
   logger.info(
     {
-      eventId: event.id,
+      eventId: opts.eventId,
       referrerId: referrer.id,
-      payerId: user.id,
-      transactionId,
-      amount,
+      payerId: payer.id,
+      transactionId: opts.transactionId,
+      amount: opts.amount,
       pct,
       earned,
     },
     "Stripe webhook: credited referral earning",
+  );
+}
+
+/**
+ * Credit the author of the user's most-recently-cloned template (if
+ * any) for this payment. Independent of the referrer credit:
+ *
+ *   - referrer credit  — "you invited a friend, they paid"
+ *   - clone credit     — "someone cloned your template, then paid"
+ *
+ * A given payment can produce zero, one, or both — the composite
+ * unique index `(transaction_id, kind)` on `referral_earnings` keeps
+ * the two from colliding. This helper is a no-op when:
+ *   - the payer has never cloned anything (no `template_clones` row)
+ *   - the most recent clone's author is the payer (no self-payouts)
+ *   - the author is no longer in the users table
+ *
+ * Idempotency: same retry-storm protection as the referrer path. The
+ * unique index throws 23505 on a second insert, which we catch and
+ * treat as a no-op.
+ */
+async function creditTemplateAuthorIfApplicable(opts: {
+  eventId: string;
+  payerId: string;
+  transactionId: string;
+  amount: number;
+}): Promise<void> {
+  // Most recent clone wins attribution. We snapshot the commission %
+  // at clone time on the event row, so a creator who later changes
+  // their cut doesn't retroactively re-price existing cloners'
+  // earnings.
+  //
+  // Important filter: exclude self-clones at SELECT time — a user who
+  // clones their OWN template should not have that self-clone become
+  // their latest attribution and thereby cancel out an earlier
+  // genuine clone of someone else's template. The clone endpoint
+  // still records self-clones (so the public counter stays accurate
+  // and the UX doesn't regress on your own templates) — we just
+  // ignore them when picking who to credit.
+  //
+  // Tiebreaker: we order by createdAt DESC then id DESC so two clones
+  // recorded in the same millisecond produce a deterministic winner
+  // rather than relying on Postgres's tuple order.
+  const lastClone = (
+    await db
+      .select({
+        sourceProjectId: templateClonesTable.sourceProjectId,
+        authorUserId: templateClonesTable.authorUserId,
+        commissionPct: templateClonesTable.commissionPct,
+      })
+      .from(templateClonesTable)
+      .where(
+        and(
+          eq(templateClonesTable.clonerUserId, opts.payerId),
+          ne(templateClonesTable.authorUserId, opts.payerId),
+        ),
+      )
+      .orderBy(
+        desc(templateClonesTable.createdAt),
+        desc(templateClonesTable.id),
+      )
+      .limit(1)
+  )[0];
+  if (!lastClone) return;
+
+  const author = (
+    await db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(eq(usersTable.id, lastClone.authorUserId))
+      .limit(1)
+  )[0];
+  if (!author) {
+    logger.warn(
+      {
+        eventId: opts.eventId,
+        payerId: opts.payerId,
+        authorId: lastClone.authorUserId,
+      },
+      "Stripe webhook: template author no longer exists, skipping clone credit",
+    );
+    return;
+  }
+
+  const pct = lastClone.commissionPct;
+  const earned = Math.round(opts.amount * pct) / 100;
+
+  try {
+    await db.insert(referralEarningsTable).values({
+      // We reuse referrerUserId / referredUserId as a generic
+      // "earner / payment-trigger" pair — the `kind` column
+      // disambiguates the relationship. See the comment on
+      // `referralEarningsTable.kind` for the discriminator values.
+      referrerUserId: author.id,
+      referredUserId: opts.payerId,
+      sourceProjectId: lastClone.sourceProjectId,
+      transactionId: opts.transactionId,
+      stripeEventId: opts.eventId ?? null,
+      amount: earned.toFixed(2),
+      commissionPct: pct,
+      status: "pending",
+      kind: "template_clone",
+    });
+  } catch (err) {
+    if (
+      err &&
+      typeof err === "object" &&
+      "code" in err &&
+      (err as { code?: unknown }).code === "23505"
+    ) {
+      logger.info(
+        { eventId: opts.eventId, transactionId: opts.transactionId },
+        "Stripe webhook: template-clone earning already exists for this transaction",
+      );
+      return;
+    }
+    throw err;
+  }
+
+  logger.info(
+    {
+      eventId: opts.eventId,
+      authorId: author.id,
+      payerId: opts.payerId,
+      transactionId: opts.transactionId,
+      amount: opts.amount,
+      pct,
+      earned,
+      sourceProjectId: lastClone.sourceProjectId,
+    },
+    "Stripe webhook: credited template-clone earning",
   );
 }
 

@@ -13,7 +13,7 @@ import {
   Smartphone,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useProject } from "@/lib/api";
+import { useProject, useCloneProject } from "@/lib/api";
 import { toast } from "sonner";
 import { MarketingNav } from "@/components/marketing-nav";
 import { MarketingFooter } from "@/components/marketing-footer";
@@ -43,7 +43,28 @@ export default function Project() {
   // object-top) which is usually the hero/nav.
   const [viewMode, setViewMode] = useState<ViewMode>("desktop");
 
-  const clone = () => toast.success("Project cloned to your dashboard.");
+  // Real clone now records an attribution event on the server so the
+  // template author can earn a commission on any future spend by this
+  // user. The mutation hook also invalidates the project + templates
+  // + explore queries so the bumped clones counter is reflected
+  // everywhere it's surfaced.
+  const cloneMut = useCloneProject(username, slug);
+  const clone = async () => {
+    try {
+      const result = await cloneMut.mutateAsync();
+      if (result.alreadyCloned) {
+        toast.success("Already in your library — attribution refreshed.");
+      } else {
+        toast.success(
+          `Cloned. ${result.authorDisplayName} earns ${result.commissionPct}% on your future builds.`,
+        );
+      }
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Could not clone right now.",
+      );
+    }
+  };
 
   if (isLoading) {
     return (
@@ -84,8 +105,14 @@ export default function Project() {
           <Link href={`/${username}/${slug}/build`}>
             <Button variant="outline" size="sm">Open builder</Button>
           </Link>
-          <Button size="sm" onClick={clone} className="bg-primary text-primary-foreground hover:bg-primary/90 font-medium">
-            <Copy className="w-4 h-4 mr-2" /> Clone
+          <Button
+            size="sm"
+            onClick={clone}
+            disabled={cloneMut.isPending}
+            className="bg-primary text-primary-foreground hover:bg-primary/90 font-medium"
+          >
+            <Copy className="w-4 h-4 mr-2" />
+            {cloneMut.isPending ? "Cloning…" : "Clone"}
           </Button>
         </div>
       </div>

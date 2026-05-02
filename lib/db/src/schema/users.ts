@@ -53,6 +53,14 @@ export const usersTable = pgTable("users", {
   // NULL means "use the global default" (currently 15). Stored as an
   // integer for clean JSON; values are interpreted as a percentage.
   referralCommissionPct: integer("referral_commission_pct"),
+  // Per-author override of the platform-default template-clone
+  // commission % — i.e. the cut THIS user (as a template author)
+  // earns when someone clones one of their templates and later pays.
+  // NULL means "use the global default"
+  // (DEFAULT_TEMPLATE_CLONE_COMMISSION_PCT, currently 10). The clone
+  // event snapshots this value at clone time so later changes don't
+  // retroactively shift earnings on existing cloners.
+  templateAuthorCommissionPct: integer("template_author_commission_pct"),
   // Stripe Connect Express account that earnings get paid out to.
   // NULL until the creator clicks "Connect payout method" on the
   // earnings page. Once present, the payout pipeline can transfer

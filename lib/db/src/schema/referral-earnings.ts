@@ -48,6 +48,15 @@ export const referralEarningsTable = pgTable(
     stripeEventId: text("stripe_event_id"),
     amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
     commissionPct: integer("commission_pct").notNull(),
+    // Discriminator for which side of the marketplace produced this
+    // earning row, so the same payment can credit BOTH the inviting
+    // user AND the template author without colliding on the
+    // (transaction_id) unique index — the index below is composite on
+    // (transaction_id, kind) so each kind gets one row per payment.
+    //   "recurring"      — referrer commission (one user invited
+    //                       another and earns on their spend)
+    //   "template_clone" — template author commission (someone cloned
+    //                       this user's template and later paid)
     kind: text("kind").default("recurring").notNull(),
     status: text("status").default("pending").notNull(),
     // Set when the row gets attached to a payout batch. We deliberately
@@ -70,18 +79,22 @@ export const referralEarningsTable = pgTable(
   (t) => ({
     referrerIdx: index("referral_earnings_referrer_idx").on(t.referrerUserId),
     referredIdx: index("referral_earnings_referred_idx").on(t.referredUserId),
-    // At most one earning per transaction, regardless of how many times
-    // the source webhook gets retried.
-    transactionUniq: uniqueIndex(
-      "referral_earnings_transaction_id_uniq",
-    ).on(t.transactionId),
-    // At most one earning row per Stripe event id. Independent of the
-    // transaction-id uniqueness above so that any future writer that
-    // forgets to set `transactionId` still can't double-credit on
-    // webhook retries.
-    stripeEventIdUniq: uniqueIndex(
-      "referral_earnings_stripe_event_id_uniq",
-    ).on(t.stripeEventId),
+    // At most one earning per (transaction, kind), regardless of how
+    // many times the source webhook gets retried. Composite on `kind`
+    // so a single payment can produce one referrer-commission row AND
+    // one template-clone-commission row without colliding — but two
+    // deliveries of the SAME event for the SAME kind still get
+    // dedup'd to one row.
+    transactionKindUniq: uniqueIndex(
+      "referral_earnings_transaction_id_kind_uniq",
+    ).on(t.transactionId, t.kind),
+    // At most one earning row per (Stripe event, kind). Independent
+    // of the transaction-id uniqueness above so that any future
+    // writer that forgets to set `transactionId` still can't
+    // double-credit on webhook retries.
+    stripeEventIdKindUniq: uniqueIndex(
+      "referral_earnings_stripe_event_id_kind_uniq",
+    ).on(t.stripeEventId, t.kind),
   }),
 );
 

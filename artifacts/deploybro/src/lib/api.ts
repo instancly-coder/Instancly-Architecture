@@ -409,6 +409,40 @@ export function useUpdateProject(
   });
 }
 
+/**
+ * Record that the current user cloned a public template. Returns the
+ * commission % the original author will earn on this user's future
+ * spend (snapshotted at clone time on the server). Re-clicking is a
+ * cheap no-op on the counter (`alreadyCloned: true`) but DOES refresh
+ * the attribution timestamp so the most-recent-clone-wins payout rule
+ * shifts to this template.
+ */
+export function useCloneProject(
+  username: string | undefined,
+  slug: string | undefined,
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => {
+      if (!username || !slug) throw new Error("Project not loaded");
+      return request<{
+        status: "ok";
+        alreadyCloned: boolean;
+        commissionPct: number;
+        authorUsername: string;
+        authorDisplayName: string;
+      }>(`/projects/${username}/${slug}/clone`, { method: "POST" });
+    },
+    onSuccess: () => {
+      // Bumped clones counter on first-time clones; refresh the
+      // surfaces that show it.
+      qc.invalidateQueries({ queryKey: ["projects", username, slug] });
+      qc.invalidateQueries({ queryKey: ["templates"] });
+      qc.invalidateQueries({ queryKey: ["explore"] });
+    },
+  });
+}
+
 export function useExplore(params: { q?: string; framework?: string; sort?: string }) {
   const search = new URLSearchParams();
   if (params.q) search.set("q", params.q);
