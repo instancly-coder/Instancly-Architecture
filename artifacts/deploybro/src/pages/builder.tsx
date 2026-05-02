@@ -51,7 +51,6 @@ import {
   Loader2,
   Rocket,
   Sparkles,
-  Pencil,
   Upload,
   ArrowDownAZ,
   ArrowDown10,
@@ -61,8 +60,7 @@ import {
 import { BrandLogo } from "@/components/brand-logo";
 import { DeleteProjectDialog } from "@/components/delete-project-dialog";
 import {
-  PlanReview,
-  PlanText,
+  PlanSummary,
   type Plan as ApprovedPlan,
 } from "@/components/plan-review";
 import { Button } from "@/components/ui/button";
@@ -781,40 +779,47 @@ export default function Builder() {
   // Default to Economy Bro by name (not by list index) so reordering the
   // picker never silently changes the default model.
   const [selectedModel, setSelectedModel] = useState<string>("Economy Bro");
-  // Plan mode: when ON, the user's submit triggers a two-stage flow —
-  // first /ai/plan streams a structured plan into the chat as its own
-  // bubble, then on "Build this" /ai/build runs locked to that plan.
+  // Plan mode: when ON, the user's submit triggers a conversational
+  // interview — the AI asks one question at a time (with quick-pick
+  // chip suggestions) until it has enough info, then emits the final
+  // plan with a Build this button. The whole thread renders inline as
+  // its own card in the chat — no modal.
   const [planMode, setPlanMode] = useState<boolean>(false);
-  // The in-flight (or completed-and-awaiting-approval) plan stream.
-  // `status: "streaming"` while bytes are still arriving, `"ready"`
-  // once the server sent the structured plan + done event. The bubble
-  // shows action buttons only in the `"ready"` state.
-  const [planStream, setPlanStream] = useState<{
-    prompt: string;
+  // The active plan-mode interview, or null when no interview is in
+  // progress. `status` walks through: thinking (server is replying) →
+  // asking (assistant message + suggestions visible, awaiting user
+  // reply) → ready (final plan emitted, Build this button visible).
+  const [planConversation, setPlanConversation] = useState<{
+    originalPrompt: string;
     overrides: {
       modelKey?: "haiku" | "sonnet" | "opus";
       urls?: string[];
       files?: File[];
     };
-    typed: string;
+    messages: Array<
+      | { role: "user"; content: string }
+      | {
+          role: "assistant";
+          content: string;
+          suggestions: string[];
+        }
+    >;
+    status: "thinking" | "asking" | "ready";
     plan: ApprovedPlan | null;
-    status: "streaming" | "ready";
   } | null>(null);
-  // Set when the user clicks "Edit plan" on a ready plan bubble. Opens
-  // the structured review modal as an opt-in fine-tune step. `null`
-  // means the modal is closed; the streaming bubble is the default UX.
-  const [editingPlan, setEditingPlan] = useState<{
-    prompt: string;
-    plan: ApprovedPlan;
-    overrides: {
-      modelKey?: "haiku" | "sonnet" | "opus";
-      urls?: string[];
-      files?: File[];
-    };
-  } | null>(null);
-  // Aborts the in-flight /ai/plan SSE stream so a user dismissing the
-  // bubble (or unmounting) closes the connection and stops billing.
+  // Aborts the in-flight /ai/plan SSE turn so a user cancelling the
+  // interview (or unmounting) closes the connection and stops billing.
+  // While set, the conversation is mid-turn — sendPlanReply uses this
+  // as a lock so a chip double-click or fast re-Enter can't kick off
+  // a second concurrent request from a stale state snapshot.
   const planAbortRef = useRef<AbortController | null>(null);
+  // Monotonic per-turn token. _streamPlanTurn captures the current
+  // value when it starts and ignores any of its own state updates if
+  // the ref has moved past it (because cancel/restart fired). This
+  // prevents stale SSE events from a previous turn — which can still
+  // arrive between the abort signal and the upstream throw — from
+  // contaminating the new turn's state.
+  const planTurnIdRef = useRef(0);
   // Attachments + reference URLs are lifted here (rather than living inside
   // ChatPanel) so handleSend can include them in the build request body.
   const [attachments, setAttachments] = useState<File[]>([]);
@@ -985,8 +990,231 @@ export default function Builder() {
     document.body.style.userSelect = "none";
   };
 
+  // ─── Plan Mode interview helpers ─────────────────────────────────────
+  // Drives the conversational planner. Each call to /ai/plan is one
+  // turn; we keep the running thread in `planConversation.messages` and
+  // POST the full history on each subsequent turn so the model has
+  // context. _streamPlanTurn handles the SSE plumbing for one turn;
+  // start/sendPlanReply/approve/cancel are the user-facing actions.
+  const _streamPlanTurn = async (
+    conv: NonNullable<typeof planConversation>,
+  ) => {
+    if (!username || !slug) return;
+    // Defensive: cancel any prior in-flight turn before starting a new
+    // one. Should already have been aborted by sendPlanReply's guard,
+    // but belt-and-braces stops a stale stream from racing this one.
+    planAbortRef.current?.abort();
+    const controller = new AbortController();
+    planAbortRef.current = controller;
+    const myTurnId = ++planTurnIdRef.current;
+    // Helper that wraps every state update so a turn whose ID has been
+    // superseded silently no-ops. Without this a delta from a prior
+    // turn could still flip status / append text to the new thread
+    // between the abort signal firing and the upstream throw.
+    const updateIfActive = (
+      updater: (
+        cur: NonNullable<typeof planConversation>,
+      ) => typeof planConversation,
+    ) => {
+      if (myTurnId !== planTurnIdRef.current) return;
+      setPlanConversation((cur) => (cur ? updater(cur) : cur));
+    };
+    try {
+      const res = await fetch(`/api/ai/plan/${username}/${slug}`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          originalPrompt: conv.originalPrompt,
+          // The server treats `messages` as the Anthropic-format
+          // conversation. We strip suggestions client-side — the
+          // model only needs the human-readable text of each turn.
+          messages: conv.messages.map((m) => ({
+            role: m.role,
+            content: m.content,
+          })),
+          ...(conv.overrides.urls && conv.overrides.urls.length > 0
+            ? { urls: conv.overrides.urls }
+            : {}),
+        }),
+        signal: controller.signal,
+      });
+      // Throw on ANY non-OK response — not just JSON ones. An HTML
+      // error page (e.g. proxy 502) would otherwise fall through to
+      // readSSE, produce no events, and leave the UI stuck in
+      // "thinking" forever.
+      if (!res.ok) {
+        let message = `HTTP ${res.status}`;
+        if (res.headers.get("content-type")?.includes("application/json")) {
+          const j = await res.json().catch(() => ({}));
+          if (j?.message) message = j.message;
+        }
+        throw new Error(message);
+      }
+      let lastTurnKind: "question" | "plan" = "question";
+      for await (const evt of readSSE(res)) {
+        if (evt.event === "start") {
+          // Push the placeholder assistant message; subsequent
+          // delta events append to its content. Doing this on
+          // `start` (not first delta) makes the typing indicator
+          // hand off cleanly the moment the connection opens.
+          updateIfActive((cur) => ({
+            ...cur,
+            messages: [
+              ...cur.messages,
+              { role: "assistant", content: "", suggestions: [] },
+            ],
+          }));
+        } else if (
+          evt.event === "delta" &&
+          typeof evt.data?.text === "string"
+        ) {
+          const chunk = evt.data.text as string;
+          updateIfActive((cur) => {
+            // Defensive: if `start` was missed for any reason,
+            // create the assistant placeholder lazily so deltas
+            // don't get dropped.
+            let msgs = cur.messages;
+            const last = msgs[msgs.length - 1];
+            if (!last || last.role !== "assistant") {
+              msgs = [
+                ...msgs,
+                { role: "assistant", content: "", suggestions: [] },
+              ];
+            }
+            const tail = msgs[msgs.length - 1];
+            if (tail.role !== "assistant") return cur;
+            return {
+              ...cur,
+              status: "asking",
+              messages: [
+                ...msgs.slice(0, -1),
+                { ...tail, content: tail.content + chunk },
+              ],
+            };
+          });
+        } else if (evt.event === "turn" && evt.data) {
+          const kind = evt.data.kind === "plan" ? "plan" : "question";
+          lastTurnKind = kind;
+          const suggestions = Array.isArray(evt.data.suggestions)
+            ? (evt.data.suggestions as unknown[]).filter(
+                (s): s is string => typeof s === "string",
+              )
+            : [];
+          const planFromServer = evt.data.plan
+            ? (evt.data.plan as ApprovedPlan)
+            : null;
+          updateIfActive((cur) => {
+            const msgs = cur.messages;
+            const last = msgs[msgs.length - 1];
+            if (!last || last.role !== "assistant") return cur;
+            return {
+              ...cur,
+              plan: planFromServer ?? cur.plan,
+              messages: [
+                ...msgs.slice(0, -1),
+                {
+                  ...last,
+                  suggestions: kind === "question" ? suggestions : [],
+                },
+              ],
+            };
+          });
+        } else if (evt.event === "error") {
+          throw new Error(evt.data?.message || "Plan turn failed");
+        } else if (evt.event === "done" && evt.data?.ok) {
+          updateIfActive((cur) => ({
+            ...cur,
+            status: lastTurnKind === "plan" ? "ready" : "asking",
+          }));
+        }
+      }
+    } catch (err) {
+      const aborted = (err as { name?: string })?.name === "AbortError";
+      if (!aborted) {
+        const msg =
+          err instanceof Error ? err.message : "Couldn't draft a reply";
+        toast.error(msg);
+        // Drop back to "asking" so the user can retry by sending
+        // another message — we don't blow away the whole thread on
+        // a single failed turn.
+        updateIfActive((cur) => ({ ...cur, status: "asking" }));
+      }
+    } finally {
+      // Only release the lock if no newer turn has taken over — the
+      // newer turn's own `planAbortRef.current = controller` may have
+      // already run by the time this finally fires.
+      if (myTurnId === planTurnIdRef.current) {
+        planAbortRef.current = null;
+      }
+    }
+  };
+
+  const startPlanConversation = (
+    prompt: string,
+    overrides: {
+      modelKey?: "haiku" | "sonnet" | "opus";
+      urls?: string[];
+      files?: File[];
+    },
+  ) => {
+    const conv = {
+      originalPrompt: prompt,
+      overrides,
+      // Seed the thread with the user's original prompt as the first
+      // visible bubble so the chat reads as a real conversation from
+      // the very first message.
+      messages: [{ role: "user" as const, content: prompt }],
+      status: "thinking" as const,
+      plan: null,
+    };
+    setPlanConversation(conv);
+    void _streamPlanTurn(conv);
+  };
+
+  const sendPlanReply = (text?: string) => {
+    if (!planConversation || planConversation.status !== "asking") return;
+    // Lock against double-submit (rapid Enter, chip double-click). A
+    // turn is in flight whenever planAbortRef.current is set; until it
+    // completes we silently drop additional sends rather than firing
+    // concurrent /ai/plan requests from stale state snapshots.
+    if (planAbortRef.current) return;
+    const reply = (typeof text === "string" ? text : chatInput).trim();
+    if (!reply) return;
+    setChatInput("");
+    const newMessages: typeof planConversation.messages = [
+      ...planConversation.messages,
+      { role: "user", content: reply },
+    ];
+    const next = {
+      ...planConversation,
+      messages: newMessages,
+      status: "thinking" as const,
+    };
+    setPlanConversation(next);
+    void _streamPlanTurn(next);
+  };
+
+  const approvePlan = () => {
+    if (!planConversation?.plan) return;
+    const { originalPrompt, plan, overrides } = planConversation;
+    setPlanConversation(null);
+    void handleSend(originalPrompt, {
+      ...overrides,
+      planMode: true,
+      approvedPlan: plan,
+    });
+  };
+
+  const cancelPlanConversation = () => {
+    planAbortRef.current?.abort();
+    const restored = planConversation?.originalPrompt ?? "";
+    setPlanConversation(null);
+    setChatInput((cur) => (cur.trim().length === 0 ? restored : cur));
+  };
+
   // Optional `overrides` lets callers (specifically the rehydration effect
-  // and the plan-review modal's "Build this" callback) pass freshly-parsed
+  // and the plan-conversation "Build this" callback) pass freshly-parsed
   // composer settings without waiting for React state setters to flush —
   // eliminates the timing race on first auto-send.
   const handleSend = async (
@@ -1009,12 +1237,13 @@ export default function Builder() {
     if (
       !raw.trim() ||
       isStreaming ||
-      // Block new sends while ANY plan bubble is in flight — both while
-      // the stream is still arriving AND while a "ready" bubble is
-      // waiting for the user's Build / Edit / Cancel decision. Without
-      // this guard, hitting Send a second time orphans the previous
-      // plan + prompt with no way to recover them.
-      planStream !== null ||
+      // Block new builds while a plan-mode interview is open — the
+      // dispatcher (onSend) routes user replies to sendPlanReply
+      // instead. The one exception is approvePlan, which calls us
+      // with overrides.approvedPlan set DURING the same render that
+      // clears planConversation; without the !approvedPlan escape
+      // hatch the stale closure value blocks "Build this" entirely.
+      (planConversation !== null && !overrides?.approvedPlan) ||
       !username ||
       !slug
     )
@@ -1028,13 +1257,14 @@ export default function Builder() {
       cleanupTimerRef.current = null;
     }
 
-    // ─── Two-stage Plan Mode interception ────────────────────────────────
-    // When Plan Mode is on AND the user hasn't yet approved a plan, open
-    // an SSE connection to /ai/plan and stream a friendly markdown plan
-    // straight into the chat as its own bubble. When the stream finishes
-    // the bubble shows "Build this" / "Edit plan" / "Cancel" buttons; the
-    // first re-enters handleSend with overrides.approvedPlan set (which
-    // skips this branch), the second opens the structured review modal.
+    // ─── Plan Mode interception — kicks off the conversational interview ──
+    // When Plan Mode is on AND no plan has been approved yet, hand
+    // control to startPlanConversation. The interview runs as a chat
+    // thread inside its own card (see ChatPanel below); the user's
+    // replies route through sendPlanReply via the onSend dispatcher
+    // until the AI emits a final plan and the user clicks Build this,
+    // which calls back into handleSend with overrides.approvedPlan set
+    // — that skips this branch and runs the build.
     const _effectivePlanMode = overrides?.planMode ?? planMode;
     if (_effectivePlanMode && !overrides?.approvedPlan) {
       const _modelKey =
@@ -1043,73 +1273,11 @@ export default function Builder() {
       const _sendingUrls = overrides?.urls ?? refUrls;
       const _sendingFiles = overrides?.files ?? attachments;
       setChatInput("");
-      const controller = new AbortController();
-      planAbortRef.current = controller;
-      setPlanStream({
-        prompt,
-        overrides: {
-          modelKey: _modelKey,
-          urls: _sendingUrls,
-          files: _sendingFiles,
-        },
-        typed: "",
-        plan: null,
-        status: "streaming",
+      startPlanConversation(prompt, {
+        modelKey: _modelKey,
+        urls: _sendingUrls,
+        files: _sendingFiles,
       });
-      try {
-        const res = await fetch(`/api/ai/plan/${username}/${slug}`, {
-          method: "POST",
-          credentials: "include",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            prompt,
-            ...(_sendingUrls.length > 0 ? { urls: _sendingUrls } : {}),
-          }),
-          signal: controller.signal,
-        });
-        if (
-          !res.ok &&
-          res.headers.get("content-type")?.includes("application/json")
-        ) {
-          const j = await res.json().catch(() => ({}));
-          throw new Error(j.message || `HTTP ${res.status}`);
-        }
-        for await (const evt of readSSE(res)) {
-          if (evt.event === "delta" && typeof evt.data?.text === "string") {
-            const text = evt.data.text as string;
-            setPlanStream((cur) =>
-              cur ? { ...cur, typed: cur.typed + text } : cur,
-            );
-          } else if (evt.event === "plan" && evt.data?.plan) {
-            const planFromServer = evt.data.plan as ApprovedPlan;
-            setPlanStream((cur) =>
-              cur ? { ...cur, plan: planFromServer } : cur,
-            );
-          } else if (evt.event === "error") {
-            throw new Error(evt.data?.message || "Plan failed");
-          } else if (evt.event === "done" && evt.data?.ok) {
-            setPlanStream((cur) =>
-              cur ? { ...cur, status: "ready" } : cur,
-            );
-          }
-        }
-      } catch (err) {
-        const aborted = (err as { name?: string })?.name === "AbortError";
-        if (!aborted) {
-          const msg =
-            err instanceof Error ? err.message : "Couldn't draft a plan";
-          toast.error(msg);
-          setPlanStream(null);
-          // Restore the prompt so the user can retry without retyping —
-          // unless they started typing a follow-up while the planner was
-          // in flight (don't clobber a fresh draft).
-          setChatInput((cur) =>
-            cur.trim().length === 0 ? prompt : cur,
-          );
-        }
-      } finally {
-        planAbortRef.current = null;
-      }
       return;
     }
 
@@ -1837,34 +2005,21 @@ export default function Builder() {
             streamSteps={streamSteps}
             typed={typed}
             pendingPrompt={pendingPrompt}
-            onSend={handleSend}
-            planStream={planStream}
-            onApprovePlan={() => {
-              if (!planStream?.plan) return;
-              const { prompt: planPrompt, overrides, plan } = planStream;
-              setPlanStream(null);
-              void handleSend(planPrompt, {
-                ...overrides,
-                planMode: true,
-                approvedPlan: plan,
-              });
+            onSend={() => {
+              // Dispatch: while a plan-mode interview is open and the
+              // assistant is awaiting a reply, route the user's send
+              // into the conversation (sendPlanReply). Otherwise fall
+              // through to a normal build.
+              if (planConversation?.status === "asking") {
+                sendPlanReply();
+              } else {
+                void handleSend();
+              }
             }}
-            onEditPlan={() => {
-              if (!planStream?.plan) return;
-              setEditingPlan({
-                prompt: planStream.prompt,
-                plan: planStream.plan,
-                overrides: planStream.overrides,
-              });
-            }}
-            onDismissPlan={() => {
-              planAbortRef.current?.abort();
-              const restored = planStream?.prompt ?? "";
-              setPlanStream(null);
-              setChatInput((cur) =>
-                cur.trim().length === 0 ? restored : cur,
-              );
-            }}
+            planConversation={planConversation}
+            onPlanSuggestionClick={(text) => sendPlanReply(text)}
+            onApprovePlan={approvePlan}
+            onCancelPlan={cancelPlanConversation}
             openBuildId={openBuildId}
             setOpenBuildId={setOpenBuildId}
             pastBuilds={pastBuilds}
@@ -2020,34 +2175,9 @@ export default function Builder() {
           Chat ↔ Preview toggle in the topbar. The old floating FAB
           and bottom-sheet pattern has been removed. */}
 
-      {/* Plan Mode review modal — opt-in editor. The default plan-mode
-          flow renders the streamed plan inline in the chat with action
-          buttons; this modal only opens when the user clicks "Edit plan"
-          on a ready plan bubble to fine-tune sections/colors/etc. */}
-      {editingPlan && (
-        <PlanReview
-          open
-          plan={editingPlan.plan}
-          onCancel={() => setEditingPlan(null)}
-          onApprove={(modifiedPlan) => {
-            const { prompt: planPrompt, overrides } = editingPlan;
-            setEditingPlan(null);
-            // Closing the modal also closes the streamed bubble — the
-            // build is starting and the bubble's role is done.
-            setPlanStream(null);
-            // Re-enter handleSend with the (possibly edited) approved
-            // plan attached. We keep planMode:true so the request body
-            // still carries the flag (server uses approvedPlan presence
-            // as the canonical signal, but the flag stays for UI /
-            // telemetry consistency).
-            void handleSend(planPrompt, {
-              ...overrides,
-              planMode: true,
-              approvedPlan: modifiedPlan,
-            });
-          }}
-        />
-      )}
+      {/* Plan-mode used to open a separate review modal here — that's
+          gone in favour of the conversational interview rendered inline
+          in the chat (see the planConversation block in ChatPanel). */}
     </div>
   );
 }
@@ -2089,10 +2219,10 @@ function ChatPanel({
   typed,
   pendingPrompt,
   onSend,
-  planStream,
+  planConversation,
+  onPlanSuggestionClick,
   onApprovePlan,
-  onEditPlan,
-  onDismissPlan,
+  onCancelPlan,
   openBuildId,
   setOpenBuildId,
   pastBuilds,
@@ -2122,24 +2252,27 @@ function ChatPanel({
   typed: string;
   pendingPrompt: string | null;
   onSend: () => void;
-  // The in-flight plan stream (replaces the old modal-only flow). Null
-  // when no plan is being drafted; otherwise the plan bubble renders
-  // inline in the chat. `status: "ready"` flips the action buttons on.
-  planStream: {
-    prompt: string;
-    typed: string;
+  // The active plan-mode interview, or null when no interview is in
+  // progress. The plan bubble renders the messages array as an
+  // alternating user/assistant thread inside its own card.
+  planConversation: {
+    originalPrompt: string;
+    messages: Array<
+      | { role: "user"; content: string }
+      | { role: "assistant"; content: string; suggestions: string[] }
+    >;
+    status: "thinking" | "asking" | "ready";
     plan: ApprovedPlan | null;
-    status: "streaming" | "ready";
   } | null;
-  // "Build this" button on a ready plan bubble — fires the build with
-  // the plan attached as the locked spec.
+  // Click handler for a suggestion chip on an assistant bubble — sends
+  // the chip text as the user's reply.
+  onPlanSuggestionClick: (text: string) => void;
+  // "Build this" button — fires the build with the approved plan as
+  // the locked spec.
   onApprovePlan: () => void;
-  // "Edit plan" button on a ready plan bubble — opens the structured
-  // review modal so the user can fine-tune sections / colors / etc.
-  onEditPlan: () => void;
-  // Dismiss / cancel the plan bubble. Aborts the SSE stream if it's
-  // still in flight and restores the original prompt to the composer.
-  onDismissPlan: () => void;
+  // Cancel button on the conversation card — aborts the in-flight SSE
+  // turn and restores the original prompt to the composer.
+  onCancelPlan: () => void;
   openBuildId: string | null;
   setOpenBuildId: (id: string | null) => void;
   pastBuilds: PastBuild[];
@@ -2226,11 +2359,13 @@ function ChatPanel({
     streamSteps.length,
     pastBuilds.length,
     isStreaming,
-    // The plan stream bubble grows token-by-token while drafting and
-    // again when the action buttons render — keep the latest content
-    // pinned to the bottom on both transitions.
-    planStream?.typed.length,
-    planStream?.status,
+    // The plan-conversation card grows on every turn — keep the latest
+    // assistant text + suggestion chips + ready plan pinned to the
+    // bottom on each transition.
+    planConversation?.messages.length,
+    planConversation?.messages[planConversation.messages.length - 1]
+      ?.content.length,
+    planConversation?.status,
   ]);
 
   // Belt-and-braces: keep the chat pinned to the bottom whenever the
@@ -2452,77 +2587,138 @@ function ChatPanel({
           </div>
         )}
 
-        {/* Streaming plan bubble — the new Plan Mode UX. Rendered as its
-            own block (not multiplexed with the build streaming bubble
-            above) because plan + build never run concurrently: planStream
-            is set by the plan-mode interception in handleSend, and the
-            "Build this" handler clears planStream before kicking off the
-            build. */}
-        {planStream && (
+        {/* Plan-mode conversation card — the new Plan Mode UX. Renders
+            the full back-and-forth interview as alternating user /
+            assistant bubbles inside its own card. The user replies to
+            each question via the regular composer below; the dispatcher
+            (parent's onSend) routes their reply to sendPlanReply while
+            the conversation is open. */}
+        {planConversation && (
           <div className="space-y-3">
-            {/* Mirror the user's prompt as a sent bubble so the chat
-                reads as a real conversation rather than a free-floating
-                AI reply. */}
-            <div className="flex justify-end">
-              <div className="max-w-[88%] px-3.5 py-2 rounded-2xl rounded-br-md bg-primary/15 text-primary text-sm leading-snug">
-                {planStream.prompt}
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-border bg-surface-raised/60 p-4 space-y-3">
+            <div className="rounded-2xl border border-border bg-surface-raised/60 p-3 sm:p-4 space-y-3">
               <div className="flex items-center gap-2 text-xs text-secondary">
                 <span className="w-6 h-6 rounded-md bg-primary/15 text-primary inline-flex items-center justify-center">
                   <Sparkles className="w-3.5 h-3.5" />
                 </span>
                 <span className="font-medium">
-                  {planStream.status === "streaming"
-                    ? "Drafting your plan…"
-                    : "Plan ready"}
+                  {planConversation.status === "ready"
+                    ? "Plan ready"
+                    : "Planning your build"}
                 </span>
-                {planStream.status === "streaming" && (
+                {planConversation.status === "thinking" && (
                   <Loader2 className="w-3 h-3 animate-spin ml-1" />
                 )}
+                <button
+                  onClick={onCancelPlan}
+                  className="ml-auto text-[11px] text-secondary hover:text-foreground transition-colors"
+                  title="Cancel planning"
+                >
+                  Cancel
+                </button>
               </div>
 
-              {/* The streamed plan body. PlanText handles headings, bold,
-                  bullets and inline code; while the stream is mid-flight
-                  the partial markdown still renders cleanly because the
-                  renderer is block-based and tolerates a trailing
-                  incomplete line. */}
-              <PlanText text={planStream.typed} />
+              {/* Conversation thread — alternating bubbles. Suggestion
+                  chips render below each assistant bubble that has them
+                  AND only while the conversation is still in question
+                  mode (never on the final plan summary). */}
+              <div className="space-y-2.5">
+                {planConversation.messages.map((m, i) => {
+                  const isLast = i === planConversation.messages.length - 1;
+                  if (m.role === "user") {
+                    return (
+                      <div key={`pm-${i}`} className="flex justify-end">
+                        <div className="max-w-[88%] px-3 py-1.5 rounded-2xl rounded-br-md bg-primary/15 text-primary text-sm leading-snug whitespace-pre-wrap break-words">
+                          {m.content}
+                        </div>
+                      </div>
+                    );
+                  }
+                  // Assistant bubble. While text is mid-stream the
+                  // content grows word-by-word; we still render it as
+                  // a normal bubble so the user sees it land in place.
+                  const showChips =
+                    isLast &&
+                    planConversation.status === "asking" &&
+                    m.suggestions.length > 0;
+                  return (
+                    <div key={`pm-${i}`} className="space-y-1.5">
+                      <div className="flex justify-start">
+                        <div className="max-w-[88%] px-3 py-1.5 rounded-2xl rounded-bl-md bg-background border border-border/70 text-sm leading-snug text-foreground whitespace-pre-wrap break-words">
+                          {m.content || (
+                            <span className="text-secondary italic">…</span>
+                          )}
+                        </div>
+                      </div>
+                      {showChips && (
+                        <div className="flex flex-wrap gap-1.5 pl-1">
+                          {m.suggestions.map((s, j) => (
+                            <button
+                              key={`pmc-${i}-${j}`}
+                              onClick={() => onPlanSuggestionClick(s)}
+                              className="inline-flex items-center px-2.5 py-1 rounded-full border border-border bg-surface-raised hover:bg-background hover:border-primary/40 text-[11px] text-foreground transition-colors text-left"
+                              title={s}
+                            >
+                              {s}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
 
-              {/* Action row only appears once the server emits its
-                  final `done` event (status flips to "ready") AND the
-                  structured plan arrived — without the structured plan
-                  we can't kick off a build. */}
-              {planStream.status === "ready" && planStream.plan && (
-                <div className="flex flex-wrap gap-2 pt-2 border-t border-border/60">
-                  <Button
-                    size="sm"
-                    onClick={onApprovePlan}
-                    className="h-8 text-xs"
-                  >
-                    <Check className="w-3.5 h-3.5 mr-1" />
-                    Build this
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={onEditPlan}
-                    className="h-8 text-xs border-border"
-                  >
-                    <Pencil className="w-3.5 h-3.5 mr-1" />
-                    Edit plan
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={onDismissPlan}
-                    className="h-8 text-xs text-secondary hover:text-foreground ml-auto"
-                  >
-                    <X className="w-3.5 h-3.5 mr-1" />
-                    Cancel
-                  </Button>
+                {/* Typing indicator while the next assistant turn is
+                    in flight. We show this whenever status==="thinking"
+                    AND the most recent message is from the user — that
+                    is, after they've sent a reply but before the new
+                    assistant placeholder has been pushed by the SSE
+                    `start` event. */}
+                {planConversation.status === "thinking" &&
+                  (planConversation.messages.length === 0 ||
+                    planConversation.messages[
+                      planConversation.messages.length - 1
+                    ].role === "user") && (
+                    <div className="flex justify-start">
+                      <div className="px-3 py-2 rounded-2xl rounded-bl-md bg-background border border-border/70 text-sm leading-snug inline-flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse" />
+                        <span
+                          className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse"
+                          style={{ animationDelay: "120ms" }}
+                        />
+                        <span
+                          className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse"
+                          style={{ animationDelay: "240ms" }}
+                        />
+                      </div>
+                    </div>
+                  )}
+              </div>
+
+              {/* Final plan summary + action row. Only appears once the
+                  server emits a kind:"plan" turn (status flips to
+                  "ready" AND `plan` is populated). */}
+              {planConversation.status === "ready" && planConversation.plan && (
+                <div className="space-y-3 pt-2 border-t border-border/60">
+                  <PlanSummary plan={planConversation.plan} />
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      onClick={onApprovePlan}
+                      className="h-8 text-xs"
+                    >
+                      <Check className="w-3.5 h-3.5 mr-1" />
+                      Build this
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={onCancelPlan}
+                      className="h-8 text-xs text-secondary hover:text-foreground ml-auto"
+                    >
+                      <X className="w-3.5 h-3.5 mr-1" />
+                      Cancel
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>

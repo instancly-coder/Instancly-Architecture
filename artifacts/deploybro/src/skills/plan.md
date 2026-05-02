@@ -1,36 +1,27 @@
 ---
 name: Plan Mode
-description: Generates a structured build plan first — sections, colors, fonts, pages, features — that you review and edit before any code is written. The approved plan locks the build to your spec.
+description: Runs a short conversational interview before any code is written — the AI asks one focused question at a time (purpose, tone, colors, fonts, pages) and you reply by typing or by tapping a quick-pick chip. After ~4-5 turns it shows a final plan; you click Build this to lock the build to that spec.
 ---
 
-When Plan Mode is on and you submit a prompt, the AI does NOT start writing code immediately. Instead it spends a few cents on a fast planning pass and shows you a structured plan first.
+When Plan Mode is on and you submit a prompt, the AI does NOT start writing code immediately. Instead it opens a quick interview right inside the chat to make sure it understands what you want.
 
-The plan covers:
+How it works:
 
-- A short project summary so you can verify it understood the brief.
-- The pages it intends to build.
-- The sections of each page (Hero, Features, Pricing, FAQ, Footer, etc.) — each with a description and an on/off toggle.
-- A color palette with named swatches.
-- The heading and body fonts.
-- The headline features and copy tone.
+1. You send your initial prompt.
+2. The AI replies with one short question, plus a few quick-pick chips you can tap to answer in a single click — colors, fonts, tone, pages, etc.
+3. You either tap a chip or type your own reply. The AI asks the next question.
+4. After roughly four or five turns the AI has enough — it shows a structured plan summary (project name, pages, sections, color palette, fonts, key features, copy tone) and a **Build this** button.
+5. Click **Build this** to lock the build to the plan, or **Cancel** to back out and revise your prompt.
 
-You can:
+Tips:
 
-- Toggle sections on or off.
-- Edit any text in the plan — section descriptions, summary, features, copy tone.
-- Edit colors and fonts.
-- Click **Build This** to lock the build to the approved plan.
-- Click **Cancel** to back out and revise your prompt.
-
-The planning AI is read-only — it cannot create or modify files. It only proposes a structure for your review. When you approve, the plan is passed to the builder as a locked spec, and the builder produces code that conforms to it.
+- Every question includes a "You decide" / "Up to you" chip so you can defer to the AI's taste on anything you don't care about.
+- Vague replies are fine — "whatever", "you pick" — the AI will move on.
+- The interview never runs more than five questions; if you've already covered most details in your initial prompt the AI will skip to the plan early.
+- You can cancel at any point and your original prompt is restored to the input.
 
 Use Plan Mode for:
 
-- Bigger first builds where you want to know exactly what's coming before tokens get spent.
+- Bigger first builds where you want to feel out the direction before tokens get spent.
 - Brand-sensitive work where you want to lock colors and fonts up front.
-- Multi-page sites where the section list is non-obvious.
-
-Skip Plan Mode for:
-
-- Quick iterations and small tweaks to an existing project.
-- Anything where you already know what you want and just want it done.
+- When you're not sure exactly what you want and it helps to be asked.

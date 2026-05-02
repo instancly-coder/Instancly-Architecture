@@ -481,40 +481,68 @@ function renderPlanMarkdown(plan: ApprovedPlan): string {
   return lines.join("\n").trim();
 }
 
+// Conversational interview endpoint. Replaces the old one-shot plan
+// generation with a multi-turn back-and-forth: the AI asks ONE short
+// question per turn (with quick-pick chip suggestions) and only
+// outputs the final structured plan once it has enough info.
+//
+// Each call is a single turn:
+//   request:  { messages: [{role, content}], originalPrompt, urls? }
+//   response: SSE stream emitting `start`, then `delta` events for the
+//             question text, then a final `turn` event carrying either
+//             { kind: "question", suggestions } or { kind: "plan", plan },
+//             then `done`.
+//
+// The client stitches the turns together into the plan conversation
+// shown inline in the chat. Model is Haiku — each turn is cheap.
 router.post(
   "/ai/plan/:username/:slug",
-  // Same rate limiter as /ai/build so a planning loop can't be used to
-  // dodge the AI cap. Planning costs are tiny (~1¢) but still real Anthropic
-  // tokens, so we bill the user just like a build.
   aiLimiter,
   requireAuth,
   async (req: Request, res: Response): Promise<void> => {
     const username = String(req.params.username);
     const slug = String(req.params.slug);
-    const prompt = String(req.body?.prompt ?? "").trim();
+    const originalPrompt = String(req.body?.originalPrompt ?? "").trim();
     const urls: string[] = Array.isArray(req.body?.urls)
       ? (req.body.urls as unknown[])
           .filter((u): u is string => typeof u === "string" && u.trim() !== "")
           .slice(0, 5)
       : [];
+    // Conversation history so far. Each entry is one chat turn the user
+    // already saw on screen. We cap at 24 entries (~12 round-trips) as
+    // a hard runaway guard — the system prompt instructs the model to
+    // wrap up after 5 questions, so this only triggers on misuse.
+    const rawMessages: unknown = req.body?.messages;
+    const messages: { role: "user" | "assistant"; content: string }[] =
+      Array.isArray(rawMessages)
+        ? (rawMessages as unknown[])
+            .filter((m): m is { role: unknown; content: unknown } => {
+              if (!m || typeof m !== "object") return false;
+              const role = (m as { role?: unknown }).role;
+              return role === "user" || role === "assistant";
+            })
+            .map((m) => ({
+              role: m.role as "user" | "assistant",
+              content: String(m.content ?? ""),
+            }))
+            .filter((m) => m.content.trim() !== "")
+            .slice(-24)
+        : [];
 
-    // Track client disconnects from the very top of the handler so a
-    // user closing the tab mid-plan stops billing immediately.
     let clientGone = false;
     req.on("close", () => {
       clientGone = true;
     });
 
-    if (!prompt) {
-      res.status(400).json({ status: "error", message: "prompt required" });
+    if (!originalPrompt) {
+      res
+        .status(400)
+        .json({ status: "error", message: "originalPrompt required" });
       return;
     }
 
     const rows = await db
-      .select({
-        project: projectsTable,
-        ownerId: usersTable.id,
-      })
+      .select({ project: projectsTable, ownerId: usersTable.id })
       .from(projectsTable)
       .innerJoin(usersTable, eq(usersTable.id, projectsTable.userId))
       .where(and(eq(usersTable.username, username), eq(projectsTable.slug, slug)))
@@ -536,9 +564,6 @@ router.post(
       return;
     }
 
-    // Open the SSE channel up-front so the client can render its
-    // streaming bubble immediately, even if the underlying Haiku call
-    // takes a couple of seconds before the first byte.
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
@@ -560,12 +585,11 @@ router.post(
       return;
     }
 
-    send("start", { phase: "planning" });
+    send("start", { phase: "planning", turnIndex: messages.length });
 
-    // Gather a tiny bit of project context so the planner knows whether
-    // this is a first build or an iteration on an existing project. We
-    // don't send file contents (Haiku doesn't need them to draw a plan)
-    // — just paths and the project's framework.
+    // Project context — same lightweight signal as before. Tells the
+    // model whether this is a first build or an iteration so the
+    // questions / final plan stay scoped accordingly.
     const existingPaths = await db
       .select({ path: projectFilesTable.path })
       .from(projectFilesTable)
@@ -574,35 +598,85 @@ router.post(
     const isFirstBuild = existingPaths.length === 0;
     const refsLine =
       urls.length > 0
-        ? `\n\nReference URLs the user wants to draw inspiration from: ${urls.join(", ")}`
+        ? `\nReference URLs the user wants to draw inspiration from: ${urls.join(", ")}`
         : "";
 
-    const planSystemPrompt = `You are a senior product designer drafting a build plan for a website. Output STRICT JSON only — no prose before or after, no markdown fences, no comments. The JSON must match this exact shape:
+    // Count how many questions the model has already asked. Used in the
+    // system prompt to nudge it toward wrapping up — without this it
+    // tends to keep asking forever.
+    const questionsAsked = messages.filter((m) => m.role === "assistant").length;
 
+    const planSystemPrompt = `You are a friendly AI design assistant interviewing a user to plan their website. Your job is to ask SHORT, focused questions ONE AT A TIME until you have enough info, then produce a final structured plan.
+
+User's original brief:
+"""
+${originalPrompt}
+"""${refsLine}
+
+${isFirstBuild ? "This is a FIRST build — you'll be planning the whole site." : `This is an ITERATION on an existing project (${existingPaths.length} files). Plan only what the user is asking to add or change. Existing paths: ${existingPaths.slice(0, 20).map((f) => f.path).join(", ")}.`}
+
+Topics to cover, in roughly this order. Skip any the user already addressed in the original brief or earlier in the conversation — DO NOT ask redundant questions.
+1. Purpose & audience — what is this site, who is it for?
+2. Tone & vibe — bold, friendly, minimal, playful, editorial, etc.
+3. Color direction — propose a few palette options.
+4. Typography — propose a few font pairings.
+5. Pages & key features — confirm what to include.
+
+Conversation rules:
+- Ask ONE question per turn. Keep it conversational and SHORT (1-2 sentences max).
+- ALWAYS provide 3-5 quick-pick \`suggestions\` the user can tap to answer in one click. Make suggestions CONCRETE and helpful:
+  - For colors: name + feel, e.g. "Warm earth tones", "Cool minimal blues", "Bold purple + lime", "Monochrome + accent"
+  - For fonts: pairing + feel, e.g. "Inter + Inter (clean & modern)", "Playfair + Source Sans (editorial)", "Space Grotesk + Inter (tech)", "DM Serif + DM Sans (warm)"
+  - For tone: a few words, e.g. "Bold & confident", "Friendly & casual", "Quiet & minimal", "Playful & quirky"
+  - For pages/features: short noun phrases, e.g. "Pricing page", "Blog", "Contact form", "You decide"
+- Always include a "You decide" or "Up to you" suggestion so the user can defer to your taste.
+- After ${Math.max(0, 4 - questionsAsked)} more question${4 - questionsAsked === 1 ? "" : "s"} you should have enough — output the final plan instead of asking another question. NEVER ask more than 5 questions total. So far you have asked ${questionsAsked}.
+- If the user's reply is vague ("sure", "whatever", "you pick"), do NOT ask a follow-up — pick something sensible and move on.
+
+Output STRICT JSON ONLY. No prose before/after, no markdown fences, no comments. Two valid shapes:
+
+QUESTION TURN:
 {
-  "projectName": string,           // a short, human-readable name for the project (2-4 words)
-  "summary": string,               // 1-2 sentence summary of what we're building
-  "pages": string[],               // top-level pages, e.g. ["Home", "About", "Pricing"]. 1-5 pages.
-  "sections": [                    // sections of the primary page in render order
-    { "name": string, "description": string, "enabled": true }
-  ],
-  "colors": [                      // 4-6 named brand colors
-    { "name": string, "hex": "#RRGGBB" }
-  ],
-  "fonts": { "heading": string, "body": string },   // Google Fonts names
-  "features": string[],            // 3-6 short bullet points describing the headline features
-  "copyTone": string               // e.g. "Confident, plain-spoken, slightly playful"
+  "kind": "question",
+  "text": "Your one short question here.",
+  "suggestions": ["Option A", "Option B", "Option C", "You decide"]
 }
 
-Rules:
-- Sections should cover the primary landing page comprehensively (Hero, Features, Social proof, Pricing, FAQ, CTA, Footer, etc — pick the ones that fit the brief). Default ALL sections to "enabled": true; the user can toggle individual ones off in the UI.
-- Color hex values MUST be valid #RRGGBB strings. Pick a real, on-brief palette — no placeholder greys.
-- Keep descriptions concrete and short (one sentence each).
-- ${isFirstBuild ? "This is the FIRST build — include a complete page structure." : `This is an ITERATION on an existing project (${existingPaths.length} files already). Plan ONLY for what the user is asking to add or change. Existing paths: ${existingPaths.slice(0, 30).map((f) => f.path).join(", ")}.`}
+FINAL PLAN TURN (use when you have enough info):
+{
+  "kind": "plan",
+  "text": "One friendly sentence summarising what you're going to build.",
+  "plan": {
+    "projectName": string,
+    "summary": string,
+    "pages": string[],
+    "sections": [{"name": string, "description": string, "enabled": true}],
+    "colors": [{"name": string, "hex": "#RRGGBB"}],
+    "fonts": {"heading": string, "body": string},
+    "features": string[],
+    "copyTone": string
+  }
+}
+
+Plan rules (only relevant for the FINAL plan turn):
+- 4-6 named brand colors with valid #RRGGBB hex strings — no placeholder greys.
+- Sections cover the primary landing page comprehensively (Hero, Features, Social proof, Pricing, FAQ, CTA, Footer — pick what fits). All sections default to enabled: true.
+- Pages: 1-5 top-level pages.
+- Features: 3-6 short bullet points.
+- Use whatever the user told you in the conversation; for anything they deferred on, pick sensibly.
 
 Output ONLY the JSON object. Nothing else.`;
 
-    const userPrompt = `User request:\n${prompt}${refsLine}`;
+    // Convert the turn history to Anthropic message format. We don't
+    // include the suggestions in the assistant content — only the
+    // human-readable question text, since that's what the model sees
+    // in the rendered chat.
+    const apiMessages: { role: "user" | "assistant"; content: string }[] =
+      messages.length > 0
+        ? messages
+        : // First turn — seed with the original brief as the first user
+          // message so the model has something to react to.
+          [{ role: "user", content: originalPrompt }];
 
     const startedAt = Date.now();
     let inputTokens = 0;
@@ -612,80 +686,108 @@ Output ONLY the JSON object. Nothing else.`;
     try {
       const result = await anthropic.messages.create({
         model: MODELS.haiku.id,
-        max_tokens: 2_000,
+        max_tokens: 2_500,
         system: planSystemPrompt,
-        messages: [{ role: "user", content: userPrompt }],
+        messages: apiMessages,
       });
       inputTokens = result.usage?.input_tokens ?? 0;
       outputTokens = result.usage?.output_tokens ?? 0;
-      // Concatenate any text blocks the model returned. Haiku basically
-      // always returns a single text block here, but defend against the
-      // shape changing.
       raw = result.content
         .map((b) => (b.type === "text" ? b.text : ""))
         .join("");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Plan request failed";
-      req.log.error({ err }, "Plan generation failed");
+      req.log.error({ err }, "Plan turn failed");
       send("error", { message });
       send("done", { ok: false });
       res.end();
       return;
     }
 
-    // Strip any accidental markdown fences and locate the JSON object.
-    const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
-    const start = cleaned.indexOf("{");
-    const end = cleaned.lastIndexOf("}");
-    let parsed: unknown = null;
-    if (start >= 0 && end > start) {
+    // Strip accidental fences and locate the JSON envelope.
+    const cleaned = raw
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/```\s*$/i, "")
+      .trim();
+    const startIdx = cleaned.indexOf("{");
+    const endIdx = cleaned.lastIndexOf("}");
+    let parsed: Record<string, unknown> | null = null;
+    if (startIdx >= 0 && endIdx > startIdx) {
       try {
-        parsed = JSON.parse(cleaned.slice(start, end + 1));
+        const obj = JSON.parse(cleaned.slice(startIdx, endIdx + 1));
+        if (obj && typeof obj === "object")
+          parsed = obj as Record<string, unknown>;
       } catch {
         parsed = null;
       }
     }
-    const plan = parseApprovedPlan(parsed);
-    if (!plan) {
-      req.log.warn({ raw: cleaned.slice(0, 500) }, "Plan response was not valid JSON");
+    if (!parsed) {
+      req.log.warn(
+        { raw: cleaned.slice(0, 500) },
+        "Plan turn response was not valid JSON",
+      );
       send("error", {
-        message: "Plan response was malformed. Try again or build without Plan Mode.",
+        message:
+          "I had trouble drafting that one — try rephrasing or build without Plan Mode.",
       });
       send("done", { ok: false });
       res.end();
       return;
     }
 
-    // Stream the rendered markdown line-by-line so the user sees the
-    // plan unfold step-by-step in the chat — same UX feel as the build
-    // stream above. We chunk by single line with a short pause between
-    // chunks; total stream time is bounded (~50ms × ~25 lines ≈ 1.3s).
-    const markdown = renderPlanMarkdown(plan);
-    const chunks = markdown.split(/(\n)/); // keep newlines as their own chunks
+    const kind = parsed.kind === "plan" ? "plan" : "question";
+    const text =
+      typeof parsed.text === "string" && parsed.text.trim()
+        ? parsed.text.trim()
+        : kind === "plan"
+          ? "Here's the plan."
+          : "Got it — a quick question:";
+    const suggestions: string[] =
+      kind === "question" && Array.isArray(parsed.suggestions)
+        ? (parsed.suggestions as unknown[])
+            .filter((s): s is string => typeof s === "string" && s.trim() !== "")
+            .slice(0, 6)
+        : [];
+    const finalPlan =
+      kind === "plan" ? parseApprovedPlan(parsed.plan) : null;
+
+    // If the model said "plan" but the plan body was malformed, we
+    // can't proceed — surface a recoverable error rather than silently
+    // dropping back to a question.
+    if (kind === "plan" && !finalPlan) {
+      req.log.warn(
+        { raw: cleaned.slice(0, 500) },
+        "Plan turn marked kind:plan but plan was malformed",
+      );
+      send("error", {
+        message:
+          "The plan came back malformed. Try again or build without Plan Mode.",
+      });
+      send("done", { ok: false });
+      res.end();
+      return;
+    }
+
+    // Stream the question / summary text into the chat with a short
+    // pace so it reads as the assistant typing rather than appearing
+    // all at once. We split on word boundaries so each chunk lands as
+    // a whole word.
+    const chunks = text.split(/(\s+)/).filter((c) => c.length > 0);
     for (const chunk of chunks) {
       if (clientGone) break;
-      if (chunk.length === 0) continue;
       send("delta", { text: chunk });
-      // 35ms between non-newline chunks gives the eye time to track each
-      // bullet without feeling laggy. Newlines flush instantly so the
-      // bullet pops as a unit rather than as fragments.
-      if (chunk !== "\n") {
-        await new Promise((r) => setTimeout(r, 35));
+      if (!/^\s+$/.test(chunk)) {
+        await new Promise((r) => setTimeout(r, 25));
       }
     }
 
-    // If the client disconnected mid-stream, don't bill them and don't
-    // try to emit any further SSE events — the connection is dead. We
-    // eat the (tiny) Haiku token cost on our end rather than charging
-    // for output the user never saw.
     if (clientGone) {
       if (!res.writableEnded) res.end();
       return;
     }
 
-    // Bill the small Haiku token cost. Same per-million pricing as the build
-    // path. Round to whole cents so the ledger stays consistent with the
-    // 2dp transactions table.
+    // Bill the (tiny) Haiku token cost for this single turn. Same
+    // per-million pricing as the build path.
     const rawCost = Math.max(
       0,
       (inputTokens / 1_000_000) * MODELS.haiku.rates.input +
@@ -702,20 +804,24 @@ Output ONLY the JSON object. Nothing else.`;
           await tx.insert(transactionsTable).values({
             userId: ownerId,
             amount: `-${cost}`,
-            method: "Plan generation",
+            method: "Plan interview",
             status: "Success",
           });
         });
       } catch (err) {
-        // Billing failure shouldn't block the user — log and continue. The
-        // ops team can reconcile from Anthropic invoices if needed.
-        req.log.error({ err }, "Failed to bill for plan generation");
+        req.log.error({ err }, "Failed to bill for plan turn");
       }
     }
 
-    // Final structured payload — the client uses this both to gate the
-    // "Build this" button and to seed the optional review modal.
-    send("plan", { plan });
+    // Final per-turn payload. The client uses this to either render
+    // suggestion chips (kind:"question") or flip the bubble into
+    // "ready" state and show Build this (kind:"plan").
+    send("turn", {
+      kind,
+      text,
+      suggestions,
+      ...(finalPlan ? { plan: finalPlan } : {}),
+    });
     send("done", {
       ok: true,
       meta: {
@@ -723,6 +829,7 @@ Output ONLY the JSON object. Nothing else.`;
         cost: Number(cost),
         tokensIn: inputTokens,
         tokensOut: outputTokens,
+        kind,
       },
     });
     res.end();
