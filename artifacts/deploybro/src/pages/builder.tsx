@@ -4013,11 +4013,79 @@ function PreviewPane({
   const showBuilding = !hasIndex && isBuilding;
   const showEmpty = !hasIndex && !isBuilding && files !== undefined;
 
+  // ─── Blank-screen guard ─────────────────────────────────────────────
+  // Even after `index.html` exists, the iframe can flash white in two
+  // common cases: (a) the parent forces a remount via `iframeKey++`
+  // after every build, and the dev server briefly serves a blank
+  // document while it re-bundles; (b) the user's app renders nothing
+  // (router with no matched route, runtime error caught upstream by
+  // the overlay, etc.). In either case the user sees a stark white
+  // frame that looks broken. We layer the branded preview state on
+  // top of the iframe and only fade it out once the iframe has both
+  // fired `load` AND has actual content in its body.
+  const localIframeRef = useRef<HTMLIFrameElement>(null);
+  const effectiveIframeRef = iframeRef ?? localIframeRef;
+  const [iframeLoaded, setIframeLoaded] = useState(false);
+  const [iframeBlank, setIframeBlank] = useState(true);
+
+  // Reset the load/blank flags whenever the iframe remounts. Without
+  // this a stale "loaded + not blank" snapshot would suppress the
+  // overlay during the white flash on remount.
+  useEffect(() => {
+    setIframeLoaded(false);
+    setIframeBlank(true);
+  }, [previewSrc, hasIndex]);
+
+  const checkBlank = () => {
+    const frame = effectiveIframeRef.current;
+    if (!frame) return;
+    try {
+      const doc = frame.contentDocument;
+      if (!doc?.body) {
+        setIframeBlank(true);
+        return;
+      }
+      // Two signals: visible text AND any element children. Either
+      // one is enough to call the page "not blank" — a SVG-only logo
+      // splash has no text but plenty of children, and a streaming
+      // text-only response has no children but plenty of text.
+      const text = (doc.body.innerText || "").trim();
+      const hasChildren = doc.body.children.length > 0;
+      setIframeBlank(!text && !hasChildren);
+    } catch {
+      // Cross-origin guard — shouldn't fire because the sandbox
+      // includes `allow-same-origin`, but if the browser ever blocks
+      // the read, assume not blank rather than locking the overlay on.
+      setIframeBlank(false);
+    }
+  };
+
+  const handleIframeLoad = () => {
+    setIframeLoaded(true);
+    // Sample now and at two follow-up beats to give a React app time
+    // to mount, hydrate, and render its first frame. 600ms covers
+    // most apps; 1500ms catches slower ones (lazy-loaded routes,
+    // image-heavy splash screens).
+    checkBlank();
+    window.setTimeout(checkBlank, 600);
+    window.setTimeout(checkBlank, 1500);
+  };
+
+  // Pick the best overlay for the current state. Building state when
+  // the app is mid-stream OR while the iframe is still loading; empty
+  // state when the iframe loaded but rendered nothing (so the user
+  // gets a clear "your preview will appear here" cue instead of a
+  // blank page). The overlay sits on top of the iframe and fades
+  // out the moment real content shows up.
+  const showLiveOverlay = hasIndex && (!iframeLoaded || iframeBlank);
+  const liveOverlay =
+    isBuilding || !iframeLoaded ? <PreviewBuildingState /> : <PreviewEmptyState />;
+
   return (
     <div className="absolute inset-0 flex flex-col bg-surface-raised">
       <div className="flex-1 p-3 md:p-8 flex items-center justify-center overflow-hidden">
         <div
-          className="w-full h-full flex flex-col transition-all duration-200 ease-in-out rounded-md overflow-hidden shadow-2xl"
+          className="w-full h-full flex flex-col transition-all duration-200 ease-in-out rounded-md overflow-hidden shadow-2xl relative"
           style={{
             maxWidth:
               viewport === "desktop"
@@ -4047,8 +4115,9 @@ function PreviewPane({
           ) : (
             <iframe
               key={previewSrc}
-              ref={iframeRef}
+              ref={effectiveIframeRef}
               src={previewSrc}
+              onLoad={handleIframeLoad}
               title="App preview"
               className="flex-1 w-full bg-white"
               // `allow-same-origin` is REQUIRED, not optional. Without it
@@ -4077,6 +4146,20 @@ function PreviewPane({
               // there is no new exposure here.
               sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
             />
+          )}
+
+          {/* Blank-screen overlay. Sits on top of the iframe (the
+              parent device frame is `relative`) and only when the
+              iframe is mid-load or has rendered nothing. Pointer
+              events disabled so the user can still interact with
+              the iframe content as soon as something paints in. */}
+          {showLiveOverlay && (
+            <div
+              className="absolute inset-0 pointer-events-none animate-in fade-in duration-200"
+              aria-hidden={iframeLoaded && !iframeBlank}
+            >
+              <PreviewPaneShell>{liveOverlay}</PreviewPaneShell>
+            </div>
           )}
         </div>
       </div>
