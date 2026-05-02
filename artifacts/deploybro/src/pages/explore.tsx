@@ -44,7 +44,10 @@ function AuthorBadge({
 }) {
   const isDeployBro = author === "deploybro";
   const dim = size === "sm" ? "w-7 h-7" : "w-6 h-6";
-  const logoH = size === "sm" ? "h-3.5" : "h-3";
+  // Logo is ~2:1 (wide). Constrain by WIDTH (not height) so it
+  // doesn't overflow the circle horizontally. ~65% of circle width
+  // leaves a small padding ring.
+  const logoW = size === "sm" ? "w-[18px]" : "w-[15px]";
   const initialText = size === "sm" ? "text-[11px]" : "text-[10px]";
   const text = size === "sm" ? "text-xs" : "text-[11px]";
 
@@ -66,7 +69,7 @@ function AuthorBadge({
             src={deploybroLogoUrl}
             alt=""
             draggable={false}
-            className={`${logoH} w-auto select-none`}
+            className={`${logoW} h-auto select-none`}
           />
         </span>
         <span className="truncate">by DeployBro</span>
