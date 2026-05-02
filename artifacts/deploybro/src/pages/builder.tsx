@@ -2587,141 +2587,114 @@ function ChatPanel({
           </div>
         )}
 
-        {/* Plan-mode conversation card — the new Plan Mode UX. Renders
-            the full back-and-forth interview as alternating user /
-            assistant bubbles inside its own card. The user replies to
-            each question via the regular composer below; the dispatcher
-            (parent's onSend) routes their reply to sendPlanReply while
-            the conversation is open. */}
+        {/* Plan-mode interview — renders as plain chat messages with no
+            card wrapper or header, so the bubbles flow inline with the
+            rest of the conversation. The user replies via the regular
+            composer below; the dispatcher (parent's onSend) routes
+            their reply to sendPlanReply while the conversation is
+            open. The ready-state Build/Cancel row is the only chrome
+            that survived. */}
         {planConversation && (
-          <div className="space-y-3">
-            <div className="rounded-2xl border border-border bg-surface-raised/60 p-3 sm:p-4 space-y-3">
-              <div className="flex items-center gap-2 text-xs text-secondary">
-                <span className="w-6 h-6 rounded-md bg-primary/15 text-primary inline-flex items-center justify-center">
-                  <Sparkles className="w-3.5 h-3.5" />
-                </span>
-                <span className="font-medium">
-                  {planConversation.status === "ready"
-                    ? "Plan ready"
-                    : "Planning your build"}
-                </span>
-                {planConversation.status === "thinking" && (
-                  <Loader2 className="w-3 h-3 animate-spin ml-1" />
-                )}
-                <button
-                  onClick={onCancelPlan}
-                  className="ml-auto text-[11px] text-secondary hover:text-foreground transition-colors"
-                  title="Cancel planning"
-                >
-                  Cancel
-                </button>
-              </div>
-
-              {/* Conversation thread — alternating bubbles. Suggestion
-                  chips render below each assistant bubble that has them
-                  AND only while the conversation is still in question
-                  mode (never on the final plan summary). */}
-              <div className="space-y-2.5">
-                {planConversation.messages.map((m, i) => {
-                  const isLast = i === planConversation.messages.length - 1;
-                  if (m.role === "user") {
-                    return (
-                      <div key={`pm-${i}`} className="flex justify-end">
-                        <div className="max-w-[88%] px-3 py-1.5 rounded-2xl rounded-br-md bg-primary/15 text-primary text-sm leading-snug whitespace-pre-wrap break-words">
-                          {m.content}
-                        </div>
-                      </div>
-                    );
-                  }
-                  // Assistant bubble. While text is mid-stream the
-                  // content grows word-by-word; we still render it as
-                  // a normal bubble so the user sees it land in place.
-                  const showChips =
-                    isLast &&
-                    planConversation.status === "asking" &&
-                    m.suggestions.length > 0;
-                  return (
-                    <div key={`pm-${i}`} className="space-y-1.5">
-                      <div className="flex justify-start">
-                        <div className="max-w-[88%] px-3 py-1.5 rounded-2xl rounded-bl-md bg-background border border-border/70 text-sm leading-snug text-foreground whitespace-pre-wrap break-words">
-                          {m.content || (
-                            <span className="text-secondary italic">…</span>
-                          )}
-                        </div>
-                      </div>
-                      {showChips && (
-                        <div className="flex flex-wrap gap-1.5 pl-1">
-                          {m.suggestions.map((s, j) => (
-                            <button
-                              key={`pmc-${i}-${j}`}
-                              onClick={() => onPlanSuggestionClick(s)}
-                              className="inline-flex items-center px-2.5 py-1 rounded-full border border-border bg-surface-raised hover:bg-background hover:border-primary/40 text-[11px] text-foreground transition-colors text-left"
-                              title={s}
-                            >
-                              {s}
-                            </button>
-                          ))}
-                        </div>
+          <div className="space-y-2.5">
+            {planConversation.messages.map((m, i) => {
+              const isLast = i === planConversation.messages.length - 1;
+              if (m.role === "user") {
+                return (
+                  <div key={`pm-${i}`} className="flex justify-end">
+                    <div className="max-w-[88%] px-3 py-1.5 rounded-2xl rounded-br-md bg-primary/15 text-primary text-sm leading-snug whitespace-pre-wrap break-words">
+                      {m.content}
+                    </div>
+                  </div>
+                );
+              }
+              // Assistant bubble. While text is mid-stream the
+              // content grows word-by-word; we still render it as
+              // a normal bubble so the user sees it land in place.
+              const showChips =
+                isLast &&
+                planConversation.status === "asking" &&
+                m.suggestions.length > 0;
+              return (
+                <div key={`pm-${i}`} className="space-y-1.5">
+                  <div className="flex justify-start">
+                    <div className="max-w-[88%] px-3 py-1.5 rounded-2xl rounded-bl-md bg-background border border-border/70 text-sm leading-snug text-foreground whitespace-pre-wrap break-words">
+                      {m.content || (
+                        <span className="text-secondary italic">…</span>
                       )}
                     </div>
-                  );
-                })}
-
-                {/* Typing indicator while the next assistant turn is
-                    in flight. We show this whenever status==="thinking"
-                    AND the most recent message is from the user — that
-                    is, after they've sent a reply but before the new
-                    assistant placeholder has been pushed by the SSE
-                    `start` event. */}
-                {planConversation.status === "thinking" &&
-                  (planConversation.messages.length === 0 ||
-                    planConversation.messages[
-                      planConversation.messages.length - 1
-                    ].role === "user") && (
-                    <div className="flex justify-start">
-                      <div className="px-3 py-2 rounded-2xl rounded-bl-md bg-background border border-border/70 text-sm leading-snug inline-flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse" />
-                        <span
-                          className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse"
-                          style={{ animationDelay: "120ms" }}
-                        />
-                        <span
-                          className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse"
-                          style={{ animationDelay: "240ms" }}
-                        />
-                      </div>
+                  </div>
+                  {showChips && (
+                    <div className="flex flex-wrap gap-1.5 pl-1">
+                      {m.suggestions.map((s, j) => (
+                        <button
+                          key={`pmc-${i}-${j}`}
+                          onClick={() => onPlanSuggestionClick(s)}
+                          className="inline-flex items-center px-2.5 py-1 rounded-full border border-border bg-surface-raised hover:bg-background hover:border-primary/40 text-[11px] text-foreground transition-colors text-left"
+                          title={s}
+                        >
+                          {s}
+                        </button>
+                      ))}
                     </div>
                   )}
-              </div>
+                </div>
+              );
+            })}
 
-              {/* Final plan summary + action row. Only appears once the
-                  server emits a kind:"plan" turn (status flips to
-                  "ready" AND `plan` is populated). */}
-              {planConversation.status === "ready" && planConversation.plan && (
-                <div className="space-y-3 pt-2 border-t border-border/60">
-                  <PlanSummary plan={planConversation.plan} />
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      size="sm"
-                      onClick={onApprovePlan}
-                      className="h-8 text-xs"
-                    >
-                      <Check className="w-3.5 h-3.5 mr-1" />
-                      Build this
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={onCancelPlan}
-                      className="h-8 text-xs text-secondary hover:text-foreground ml-auto"
-                    >
-                      <X className="w-3.5 h-3.5 mr-1" />
-                      Cancel
-                    </Button>
+            {/* Typing indicator while the next assistant turn is
+                in flight. We show this whenever status==="thinking"
+                AND the most recent message is from the user — that
+                is, after they've sent a reply but before the new
+                assistant placeholder has been pushed by the SSE
+                `start` event. */}
+            {planConversation.status === "thinking" &&
+              (planConversation.messages.length === 0 ||
+                planConversation.messages[
+                  planConversation.messages.length - 1
+                ].role === "user") && (
+                <div className="flex justify-start">
+                  <div className="px-3 py-2 rounded-2xl rounded-bl-md bg-background border border-border/70 text-sm leading-snug inline-flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse" />
+                    <span
+                      className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse"
+                      style={{ animationDelay: "120ms" }}
+                    />
+                    <span
+                      className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse"
+                      style={{ animationDelay: "240ms" }}
+                    />
                   </div>
                 </div>
               )}
-            </div>
+
+            {/* Final plan summary + action row. Only appears once the
+                server emits a kind:"plan" turn (status flips to
+                "ready" AND `plan` is populated). Sits inline with the
+                other bubbles — no card edge to separate from. */}
+            {planConversation.status === "ready" && planConversation.plan && (
+              <div className="space-y-3 pt-1">
+                <PlanSummary plan={planConversation.plan} />
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    onClick={onApprovePlan}
+                    className="h-8 text-xs"
+                  >
+                    <Check className="w-3.5 h-3.5 mr-1" />
+                    Build this
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={onCancelPlan}
+                    className="h-8 text-xs text-secondary hover:text-foreground ml-auto"
+                  >
+                    <X className="w-3.5 h-3.5 mr-1" />
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
