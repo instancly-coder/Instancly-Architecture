@@ -44,7 +44,9 @@ export function MarketingNav() {
         <BrandLogo className="h-5 w-auto text-foreground" />
       </Link>
 
-      <div className="hidden md:flex items-center gap-6 text-sm text-secondary">
+      {/* Absolutely centered so the link group stays put no matter how wide the
+          right-side auth cluster gets (Dashboard vs Log in + Start building). */}
+      <div className="hidden md:flex absolute left-1/2 -translate-x-1/2 items-center gap-6 text-sm text-secondary">
         {NAV_LINKS.map((l) => (
           <Link
             key={l.label}
