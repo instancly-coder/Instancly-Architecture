@@ -23,44 +23,87 @@ import { Button } from "@/components/ui/button";
 import { BrandLogo } from "@/components/brand-logo";
 import { SKILLS } from "@/skills";
 
-const MARKETING_LINKS = [
-  { href: "/explore", label: "Explore", icon: Compass },
-  { href: "/skills", label: "Skills", icon: Sparkles },
-  { href: "/changelog", label: "Changelog", icon: GitCommit },
-  { href: "/status", label: "Status", icon: ActivityIcon },
-  { href: "/about", label: "About", icon: Building2 },
-  { href: "/careers", label: "Careers", icon: Briefcase },
-  { href: "/privacy", label: "Privacy", icon: Lock },
-  { href: "/terms", label: "Terms", icon: Scale },
-  { href: "/aup", label: "Acceptable use", icon: ShieldAlert },
-  { href: "/cookies", label: "Cookies", icon: Cookie },
-  { href: "/dpa", label: "Data processing", icon: FileLock2 },
+// Sidebar resources are grouped so the menu reads as
+// {discovery → company → legal}, with the dry legal pages tucked
+// at the bottom rather than mixed in with Explore/Skills.
+// Each group renders as a block separated by a hairline border —
+// the section headings are intentionally kept lightweight so the
+// sidebar still reads as a single "Resources" panel.
+const MARKETING_LINK_GROUPS: ReadonlyArray<{
+  heading?: string;
+  links: ReadonlyArray<{
+    href: string;
+    label: string;
+    icon: typeof Compass;
+  }>;
+}> = [
+  {
+    links: [
+      { href: "/explore", label: "Explore", icon: Compass },
+      { href: "/skills", label: "Skills", icon: Sparkles },
+      { href: "/changelog", label: "Changelog", icon: GitCommit },
+      { href: "/status", label: "Status", icon: ActivityIcon },
+    ],
+  },
+  {
+    heading: "Company",
+    links: [
+      { href: "/about", label: "About", icon: Building2 },
+      { href: "/careers", label: "Careers", icon: Briefcase },
+    ],
+  },
+  {
+    heading: "Legal",
+    links: [
+      { href: "/privacy", label: "Privacy", icon: Lock },
+      { href: "/terms", label: "Terms", icon: Scale },
+      { href: "/aup", label: "Acceptable use", icon: ShieldAlert },
+      { href: "/cookies", label: "Cookies", icon: Cookie },
+      { href: "/dpa", label: "Data processing", icon: FileLock2 },
+    ],
+  },
 ];
 
 export function SideNav() {
   const [loc] = useLocation();
   return (
-    <nav className="lg:sticky lg:top-24 lg:self-start space-y-1 text-sm">
+    <nav className="lg:sticky lg:top-24 lg:self-start text-sm">
       <div className="text-[10px] uppercase tracking-wider font-mono text-secondary px-3 py-2">
         Resources
       </div>
-      {MARKETING_LINKS.map(({ href, label, icon: Icon }) => {
-        const active = loc === href;
-        return (
-          <Link
-            key={href}
-            href={href}
-            className={`flex items-center gap-2 px-3 py-2 rounded-md transition-colors ${
-              active
-                ? "bg-primary/15 text-primary border border-primary/25"
-                : "text-secondary hover:text-foreground hover:bg-surface"
-            }`}
-          >
-            <Icon className="w-3.5 h-3.5 shrink-0" />
-            {label}
-          </Link>
-        );
-      })}
+      {MARKETING_LINK_GROUPS.map((group, i) => (
+        <div
+          key={group.heading ?? `group-${i}`}
+          className={
+            i > 0
+              ? "mt-3 pt-3 border-t border-border/60 space-y-1"
+              : "space-y-1"
+          }
+        >
+          {group.heading && (
+            <div className="text-[10px] uppercase tracking-wider font-mono text-secondary/70 px-3 pb-1">
+              {group.heading}
+            </div>
+          )}
+          {group.links.map(({ href, label, icon: Icon }) => {
+            const active = loc === href;
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={`flex items-center gap-2 px-3 py-2 rounded-md transition-colors ${
+                  active
+                    ? "bg-primary/15 text-primary border border-primary/25"
+                    : "text-secondary hover:text-foreground hover:bg-surface"
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5 shrink-0" />
+                {label}
+              </Link>
+            );
+          })}
+        </div>
+      ))}
     </nav>
   );
 }
