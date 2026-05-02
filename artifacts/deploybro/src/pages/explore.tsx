@@ -20,7 +20,73 @@ import {
 } from "@/components/ui/carousel";
 import { Shell } from "@/pages/info";
 import { DashboardLayout } from "@/components/dashboard-layout";
+import { BrandLogo } from "@/components/brand-logo";
 import { PROJECT_CATEGORIES } from "@/lib/categories";
+
+// Small avatar + "by @username" row used by every flavour of explore card
+// (search dropdown, featured carousel, grid). Three rendering branches:
+//   1. The official `deploybro` author renders the brand mark instead of
+//      a profile picture, and shows "by DeployBro" — both because the
+//      seed user has no avatarUrl and because the logo reads as an
+//      authoritative "first-party template" cue.
+//   2. Any other author with an avatarUrl gets the image, with onError
+//      collapsing back to the gradient initial if the URL goes stale.
+//   3. Fallback: a small gradient circle with the author's initial,
+//      mirroring the avatar fallback used on the profile page.
+function AuthorBadge({
+  author,
+  authorAvatarUrl,
+  size = "sm",
+}: {
+  author: string;
+  authorAvatarUrl: string | null;
+  size?: "sm" | "xs";
+}) {
+  const isDeployBro = author === "deploybro";
+  const dim = size === "sm" ? "w-5 h-5" : "w-4 h-4";
+  const text = size === "sm" ? "text-xs" : "text-[11px]";
+
+  if (isDeployBro) {
+    return (
+      <span className={`inline-flex items-center gap-1.5 min-w-0 ${text} text-secondary`}>
+        <span
+          className={`${dim} rounded-full bg-foreground flex items-center justify-center shrink-0 overflow-hidden`}
+          aria-hidden
+        >
+          <BrandLogo className="h-2.5 w-auto" />
+        </span>
+        <span className="truncate">by DeployBro</span>
+      </span>
+    );
+  }
+
+  const validHttpUrl =
+    !!authorAvatarUrl && /^https?:\/\//i.test(authorAvatarUrl);
+
+  return (
+    <span className={`inline-flex items-center gap-1.5 min-w-0 ${text} text-secondary`}>
+      <span
+        className={`${dim} rounded-full bg-gradient-to-br from-blue-500 via-blue-900 to-black flex items-center justify-center shrink-0 overflow-hidden text-[9px] font-semibold text-white`}
+        aria-hidden
+      >
+        {validHttpUrl ? (
+          <img
+            src={authorAvatarUrl!}
+            alt=""
+            loading="lazy"
+            className="w-full h-full object-cover"
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).style.display = "none";
+            }}
+          />
+        ) : (
+          (author.charAt(0) || "?").toUpperCase()
+        )}
+      </span>
+      <span className="truncate">by @{author}</span>
+    </span>
+  );
+}
 
 // Single public-facing browse surface. Lists curated, admin-featured
 // templates with three browsing surfaces stacked top-to-bottom:
@@ -221,8 +287,13 @@ function HeroSearch({
                         <div className="text-sm font-medium truncate">
                           {t.name}
                         </div>
-                        <div className="text-xs text-secondary truncate">
-                          by @{t.author} · {t.category ?? "Other"}
+                        <div className="flex items-center gap-1.5 text-xs text-secondary truncate">
+                          <AuthorBadge
+                            author={t.author}
+                            authorAvatarUrl={t.authorAvatarUrl ?? null}
+                            size="xs"
+                          />
+                          <span className="shrink-0">· {t.category ?? "Other"}</span>
                         </div>
                       </div>
                       <span className="text-[11px] text-secondary shrink-0 hidden sm:inline">
@@ -281,9 +352,12 @@ function FeaturedCard({ t }: { t: ApiTemplateItem }) {
           <p className="text-sm text-secondary line-clamp-3">
             {t.description || "—"}
           </p>
-          <div className="mt-auto flex items-center justify-between text-xs text-secondary pt-2">
-            <span className="truncate">by @{t.author}</span>
-            <span>{t.clones} clones</span>
+          <div className="mt-auto flex items-center justify-between gap-3 text-xs text-secondary pt-2">
+            <AuthorBadge
+              author={t.author}
+              authorAvatarUrl={t.authorAvatarUrl ?? null}
+            />
+            <span className="shrink-0">{t.clones} clones</span>
           </div>
         </div>
       </div>
@@ -509,10 +583,15 @@ function ExploreBrowse({
                 count were removed so the grid reads as a clean visual
                 wall of screenshots.
               */}
-              <div className="p-3 sm:p-4">
+              <div className="p-3 sm:p-4 flex flex-col gap-1.5">
                 <h3 className="text-sm font-medium group-hover:text-primary transition-colors truncate">
                   {t.name}
                 </h3>
+                <AuthorBadge
+                  author={t.author}
+                  authorAvatarUrl={t.authorAvatarUrl ?? null}
+                  size="xs"
+                />
               </div>
             </Link>
           ))}

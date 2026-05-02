@@ -61,6 +61,7 @@ router.get("/explore", async (req, res) => {
       lastBuiltAt: projectsTable.lastBuiltAt,
       author: usersTable.username,
       authorDisplayName: usersTable.displayName,
+      authorAvatarUrl: usersTable.avatarUrl,
     })
     .from(projectsTable)
     .innerJoin(usersTable, eq(usersTable.id, projectsTable.userId))
@@ -74,6 +75,7 @@ router.get("/explore", async (req, res) => {
         ...r,
         features: r.features ?? [],
         screenshotUrl: r.screenshotUrl ?? null,
+        authorAvatarUrl: r.authorAvatarUrl ?? null,
         lastBuiltAt: r.lastBuiltAt.toISOString(),
       })),
     ),
@@ -98,6 +100,7 @@ router.get("/templates", async (_req, res) => {
       clones: projectsTable.clones,
       author: usersTable.username,
       authorDisplayName: usersTable.displayName,
+      authorAvatarUrl: usersTable.avatarUrl,
       createdAt: projectsTable.createdAt,
     })
     .from(projectsTable)
@@ -116,6 +119,7 @@ router.get("/templates", async (_req, res) => {
       ...r,
       features: r.features ?? [],
       screenshotUrl: r.screenshotUrl ?? null,
+      authorAvatarUrl: r.authorAvatarUrl ?? null,
       createdAt: r.createdAt.toISOString(),
     })),
   );

@@ -886,6 +886,12 @@ export const ExploreResponseItem = zod.object({
   lastBuiltAt: zod.string().datetime({}),
   author: zod.string(),
   authorDisplayName: zod.string(),
+  authorAvatarUrl: zod
+    .string()
+    .nullable()
+    .describe(
+      "Profile picture URL of the author. NULL = render the default fallback (gradient initial, or the DeployBro logo for the official `deploybro` author).",
+    ),
 });
 export const ExploreResponse = zod.array(ExploreResponseItem);
 
@@ -906,6 +912,12 @@ export const ListTemplatesResponseItem = zod
     clones: zod.number(),
     author: zod.string(),
     authorDisplayName: zod.string(),
+    authorAvatarUrl: zod
+      .string()
+      .nullable()
+      .describe(
+        "Profile picture URL of the author. NULL = render the default fallback (gradient initial, or the DeployBro logo for the official `deploybro` author).",
+      ),
     createdAt: zod.string().datetime({}),
   })
   .describe("A public, admin-featured template surfaced on \/templates.");

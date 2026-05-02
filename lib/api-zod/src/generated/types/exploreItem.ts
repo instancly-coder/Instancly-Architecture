@@ -19,4 +19,6 @@ export interface ExploreItem {
   lastBuiltAt: string;
   author: string;
   authorDisplayName: string;
+  /** Profile picture URL of the author. NULL = render the default fallback (gradient initial, or the DeployBro logo for the official `deploybro` author). */
+  authorAvatarUrl: string | null;
 }

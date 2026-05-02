@@ -1550,6 +1550,10 @@ components:
           format: date-time
         author: { type: string }
         authorDisplayName: { type: string }
+        authorAvatarUrl:
+          type: string
+          nullable: true
+          description: Profile picture URL of the author. NULL = render the default fallback (gradient initial, or the DeployBro logo for the official `deploybro` author).
       required:
         - id
         - name
@@ -1563,6 +1567,7 @@ components:
         - lastBuiltAt
         - author
         - authorDisplayName
+        - authorAvatarUrl
     TemplateItem:
       type: object
       description: A public, admin-featured template surfaced on /templates.
@@ -1585,6 +1590,10 @@ components:
         clones: { type: integer }
         author: { type: string }
         authorDisplayName: { type: string }
+        authorAvatarUrl:
+          type: string
+          nullable: true
+          description: Profile picture URL of the author. NULL = render the default fallback (gradient initial, or the DeployBro logo for the official `deploybro` author).
         createdAt:
           type: string
           format: date-time
@@ -1601,6 +1610,7 @@ components:
         - clones
         - author
         - authorDisplayName
+        - authorAvatarUrl
         - createdAt
     AdminTemplateItem:
       type: object
