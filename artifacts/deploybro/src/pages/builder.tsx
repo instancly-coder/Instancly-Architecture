@@ -541,6 +541,50 @@ async function* readSSE(res: Response): AsyncGenerator<{ event: string; data: an
   }
 }
 
+// Renders an approved Plan as a human-readable build prompt the user
+// can drop into the chat composer to review and edit before sending.
+// Shape mirrors what the model would emit on its own from a thorough
+// brief — sectioned and labelled, no fenced code blocks (those would
+// confuse the build pipeline's directive parsers downstream). The
+// originalPrompt sits at the top so the user's exact words are
+// preserved as the leading intent statement; the plan facts follow as
+// labelled lines the model can scan and the user can edit in place.
+function formatPlanAsPrompt(originalPrompt: string, plan: ApprovedPlan): string {
+  const lines: string[] = [];
+  lines.push(originalPrompt.trim());
+  lines.push("");
+  lines.push("Build to this plan:");
+  if (plan.projectName) lines.push(`- Name: ${plan.projectName}`);
+  if (plan.summary) lines.push(`- Summary: ${plan.summary}`);
+  if (plan.pages.length > 0)
+    lines.push(`- Pages: ${plan.pages.join(", ")}`);
+  const enabledSections = plan.sections.filter((s) => s.enabled);
+  if (enabledSections.length > 0) {
+    lines.push(
+      `- Sections: ${enabledSections.map((s) => s.name).join(", ")}`,
+    );
+  }
+  if (plan.colors.length > 0) {
+    lines.push(
+      `- Palette: ${plan.colors
+        .map((c) => `${c.name} ${c.hex}`)
+        .join(", ")}`,
+    );
+  }
+  if (plan.fonts.heading || plan.fonts.body) {
+    lines.push(
+      `- Fonts: ${plan.fonts.heading || "default"} for headings, ${
+        plan.fonts.body || "default"
+      } for body`,
+    );
+  }
+  if (plan.features.length > 0) {
+    lines.push(`- Key features: ${plan.features.join("; ")}`);
+  }
+  if (plan.copyTone) lines.push(`- Copy tone: ${plan.copyTone}`);
+  return lines.join("\n");
+}
+
 // The old BuilderTabStrip (horizontal tabs + add-tab popover) was
 // replaced by BuilderTabsMenu — see below — which collapses every
 // view into a single dropdown trigger next to Chat ↔ Preview.
@@ -854,7 +898,11 @@ export default function Builder() {
   // The active plan-mode interview, or null when no interview is in
   // progress. `status` walks through: thinking (server is replying) →
   // asking (assistant message + suggestions visible, awaiting user
-  // reply) → ready (final plan emitted, Build this button visible).
+  // reply) → ready (final plan emitted, "Add to chat" button visible)
+  // → approved (user clicked "Add to chat"; plan is loaded into the
+  // composer for review/edit; the planning thread stays visible as
+  // the paper trail and the actual build only fires when the user
+  // hits Send).
   const [planConversation, setPlanConversation] = useState<{
     originalPrompt: string;
     overrides: {
@@ -870,7 +918,7 @@ export default function Builder() {
           suggestions: string[];
         }
     >;
-    status: "thinking" | "asking" | "ready";
+    status: "thinking" | "asking" | "ready" | "approved";
     plan: ApprovedPlan | null;
   } | null>(null);
   // Aborts the in-flight /ai/plan SSE turn so a user cancelling the
@@ -1304,14 +1352,37 @@ export default function Builder() {
     void _streamPlanTurn(next);
   };
 
+  // "Add to chat" — formats the approved plan as a human-readable
+  // prompt and drops it into the chat composer so the user can review,
+  // tweak the wording, then hit Send to fire the build themselves.
+  // Replaces the old auto-build behaviour that wiped the planning
+  // thread and immediately POSTed to /ai/build — a one-click jump
+  // that left users with no chance to refine the prompt that the
+  // model would actually act on.
+  //
+  // The planning thread stays visible (status flips to "approved")
+  // as the paper trail of how the plan was reached. The dispatcher
+  // in onSend below routes Send presses while status==="approved"
+  // straight to handleSend with the locked plan, instead of treating
+  // them as another conversation turn.
   const approvePlan = () => {
     if (!planConversation?.plan) return;
-    const { originalPrompt, plan, overrides } = planConversation;
-    setPlanConversation(null);
-    void handleSend(originalPrompt, {
-      ...overrides,
-      planMode: true,
-      approvedPlan: plan,
+    const { originalPrompt, plan } = planConversation;
+    const formatted = formatPlanAsPrompt(originalPrompt, plan);
+    setChatInput(formatted);
+    setPlanConversation((cur) => (cur ? { ...cur, status: "approved" } : cur));
+    requestAnimationFrame(() => {
+      const ta = document.querySelector<HTMLTextAreaElement>(
+        'textarea[data-composer="chat"]',
+      );
+      if (ta) {
+        ta.focus();
+        ta.setSelectionRange(ta.value.length, ta.value.length);
+        ta.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+    });
+    toast.message("Plan added to chat", {
+      description: "Review or edit the prompt, then hit Send to build.",
     });
   };
 
@@ -2357,6 +2428,20 @@ export default function Builder() {
                 planConversation?.status === "ready"
               ) {
                 sendPlanReply();
+              } else if (
+                planConversation?.status === "approved" &&
+                planConversation.plan
+              ) {
+                // User reviewed/edited the formatted plan in the
+                // composer and hit Send. Fire the actual build with
+                // the locked plan as the spec — handleSend's guard
+                // permits this via the !approvedPlan escape hatch
+                // even though planConversation is still set.
+                void handleSend(undefined, {
+                  ...planConversation.overrides,
+                  planMode: true,
+                  approvedPlan: planConversation.plan,
+                });
               } else {
                 void handleSend();
               }
@@ -2625,14 +2710,16 @@ function ChatPanel({
       | { role: "user"; content: string }
       | { role: "assistant"; content: string; suggestions: string[] }
     >;
-    status: "thinking" | "asking" | "ready";
+    status: "thinking" | "asking" | "ready" | "approved";
     plan: ApprovedPlan | null;
   } | null;
   // Click handler for a suggestion chip on an assistant bubble — sends
   // the chip text as the user's reply.
   onPlanSuggestionClick: (text: string) => void;
-  // "Build this" button — fires the build with the approved plan as
-  // the locked spec.
+  // "Add to chat" button — drops the formatted plan into the chat
+  // composer for the user to review/edit before they hit Send. The
+  // actual build is fired by the Send dispatcher above when the user
+  // is ready, NOT by this callback.
   onApprovePlan: () => void;
   // Cancel button on the conversation card — aborts the in-flight SSE
   // turn and restores the original prompt to the composer.
@@ -3754,7 +3841,7 @@ type PlanConversation = {
     | { role: "user"; content: string }
     | { role: "assistant"; content: string; suggestions: string[] }
   >;
-  status: "thinking" | "asking" | "ready";
+  status: "thinking" | "asking" | "ready" | "approved";
   plan: ApprovedPlan | null;
 };
 
@@ -3775,6 +3862,11 @@ function PlanBox({
 }) {
   const { messages, status, plan } = conversation;
   const isReady = status === "ready" && plan !== null;
+  const isApproved = status === "approved" && plan !== null;
+  // Plan is "shown" (summary visible) once we hit either ready or
+  // approved — the read-only stepper above stays the same in both
+  // states; only the action footer differs.
+  const showPlan = isReady || isApproved;
 
   // Pair every assistant question with its (optional) following user
   // reply so we can render the conversation as a numbered list of
@@ -3819,9 +3911,13 @@ function PlanBox({
           enough chrome for the box. */}
       <div className="flex items-center gap-2">
         <div className="text-sm font-semibold text-foreground">
-          {isReady ? "Plan ready" : "Planning your app"}
+          {isApproved
+            ? "Plan added to chat"
+            : isReady
+            ? "Plan ready"
+            : "Planning your app"}
         </div>
-        {!isReady && steps.length > 0 && (
+        {!showPlan && steps.length > 0 && (
           <div className="ml-auto text-[10px] font-mono uppercase tracking-wider text-secondary">
             Step {lastStepIdx + 1}
           </div>
@@ -3834,8 +3930,8 @@ function PlanBox({
       <ol className="space-y-3">
         {steps.map((step, idx) => {
           const isLastStep = idx === lastStepIdx;
-          const isCurrent = !isReady && isLastStep && step.answer === null;
-          const isCompleted = isReady || step.answer !== null;
+          const isCurrent = !showPlan && isLastStep && step.answer === null;
+          const isCompleted = showPlan || step.answer !== null;
           // Mid-stream shimmer — the current question is "writing"
           // until either the suggestions chips arrive (asking turn)
           // or the conversation flips to ready (final plan turn).
@@ -3950,29 +4046,59 @@ function PlanBox({
         </div>
       )}
 
-      {/* Final approved plan + actions. Replaces no part of the
-          stepper — the completed steps stay visible above as the
-          paper trail of how we got here. */}
-      {isReady && plan && (
+      {/* Final plan + actions. Replaces no part of the stepper —
+          the completed steps stay visible above as the paper trail
+          of how we got here. The footer swaps once the user clicks
+          "Add to chat": the actions disappear and a small hint
+          replaces them, since the build is now driven by the chat
+          composer's Send button (not the card). */}
+      {showPlan && plan && (
         <>
           <div className="border-t border-border/60 pt-3">
-            <PlanSummary plan={plan} onChange={onUpdatePlan} />
+            {/* Once the plan is approved into the composer, freeze
+                the palette picker. Otherwise tapping a swatch silently
+                desyncs the visual chips from the formatted hex codes
+                already in the chat input — and re-formatting the
+                prompt would clobber any edits the user made. The
+                composer is now the source of truth. */}
+            <PlanSummary
+              plan={plan}
+              onChange={isApproved ? undefined : onUpdatePlan}
+            />
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" onClick={onApprovePlan} className="h-8 text-xs">
-              <Check className="w-3.5 h-3.5 mr-1" />
-              Build this
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={onCancelPlan}
-              className="h-8 text-xs text-secondary hover:text-foreground ml-auto"
-            >
-              <X className="w-3.5 h-3.5 mr-1" />
-              Cancel
-            </Button>
-          </div>
+          {isReady ? (
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                onClick={onApprovePlan}
+                className="h-8 text-xs"
+              >
+                <Plus className="w-3.5 h-3.5 mr-1" />
+                Add to chat
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={onCancelPlan}
+                className="h-8 text-xs text-secondary hover:text-foreground ml-auto"
+              >
+                <X className="w-3.5 h-3.5 mr-1" />
+                Cancel
+              </Button>
+            </div>
+          ) : (
+            // status === "approved" — the formatted plan is now in
+            // the composer below. We hide the action buttons (and
+            // intentionally drop Cancel) so the planning thread
+            // stays put as the paper trail. The user drives the
+            // actual build from the chat input.
+            <div className="flex items-center gap-1.5 text-[11px] text-secondary border-t border-border/40 pt-2">
+              <ChevronDown className="w-3.5 h-3.5 text-primary" aria-hidden />
+              <span>
+                Edit the prompt below and hit Send to build.
+              </span>
+            </div>
+          )}
         </>
       )}
     </div>
