@@ -697,10 +697,10 @@ export default function Landing() {
                           src={(t.screenshotUrl ?? t.coverImageUrl)!}
                           alt={t.name}
                           loading="lazy"
-                          className="absolute inset-0 w-full h-full object-cover object-top transition-transform group-hover:scale-[1.02]"
+                          className="absolute inset-0 w-full h-full object-cover object-top"
                         />
                       ) : (
-                        <div className="absolute inset-3 rounded bg-background/80 backdrop-blur-sm border border-border/50 p-2 flex flex-col gap-1.5 transition-transform group-hover:scale-[1.02]">
+                        <div className="absolute inset-3 rounded bg-background/80 backdrop-blur-sm border border-border/50 p-2 flex flex-col gap-1.5">
                           <div className="h-1.5 w-1/3 rounded bg-foreground/30" />
                           <div className="h-1 w-2/3 rounded bg-foreground/15" />
                           <div className="grid grid-cols-3 gap-1 mt-1 flex-1">

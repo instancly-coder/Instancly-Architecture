@@ -184,12 +184,13 @@
   will-change: transform, opacity, filter;
 }
 
+/* Previously this added a translateY(-2px) lift and a primary border on
+   hover for any card-like element (project cards, explore cards, etc.).
+   The lift read as a "zoom" and the border swap was visually noisy when
+   cards sat in a tight grid. Kept as a no-op class so the dozens of
+   existing call sites don't need to be touched, but cards now stay still
+   and keep their original border on hover. */
 .hover-elevate {
-  transition: transform 0.2s ease, border-color 0.2s ease;
-}
-.hover-elevate:hover {
-  transform: translateY(-2px);
-  border-color: hsl(var(--primary));
 }
 
 /* Hide native scrollbars on horizontally-scrolling chip rows etc. */

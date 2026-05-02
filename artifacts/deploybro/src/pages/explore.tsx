@@ -256,7 +256,7 @@ function FeaturedCard({ t }: { t: ApiTemplateItem }) {
               src={img}
               alt={t.name}
               loading="lazy"
-              className="absolute inset-0 w-full h-full object-cover object-top transition-transform group-hover:scale-[1.02]"
+              className="absolute inset-0 w-full h-full object-cover object-top"
             />
           ) : (
             <div className="absolute inset-0 flex items-center justify-center bg-surface-raised">
@@ -493,7 +493,7 @@ function ExploreBrowse({
                     src={(t.screenshotUrl ?? t.coverImageUrl)!}
                     alt={t.name}
                     loading="lazy"
-                    className="absolute inset-0 w-full h-full object-cover object-top transition-transform group-hover:scale-[1.02]"
+                    className="absolute inset-0 w-full h-full object-cover object-top"
                   />
                 ) : (
                   <div className="absolute inset-0 flex items-center justify-center bg-surface-raised">
