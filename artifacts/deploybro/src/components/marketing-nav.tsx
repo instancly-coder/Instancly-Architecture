@@ -7,6 +7,7 @@ import { useMe } from "@/lib/api";
 import { useMobileUserMenu } from "./mobile-user-menu";
 
 const NAV_LINKS = [
+  { label: "Explore", href: "/explore" },
   { label: "Skills", href: "/skills" },
   { label: "Pricing", href: "/pricing" },
 ];
