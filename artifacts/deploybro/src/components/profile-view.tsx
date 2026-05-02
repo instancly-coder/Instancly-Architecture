@@ -88,30 +88,32 @@ export function ProfileView({
     <>
       <div className="p-4 md:p-8 w-full">
         <div className="flex flex-col md:flex-row gap-12">
-          {/* Left sidebar — Framer-style profile card. Centered avatar,
-              name, headline, bio, primary action(s), then icon rows of
-              metadata and a chip cloud of skills at the bottom. */}
+          {/* Left sidebar — Framer-style profile card. Left-aligned
+              with a small avatar at the top so the eye reads top→down
+              like a personal "card" (matches framer.com/@<user>'s
+              expert profile layout: small avatar, name, headline, bio,
+              primary action(s), icon rows of metadata, skill chips). */}
           <aside className="w-full md:w-72 shrink-0">
             <div
-              className="w-28 h-28 mx-auto rounded-full border border-border flex items-center justify-center text-4xl font-bold mb-4 text-white shadow-lg bg-gradient-to-br from-blue-500 via-blue-900 to-black"
+              className="w-16 h-16 rounded-full border border-border flex items-center justify-center text-2xl font-bold mb-5 text-white shadow-lg bg-gradient-to-br from-blue-500 via-blue-900 to-black"
               aria-hidden="true"
             >
               {user.username[0].toUpperCase()}
             </div>
-            <h2 className="text-2xl font-bold tracking-tight text-center">
+            <h2 className="text-2xl font-bold tracking-tight">
               {user.displayName}
             </h2>
-            <div className="text-secondary font-mono text-sm text-center mb-3">
+            <div className="text-secondary font-mono text-sm mb-3">
               @{user.username}
             </div>
 
             {tagline && (
-              <p className="text-sm text-center text-secondary mb-4 leading-snug">
+              <p className="text-sm text-secondary mb-4 leading-snug">
                 {tagline}
               </p>
             )}
             {bio && (
-              <p className="text-sm text-center mb-5 leading-relaxed">
+              <p className="text-sm mb-5 leading-relaxed">
                 {bio}
               </p>
             )}
@@ -185,17 +187,11 @@ export function ProfileView({
                 </div>
               </div>
             )}
-
-            <div className="mt-6 pt-5 border-t border-border">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-sm text-secondary">Public Projects</span>
-                <span className="font-mono font-medium">{user.publicProjects}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-secondary">Total Clones</span>
-                <span className="font-mono font-medium">{user.totalClones}</span>
-              </div>
-            </div>
+            {/* NOTE: stats (Public Projects / Total Clones) intentionally
+                not rendered here — Framer's layout doesn't surface them
+                in the sidebar, and the project grid header already shows
+                a project count. Stats are still on the API response so
+                other surfaces (e.g. /admin/users) can use them. */}
           </aside>
 
           {/* Right column — projects grid. */}
