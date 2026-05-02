@@ -3479,9 +3479,6 @@ function ChatPanel({
             </div>
           </div>
         </div>
-        <div className="text-[10px] text-secondary text-center mt-2">
-          Enter to send · Shift+Enter for newline
-        </div>
       </div>
     </>
   );
