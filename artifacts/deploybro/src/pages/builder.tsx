@@ -13,6 +13,7 @@ import {
   X,
   Send,
   ChevronDown,
+  ChevronRight,
   FileCode2,
   Play,
   Database,
@@ -260,12 +261,23 @@ function stripIncompleteFileBlocks(text: string): string {
 // Renders a chat message string, swapping our [[FILE_DONE:path]] /
 // [[FILE_PENDING:path]] markers for full conversational lines like
 // "Creating app.jsx..." / "Created app.jsx" — prose renders inline; all
-// file events are aggregated into a single collapsible drawer so the chat
-// stays readable. In collapsed mode the drawer shows the currently-active
-// file path and a running count. Expand to see every file.
+// file events are aggregated into a single inline collapsible row so the
+// chat stays readable. In collapsed mode the row shows the
+// currently-active file path and a running count. Expand to see every file.
 // Also accepts the legacy server format `_(updated **path**)_` /
 // `_(writing path…)_` so historical builds render with the new look too.
-function FileNoticeText({ text }: { text: string }) {
+//
+// `streaming` indicates this message is the live in-flight assistant
+// response — when true, the last paragraph and any in-progress file
+// label get the left-to-right shimmer treatment so the user can tell
+// at a glance which line is "working" right now.
+function FileNoticeText({
+  text,
+  streaming = false,
+}: {
+  text: string;
+  streaming?: boolean;
+}) {
   const [filesOpen, setFilesOpen] = useState(false);
 
   // Normalize legacy markers + CRLF up front.
@@ -313,67 +325,99 @@ function FileNoticeText({ text }: { text: string }) {
     ? fileBlocks[0]?.path ?? "1 file"
     : `${doneCount} file${doneCount !== 1 ? "s" : ""} created`;
 
+  // Index of the last prose paragraph — used to apply the streaming
+  // shimmer only to the in-flight tail, not the entire history.
+  const lastProseIdx = proseBlocks.length - 1;
+
   return (
     <div className="space-y-2">
-      {/* Prose paragraphs render as normal */}
-      {proseBlocks.map((b, i) => (
-        <p key={i} className="whitespace-pre-wrap leading-relaxed">
-          {b.text}
-        </p>
-      ))}
+      {/* Prose paragraphs render as normal — the very last paragraph
+          gets a left-to-right shimmer while the response is still
+          streaming, so the user can see exactly which sentence is
+          currently being written. */}
+      {proseBlocks.map((b, i) => {
+        const isTail = streaming && !pendingFile && i === lastProseIdx;
+        return (
+          <p
+            key={i}
+            className={`whitespace-pre-wrap leading-relaxed ${
+              isTail ? "shimmer-text" : ""
+            }`}
+          >
+            {b.text}
+          </p>
+        );
+      })}
 
-      {/* Collapsible file drawer */}
+      {/* Inline collapsible file row — chevron + summary text on one
+          line, no card chrome. Matches the "Explored N files" pattern
+          from modern AI chat UIs (rork, Claude, etc.). */}
       {fileBlocks.length > 0 && (
-        <div className="rounded-lg border border-border/60 bg-muted/20 overflow-hidden text-[12px]">
-          {/* Summary row — always visible, acts as toggle */}
+        <div className="text-[12px]">
           <button
             type="button"
             onClick={() => setFilesOpen((v) => !v)}
-            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted/40 transition-colors text-left"
+            aria-expanded={filesOpen}
+            className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors text-left max-w-full"
           >
+            <ChevronRight
+              className={`w-3 h-3 shrink-0 transition-transform duration-150 ${
+                filesOpen ? "rotate-90" : ""
+              }`}
+            />
             {pendingFile ? (
-              <FilePen className="w-3.5 h-3.5 shrink-0 text-primary animate-pulse" />
+              <span className="inline-flex items-baseline gap-1 min-w-0">
+                <span>Creating</span>
+                <span
+                  className={`font-mono text-foreground/90 truncate ${
+                    streaming ? "shimmer-text" : ""
+                  }`}
+                >
+                  {summaryLabel}
+                </span>
+                <span>…</span>
+              </span>
             ) : (
-              <FileCheck className="w-3.5 h-3.5 shrink-0 text-emerald-500" />
+              <span className="text-foreground/80">{summaryLabel}</span>
             )}
-            <span className="flex-1 min-w-0">
-              {pendingFile ? (
-                <>
-                  <span className="text-muted-foreground">Creating </span>
-                  <span className="font-mono text-foreground/90 truncate">{summaryLabel}</span>
-                  <span className="text-muted-foreground">…</span>
-                </>
-              ) : (
-                <span className="text-foreground/80">{summaryLabel}</span>
-              )}
-            </span>
-            {/* File count badge */}
             {totalCount > 1 && (
-              <span className="shrink-0 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-primary tabular-nums">
-                {doneCount}/{totalCount}
+              <span className="shrink-0 ml-1 tabular-nums text-muted-foreground/80">
+                ({doneCount}/{totalCount})
               </span>
             )}
-            <ChevronDown
-              className={`w-3.5 h-3.5 shrink-0 text-muted-foreground transition-transform duration-150 ${filesOpen ? "rotate-180" : ""}`}
-            />
           </button>
 
-          {/* Expanded file list */}
+          {/* Expanded file list — indented, no border/background */}
           {filesOpen && (
-            <div className="border-t border-border/40 px-3 py-2 space-y-1.5">
+            <div className="mt-1.5 ml-4 pl-2 border-l border-border/40 space-y-1 animate-in fade-in slide-in-from-top-1 duration-150">
               {fileBlocks.map((b, i) =>
                 b.kind === "file_done" ? (
-                  <div key={i} className="flex items-center gap-2 text-secondary/90">
-                    <FileCheck className="w-3 h-3 shrink-0 text-emerald-500" />
-                    <span className="font-mono text-foreground/80">{b.path}</span>
+                  <div
+                    key={i}
+                    className="flex items-center gap-2 text-muted-foreground"
+                  >
+                    <FileCheck className="w-3 h-3 shrink-0 text-emerald-500/80" />
+                    <span className="font-mono text-foreground/70 line-through decoration-muted-foreground/40">
+                      {b.path}
+                    </span>
                   </div>
                 ) : (
-                  <div key={i} className="flex items-center gap-2 text-secondary/90">
+                  <div
+                    key={i}
+                    className="flex items-center gap-2 text-muted-foreground"
+                  >
                     <FilePen className="w-3 h-3 shrink-0 text-primary animate-pulse" />
-                    <span className="font-mono text-foreground/80">{b.path}</span>
-                    <span className="text-muted-foreground">…</span>
+                    <span
+                      className={`font-mono ${
+                        streaming
+                          ? "shimmer-text"
+                          : "text-foreground/80"
+                      }`}
+                    >
+                      {b.path}
+                    </span>
                   </div>
-                )
+                ),
               )}
             </div>
           )}
@@ -2480,11 +2524,12 @@ function ChatPanel({
                   />
                 ))}
 
-                {/* Footer: Checkpoint on its own line, then full-width
-                    "Worked for…" accordion row with the chevron pinned to
-                    the right. Clicking anywhere on the row toggles the
-                    cost details below. */}
-                <div className="pt-1 space-y-1.5 text-xs text-secondary">
+                {/* Footer: Checkpoint on its own line, then an inline
+                    "Worked for…" collapsible — chevron + text, no card
+                    chrome. Matches the rork.com / Claude pattern of
+                    inline collapsibles instead of accordion pills.
+                    Clicking the row toggles the cost details below. */}
+                <div className="pt-1 space-y-1 text-xs text-muted-foreground">
                   <button
                     onClick={() =>
                       toast.success(`Restored to checkpoint · Build #${b.number}`)
@@ -2497,20 +2542,21 @@ function ChatPanel({
                   <button
                     onClick={() => setOpenBuildId(open ? null : b.id)}
                     aria-expanded={open}
-                    className="builder-chat-accordion-trigger w-full flex items-center justify-between gap-2 px-2.5 py-2 font-mono text-left"
+                    className="inline-flex items-center gap-1.5 font-mono hover:text-foreground transition-colors text-left"
                   >
-                    <span>Worked for {durationLabel}</span>
-                    <ChevronDown
-                      className={`w-3.5 h-3.5 shrink-0 transition-transform ${
-                        open ? "rotate-180" : ""
+                    <ChevronRight
+                      className={`w-3 h-3 shrink-0 transition-transform duration-150 ${
+                        open ? "rotate-90" : ""
                       }`}
                     />
+                    <span>Worked for {durationLabel}</span>
                   </button>
                 </div>
 
-                {/* Expanded price details */}
+                {/* Expanded price details — indented under the row,
+                    no card background, just a subtle left rule. */}
                 {open && (
-                  <div className="builder-chat-accordion-body mt-2 p-3 space-y-2.5 text-xs animate-in fade-in slide-in-from-top-1 duration-150">
+                  <div className="mt-2 ml-4 pl-3 border-l border-border/40 space-y-2 text-xs animate-in fade-in slide-in-from-top-1 duration-150">
                     <div className="flex items-center justify-between">
                       <span className="text-secondary">Model</span>
                       <span className="font-mono text-foreground">{b.model}</span>
@@ -2575,10 +2621,12 @@ function ChatPanel({
               </div>
             )}
 
-            {/* The AI's prose — calm, muted, no animation. This is where
-                the model tells the user what it is about to do. */}
+            {/* The AI's prose — muted, with a left-to-right shimmer
+                applied to the in-flight tail (last paragraph and any
+                currently-writing file label) so the user can see at
+                a glance which line is "working" right now. */}
             <div className="text-sm leading-relaxed min-h-[1.4em] whitespace-pre-wrap break-words text-muted-foreground">
-              <FileNoticeText text={typed} />
+              <FileNoticeText text={typed} streaming={isStreaming} />
             </div>
 
             {/* The per-step icon list used to live here, but the AI's prose
@@ -2614,11 +2662,25 @@ function ChatPanel({
                 isLast &&
                 planConversation.status === "asking" &&
                 m.suggestions.length > 0;
+              // Mid-stream shimmer: the last assistant message is
+              // "working" until either suggestion chips arrive (for a
+              // question turn) or the conversation flips to "ready"
+              // (for the final plan turn). Either signal means the
+              // SSE turn event has landed and the text is final.
+              const isMidStream =
+                isLast &&
+                planConversation.status !== "ready" &&
+                m.suggestions.length === 0 &&
+                m.content.length > 0;
               return (
                 <div key={`pm-${i}`} className="space-y-1.5">
                   <div className="flex justify-start">
                     <div className="max-w-[88%] px-3 py-1.5 rounded-2xl rounded-bl-md bg-background border border-border/70 text-sm leading-snug text-foreground whitespace-pre-wrap break-words">
-                      {m.content || (
+                      {m.content ? (
+                        <span className={isMidStream ? "shimmer-text" : ""}>
+                          {m.content}
+                        </span>
+                      ) : (
                         <span className="text-secondary italic">…</span>
                       )}
                     </div>
