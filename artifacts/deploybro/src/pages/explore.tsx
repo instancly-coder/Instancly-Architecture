@@ -43,7 +43,9 @@ function AuthorBadge({
   size?: "sm" | "xs";
 }) {
   const isDeployBro = author === "deploybro";
-  const dim = size === "sm" ? "w-5 h-5" : "w-4 h-4";
+  const dim = size === "sm" ? "w-7 h-7" : "w-6 h-6";
+  const logoH = size === "sm" ? "h-3.5" : "h-3";
+  const initialText = size === "sm" ? "text-[11px]" : "text-[10px]";
   const text = size === "sm" ? "text-xs" : "text-[11px]";
 
   if (isDeployBro) {
@@ -64,7 +66,7 @@ function AuthorBadge({
             src={deploybroLogoUrl}
             alt=""
             draggable={false}
-            className="h-2.5 w-auto select-none"
+            className={`${logoH} w-auto select-none`}
           />
         </span>
         <span className="truncate">by DeployBro</span>
@@ -78,7 +80,7 @@ function AuthorBadge({
   return (
     <span className={`inline-flex items-center gap-1.5 min-w-0 ${text} text-secondary`}>
       <span
-        className={`${dim} rounded-full bg-gradient-to-br from-blue-500 via-blue-900 to-black flex items-center justify-center shrink-0 overflow-hidden text-[9px] font-semibold text-white`}
+        className={`${dim} rounded-full bg-gradient-to-br from-blue-500 via-blue-900 to-black flex items-center justify-center shrink-0 overflow-hidden ${initialText} font-semibold text-white`}
         aria-hidden
       >
         {validHttpUrl ? (
