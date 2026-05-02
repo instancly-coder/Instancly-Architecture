@@ -2167,12 +2167,18 @@ export default function Builder() {
         set.add("/" + m[1]);
         continue;
       }
-      m = p.match(/^pages\/([a-z0-9][a-z0-9_-]*)\.[jt]sx?$/i);
-      if (
-        m &&
-        !["index", "_app", "_document", "_error"].includes(m[1].toLowerCase())
-      ) {
-        set.add("/" + m[1]);
+      // Pages Router supports nested static routes like
+      // pages/blog/index.tsx (→ /blog) and pages/about/team.tsx
+      // (→ /about/team). Match the full sub-path, then trim a
+      // trailing /index and skip dynamic/private/special segments.
+      m = p.match(/^pages\/(.+)\.[jt]sx?$/i);
+      if (m) {
+        let route = m[1];
+        if (/(^|\/)_/.test(route)) continue; // _app, _document, _error, _layout, …
+        if (/[[\](){}@]/.test(route)) continue; // dynamic, route groups
+        route = route.replace(/\/index$/i, "");
+        if (route.toLowerCase() === "index" || route === "") continue;
+        set.add("/" + route);
       }
     }
     return Array.from(set).sort((a, b) =>
@@ -4220,6 +4226,8 @@ function PreviewPane({
   viewport,
   isBuilding,
   iframeRef,
+  previewPath = "/",
+  onPathChange,
 }: {
   username: string;
   slug: string;
@@ -4227,6 +4235,8 @@ function PreviewPane({
   setViewport: (v: "desktop" | "tablet" | "mobile") => void;
   isBuilding?: boolean;
   iframeRef?: React.RefObject<HTMLIFrameElement | null>;
+  previewPath?: string;
+  onPathChange?: (path: string) => void;
 }) {
   const { data: files } = useProjectFiles(username, slug);
   const hasIndex = !!files?.some((f) => f.path === "index.html");
@@ -4234,7 +4244,33 @@ function PreviewPane({
   // frontend talks to via VITE_API_BASE_URL. Build the iframe src off that.
   const apiBase =
     (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "/api";
+  // The iframe stays mounted with this BASE src for its entire lifetime
+  // — page navigation happens imperatively via contentWindow.location
+  // so a dropdown click doesn't trigger a React remount (which would
+  // reflash the building/empty overlay and dump scroll position).
   const previewSrc = `${apiBase.replace(/\/+$/, "")}/preview/${username}/${slug}/`;
+
+  // Pathname prefix the iframe lives under inside the parent's
+  // location bar; we strip it before reporting the in-app path back
+  // up so the URL pill always reads as something like "/" or
+  // "/about" rather than the long opaque proxy path.
+  const inAppPrefix = useMemo(() => {
+    let base = apiBase.replace(/\/+$/, "");
+    if (/^https?:\/\//i.test(base)) {
+      try {
+        base = new URL(base).pathname.replace(/\/+$/, "");
+      } catch {
+        // fall through with the original string
+      }
+    }
+    return `${base}/preview/${username}/${slug}`;
+  }, [apiBase, username, slug]);
+
+  const stripPrefix = (pathname: string): string => {
+    if (!pathname.startsWith(inAppPrefix)) return "/";
+    const rest = pathname.slice(inAppPrefix.length);
+    return !rest || rest === "/" ? "/" : rest;
+  };
 
   // Three distinct empty states sit on top of the white "device" frame:
   //   1. Files still loading from the server  → soft loader.
@@ -4268,6 +4304,103 @@ function PreviewPane({
     setIframeLoaded(false);
     setIframeBlank(true);
   }, [previewSrc, hasIndex]);
+
+  // While a parent-initiated navigation is in flight (dropdown click
+  // → assign(); or post-Refresh re-drive to the persisted path), the
+  // iframe briefly still reports its OLD pathname. Without a guard,
+  // the 500ms poll would race ahead and call onPathChange with the
+  // stale value, stomping the parent's desired path back to the old
+  // page. We park the in-flight target + start timestamp here so the
+  // poll knows to skip mirroring until the iframe has actually
+  // settled on it — but if the nav never lands on the exact target
+  // (server redirect, 404, app catches the URL and renders elsewhere)
+  // the timestamp lets us bail after PENDING_NAV_TIMEOUT_MS so
+  // mirroring isn't permanently suppressed.
+  const PENDING_NAV_TIMEOUT_MS = 4000;
+  const pendingPathRef = useRef<{ target: string; startedAt: number } | null>(
+    null,
+  );
+
+  // Normalize trailing slashes so "/about" and "/about/" never
+  // ping-pong each other through the poll/assign cycle.
+  const normalizePath = (p: string): string => {
+    if (!p) return "/";
+    const trimmed = p.replace(/\/+$/, "");
+    return trimmed === "" ? "/" : trimmed;
+  };
+
+  // Drive the iframe to whatever path the parent currently wants.
+  // Compares against the live `contentWindow.location` so a no-op
+  // (parent re-render with the same path the iframe is already at)
+  // doesn't trigger a redundant assign() — that matters because
+  // assign() fires `load` and resets our blank/loaded flags, which
+  // would briefly flash the overlay.
+  useEffect(() => {
+    if (!hasIndex || !iframeLoaded) return;
+    const frame = effectiveIframeRef.current;
+    if (!frame) return;
+    const target = normalizePath(previewPath);
+    try {
+      const cur = normalizePath(stripPrefix(frame.contentWindow?.location.pathname ?? ""));
+      if (cur === target) {
+        pendingPathRef.current = null;
+        return;
+      }
+      pendingPathRef.current = { target, startedAt: Date.now() };
+      const url = `${previewSrc}${target.replace(/^\//, "")}`;
+      frame.contentWindow?.location.assign(url);
+    } catch {
+      // Same-origin guard failed; surface as a hard nav fallback so
+      // the user still gets to the page they clicked.
+      pendingPathRef.current = { target, startedAt: Date.now() };
+      frame.src = `${previewSrc}${target.replace(/^\//, "")}`;
+    }
+    // stripPrefix/normalizePath are stable closures over inAppPrefix;
+    // depending on inAppPrefix is enough to track their identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewPath, hasIndex, iframeLoaded, previewSrc, inAppPrefix]);
+
+  // Mirror in-iframe navigation back into the URL pill. Next.js
+  // client routing changes `location.pathname` without firing a
+  // top-level `load` event on the iframe, so a 500ms poll is the
+  // simplest reliable signal — cheap, doesn't require the generated
+  // app to opt in via postMessage, and stops the moment the iframe
+  // unmounts. While a parent-initiated nav is pending we suppress
+  // mirroring until the iframe catches up to the target, otherwise
+  // the stale pre-assign() pathname would clobber the parent state.
+  useEffect(() => {
+    if (!hasIndex || !iframeLoaded || !onPathChange) return;
+    const id = window.setInterval(() => {
+      const frame = effectiveIframeRef.current;
+      if (!frame) return;
+      try {
+        const raw = frame.contentWindow?.location.pathname;
+        if (!raw) return;
+        const here = normalizePath(stripPrefix(raw));
+        const pending = pendingPathRef.current;
+        if (pending) {
+          // Clear the pending flag once the iframe has actually
+          // landed on the target — that's the happy path. If the
+          // nav never settles on the exact target (server redirect,
+          // 404, the app eats the URL and renders /not-found, …),
+          // bail after the timeout so we don't suppress mirroring
+          // forever. In that case mirror whatever the iframe is
+          // ACTUALLY showing now, since that's the user's reality.
+          if (here === pending.target) {
+            pendingPathRef.current = null;
+            return;
+          }
+          if (Date.now() - pending.startedAt < PENDING_NAV_TIMEOUT_MS) return;
+          pendingPathRef.current = null;
+        }
+        onPathChange(here);
+      } catch {
+        // cross-origin or transient; skip this tick
+      }
+    }, 500);
+    return () => window.clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasIndex, iframeLoaded, onPathChange, inAppPrefix]);
 
   const checkBlank = () => {
     const frame = effectiveIframeRef.current;
