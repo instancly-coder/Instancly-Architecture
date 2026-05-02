@@ -29,6 +29,7 @@ import {
   User as UserIcon,
 } from "lucide-react";
 import { BrandLogo } from "./brand-logo";
+import { ThemeToggle } from "./theme-toggle";
 import { useMe } from "@/lib/api";
 import { authClient, authConfigured } from "@/auth";
 import { clearDevBypass } from "@/lib/dev-bypass";
@@ -141,7 +142,10 @@ function SideNavContent({
 
   return (
     <>
-      {/* Top bar: logo (+ optional close button on mobile) */}
+      {/* Top bar: logo on the left; theme toggle + (mobile-only)
+          close button on the right. The theme toggle is rendered in
+          both desktop and mobile chromes so it's always reachable
+          from the same spot in the rail. */}
       <div className="h-14 flex items-center justify-between px-5 shrink-0">
         <Link
           href={me ? "/dashboard" : "/"}
@@ -151,15 +155,18 @@ function SideNavContent({
         >
           <BrandLogo className="h-5 w-auto text-foreground" />
         </Link>
-        {showCloseButton ? (
-          <button
-            onClick={onClose}
-            className="w-9 h-9 rounded-md flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
-            aria-label="Close menu"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        ) : null}
+        <div className="flex items-center gap-1">
+          <ThemeToggle />
+          {showCloseButton ? (
+            <button
+              onClick={onClose}
+              className="w-9 h-9 rounded-md flex items-center justify-center text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
+              aria-label="Close menu"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {/* Search */}
