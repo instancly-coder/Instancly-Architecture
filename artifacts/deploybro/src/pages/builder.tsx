@@ -3622,9 +3622,6 @@ function ClarificationBubble({
           <MessageSquare className="w-3.5 h-3.5 text-primary" />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-[10px] uppercase tracking-wider font-mono text-primary mb-1">
-            Quick question
-          </div>
           <div className="text-sm text-foreground leading-snug">
             {clarification.question}
           </div>
