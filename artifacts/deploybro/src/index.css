@@ -495,7 +495,11 @@
   border-top: none;
 }
 .builder-chat-input-shell {
-  background-color: hsl(var(--surface-raised));
+  /* Match the card surface (`bg-surface`) so the prompt reads as
+     the same elevation as the surrounding feature/template cards
+     in the hero and the project cards/panels in the builder,
+     instead of standing one step brighter on `surface-raised`. */
+  background-color: hsl(var(--surface));
   border: none;
 }
 .builder-chat-accordion-trigger {
@@ -521,7 +525,11 @@
 .dark .builder-chat-input-bar {
   background-color: #000;
 }
-.dark .builder-chat-input-shell,
+.dark .builder-chat-input-shell {
+  /* Track the card surface in dark mode too so hero + builder
+     prompts sit on the same plane as the cards around them. */
+  background-color: hsl(var(--surface));
+}
 .dark .builder-chat-accordion-trigger,
 .dark .builder-chat-accordion-body {
   background-color: hsl(0 0% 14%);
