@@ -198,14 +198,25 @@
 
 /* Streaming-text shimmer: paints the text with a horizontal gradient
    (dim base color with a single brighter band) and slides that gradient
-   left → right so a highlight sweeps through the glyphs. The gradient
-   image is sized at 300% of the text width so even at the extremes of
-   the animation the text is fully covered (otherwise the no-repeat
-   gradient slides off and the glyphs vanish, since their fill is
-   transparent for the background-clip trick to work). */
+   so a highlight sweeps left → right through the glyphs. The gradient
+   image is sized at 300% of the text width so the visible window
+   (always the middle third of the image) is fully covered no matter
+   where the bright band sits — without that the no-repeat gradient
+   would slide off and the glyphs would vanish, since their fill is
+   transparent for the background-clip trick to work.
+
+   `background-position` percentages are relative to (container − image),
+   which is negative when the image is wider than the container, so the
+   numbers feel inverted: 100% positions the image so its left edge sits
+   far to the LEFT of the container (visible area = right third → bright
+   band off-screen left), and 0% positions it with the left edge at the
+   container's left edge (visible area = left third → bright band
+   off-screen right). Animating 100% → 0% therefore sweeps the bright
+   band left-to-right across the visible text, exactly like a spotlight
+   crossing a marquee. */
 @keyframes shimmer-sweep {
-  0%   { background-position: -200% 0; }
-  100% { background-position:    0% 0; }
+  0%   { background-position: 100% 0; }
+  100% { background-position:   0% 0; }
 }
 
 .shimmer-text {
@@ -227,12 +238,13 @@
 }
 
 /* Respect users who've requested reduced motion: pin the gradient at
-   the highlighted phase so the text stays readable in the foreground
-   color instead of strobing across the screen. */
+   the highlighted phase (50% positions the bright band dead-centre of
+   the visible text) so the text stays readable in the foreground
+   colour instead of strobing across the screen. */
 @media (prefers-reduced-motion: reduce) {
   .shimmer-text {
     animation: none;
-    background-position: -100% 0;
+    background-position: 50% 0;
   }
 }
 
