@@ -2,7 +2,11 @@ import { type ReactNode } from "react";
 import { Link } from "wouter";
 import { Menu } from "lucide-react";
 import { BrandLogo } from "./brand-logo";
-import { DesktopSideNav, useMobileUserMenu } from "./mobile-user-menu";
+import { DesktopSideNav } from "./mobile-user-menu";
+// Import the hook from the dedicated context module (not from
+// `mobile-user-menu`) so HMR edits to the nav components can't
+// invalidate the Context identity this layout depends on.
+import { useMobileUserMenu } from "./mobile-user-menu-context";
 
 /**
  * Shell for every signed-in dashboard route.

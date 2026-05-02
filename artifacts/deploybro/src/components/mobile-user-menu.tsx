@@ -1,13 +1,19 @@
 import {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from "react";
 import { Link, useLocation } from "wouter";
+import {
+  MobileUserMenuContext,
+  type MobileUserMenuContextValue,
+} from "./mobile-user-menu-context";
+
+// Re-export the hook so existing call sites keep working without
+// every consumer needing to know about the split module.
+export { useMobileUserMenu } from "./mobile-user-menu-context";
 import {
   X,
   Search,
@@ -33,22 +39,6 @@ import { ThemeToggle } from "./theme-toggle";
 import { useMe } from "@/lib/api";
 import { authClient, authConfigured } from "@/auth";
 import { clearDevBypass } from "@/lib/dev-bypass";
-
-type MobileUserMenuContextValue = {
-  open: boolean;
-  openMenu: () => void;
-  closeMenu: () => void;
-};
-
-const MobileUserMenuContext = createContext<MobileUserMenuContextValue | null>(null);
-
-export function useMobileUserMenu() {
-  const ctx = useContext(MobileUserMenuContext);
-  if (!ctx) {
-    throw new Error("useMobileUserMenu must be used within MobileUserMenuProvider");
-  }
-  return ctx;
-}
 
 type NavItem = {
   href: string;
