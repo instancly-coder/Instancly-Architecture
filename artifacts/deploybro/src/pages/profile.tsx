@@ -9,8 +9,7 @@ import {
   useUpdateProject,
   type ApiProjectListItem,
 } from "@/lib/api";
-import { MarketingNav } from "@/components/marketing-nav";
-import { MarketingFooter } from "@/components/marketing-footer";
+import { DashboardLayout } from "@/components/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import { PublishDetailsDialog } from "@/components/publish-details-dialog";
 
@@ -195,22 +194,20 @@ export default function Profile() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background text-foreground flex flex-col">
-        <MarketingNav />
-        <main className="max-w-5xl mx-auto p-8 text-secondary">Loading…</main>
-      </div>
+      <DashboardLayout>
+        <div className="max-w-5xl mx-auto p-8 text-secondary">Loading…</div>
+      </DashboardLayout>
     );
   }
 
   if (isError || !user) {
     return (
-      <div className="min-h-screen bg-background text-foreground flex flex-col">
-        <MarketingNav />
-        <main className="max-w-5xl mx-auto p-8">
+      <DashboardLayout>
+        <div className="max-w-5xl mx-auto p-8">
           <h1 className="text-2xl font-bold mb-2">User not found</h1>
           <p className="text-secondary">No user with the handle @{username}.</p>
-        </main>
-      </div>
+        </div>
+      </DashboardLayout>
     );
   }
 
@@ -223,10 +220,8 @@ export default function Profile() {
     : projects.filter((p) => p.isPublic);
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col">
-      <MarketingNav />
-
-      <main className="max-w-5xl mx-auto p-8 w-full">
+    <DashboardLayout>
+      <div className="max-w-5xl mx-auto p-8 w-full">
         <div className="flex flex-col md:flex-row gap-12">
           <div className="w-full md:w-64 shrink-0">
             <div
@@ -289,11 +284,7 @@ export default function Profile() {
             )}
           </div>
         </div>
-      </main>
-
-      <div className="mt-auto">
-        <MarketingFooter />
       </div>
-    </div>
+    </DashboardLayout>
   );
 }
