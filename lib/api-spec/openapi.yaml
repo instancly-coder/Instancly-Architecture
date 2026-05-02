@@ -1152,6 +1152,9 @@ components:
           type: array
           items: { type: string }
           description: Profile skill / topic chips.
+        bannerUrl:
+          type: string
+          description: Wide cover image URL shown at the top of the profile. Empty = use placeholder gradient.
         plan: { type: string }
         balance: { type: number }
         status: { type: string }
@@ -1181,6 +1184,7 @@ components:
         - location
         - websiteUrl
         - skills
+        - bannerUrl
         - plan
         - balance
         - status
@@ -1209,6 +1213,9 @@ components:
           type: array
           items: { type: string }
           description: Profile skill / topic chips.
+        bannerUrl:
+          type: string
+          description: Wide cover image URL shown at the top of the profile. Empty = use placeholder gradient.
         avatarUrl:
           type: string
           nullable: true
@@ -1228,6 +1235,7 @@ components:
         - location
         - websiteUrl
         - skills
+        - bannerUrl
         - avatarUrl
         - plan
         - balance
@@ -1244,6 +1252,7 @@ components:
         tagline: { type: string }
         location: { type: string }
         websiteUrl: { type: string }
+        bannerUrl: { type: string }
         skills:
           type: array
           items: { type: string }

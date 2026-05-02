@@ -13,5 +13,6 @@ export interface UpdateMeBody {
   tagline?: string;
   location?: string;
   websiteUrl?: string;
+  bannerUrl?: string;
   skills?: string[];
 }

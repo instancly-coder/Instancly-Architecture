@@ -131,6 +131,7 @@ function toMe(user: typeof usersTable.$inferSelect): typeof GetMeResponse._type 
     location: user.location,
     websiteUrl: user.websiteUrl,
     skills: user.skills,
+    bannerUrl: user.bannerUrl,
     plan: user.plan,
     balance: Number(user.balance),
     status: user.status,
@@ -665,8 +666,16 @@ router.patch("/me", async (req: Request, res: Response): Promise<void> => {
     res.status(401).json({ status: "error", message: "Unauthenticated" });
     return;
   }
-  const { username, displayName, bio, tagline, location, websiteUrl, skills } =
-    req.body ?? {};
+  const {
+    username,
+    displayName,
+    bio,
+    tagline,
+    location,
+    websiteUrl,
+    bannerUrl,
+    skills,
+  } = req.body ?? {};
   const updates: Record<string, unknown> = {};
 
   if (typeof displayName === "string") {
@@ -719,6 +728,17 @@ router.patch("/me", async (req: Request, res: Response): Promise<void> => {
       return;
     }
     updates.websiteUrl = trimmed;
+  }
+
+  if (typeof bannerUrl === "string") {
+    // 500 chars is generous enough for normal hosted-image URLs but
+    // small enough that we don't end up storing a huge data: URI.
+    const trimmed = bannerUrl.trim();
+    if (trimmed.length > 500) {
+      res.status(400).json({ status: "error", message: "Banner URL must be at most 500 chars." });
+      return;
+    }
+    updates.bannerUrl = trimmed;
   }
 
   // Skills is the chip list at the bottom of the profile sidebar. We

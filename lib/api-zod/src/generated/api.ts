@@ -56,6 +56,11 @@ export const GetMeResponse = zod.object({
     ),
   websiteUrl: zod.string().describe("Personal website URL. Empty = unset."),
   skills: zod.array(zod.string()).describe("Profile skill \/ topic chips."),
+  bannerUrl: zod
+    .string()
+    .describe(
+      "Wide cover image URL shown at the top of the profile. Empty = use placeholder gradient.",
+    ),
   plan: zod.string(),
   balance: zod.number(),
   status: zod.string(),
@@ -87,6 +92,7 @@ export const UpdateMeBody = zod.object({
   tagline: zod.string().optional(),
   location: zod.string().optional(),
   websiteUrl: zod.string().optional(),
+  bannerUrl: zod.string().optional(),
   skills: zod.array(zod.string()).optional(),
 });
 
@@ -106,6 +112,11 @@ export const UpdateMeResponse = zod.object({
     ),
   websiteUrl: zod.string().describe("Personal website URL. Empty = unset."),
   skills: zod.array(zod.string()).describe("Profile skill \/ topic chips."),
+  bannerUrl: zod
+    .string()
+    .describe(
+      "Wide cover image URL shown at the top of the profile. Empty = use placeholder gradient.",
+    ),
   plan: zod.string(),
   balance: zod.number(),
   status: zod.string(),
@@ -187,6 +198,11 @@ export const CompleteOnboardingResponse = zod.object({
     ),
   websiteUrl: zod.string().describe("Personal website URL. Empty = unset."),
   skills: zod.array(zod.string()).describe("Profile skill \/ topic chips."),
+  bannerUrl: zod
+    .string()
+    .describe(
+      "Wide cover image URL shown at the top of the profile. Empty = use placeholder gradient.",
+    ),
   plan: zod.string(),
   balance: zod.number(),
   status: zod.string(),
@@ -321,6 +337,11 @@ export const GetUserResponse = zod.object({
     ),
   websiteUrl: zod.string().describe("Personal website URL. Empty = unset."),
   skills: zod.array(zod.string()).describe("Profile skill \/ topic chips."),
+  bannerUrl: zod
+    .string()
+    .describe(
+      "Wide cover image URL shown at the top of the profile. Empty = use placeholder gradient.",
+    ),
   avatarUrl: zod.string().nullable(),
   plan: zod.string(),
   balance: zod.number(),

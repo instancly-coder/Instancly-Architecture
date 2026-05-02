@@ -20,6 +20,8 @@ export interface User {
   websiteUrl: string;
   /** Profile skill / topic chips. */
   skills: string[];
+  /** Wide cover image URL shown at the top of the profile. Empty = use placeholder gradient. */
+  bannerUrl: string;
   avatarUrl: string | null;
   plan: string;
   balance: number;

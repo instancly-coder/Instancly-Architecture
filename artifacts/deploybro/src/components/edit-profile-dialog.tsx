@@ -19,6 +19,7 @@ const TAGLINE_MAX = 120;
 const BIO_MAX = 280;
 const LOCATION_MAX = 80;
 const WEBSITE_MAX = 200;
+const BANNER_MAX = 500;
 const SKILL_MAX = 32;
 const SKILLS_MAX_COUNT = 12;
 
@@ -125,6 +126,7 @@ export function EditProfileDialog({
   const [bio, setBio] = useState(me.bio);
   const [location, setLocation] = useState(me.location);
   const [websiteUrl, setWebsiteUrl] = useState(me.websiteUrl);
+  const [bannerUrl, setBannerUrl] = useState(me.bannerUrl);
   const [skills, setSkills] = useState<string[]>(me.skills);
 
   const hydratedRef = useRef(false);
@@ -140,6 +142,7 @@ export function EditProfileDialog({
     setBio(me.bio);
     setLocation(me.location);
     setWebsiteUrl(me.websiteUrl);
+    setBannerUrl(me.bannerUrl);
     // Normalize legacy duplicates here too (case-insensitive),
     // mirroring the server-side dedupe in PATCH /me. Without this,
     // a stored `["React","react"]` would render two identical chips
@@ -170,6 +173,7 @@ export function EditProfileDialog({
         bio: bio.trim(),
         location: location.trim(),
         websiteUrl: websiteUrl.trim(),
+        bannerUrl: bannerUrl.trim(),
         skills,
       },
       {
@@ -255,6 +259,29 @@ export function EditProfileDialog({
                 placeholder="alex.design"
               />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="ep-banner">Cover image URL</Label>
+            <Input
+              id="ep-banner"
+              type="url"
+              value={bannerUrl}
+              onChange={(e) => setBannerUrl(e.target.value)}
+              maxLength={BANNER_MAX}
+              placeholder="https://images.unsplash.com/…"
+            />
+            {bannerUrl.trim() && (
+              <div
+                className="mt-2 w-full h-24 rounded-md border border-border bg-cover bg-center bg-surface-raised"
+                style={{ backgroundImage: `url(${JSON.stringify(bannerUrl.trim())})` }}
+                aria-label="Cover image preview"
+                role="img"
+              />
+            )}
+            <p className="text-[11px] text-secondary">
+              Paste an https:// link to an image. Leave blank for the default gradient.
+            </p>
           </div>
 
           <ChipList

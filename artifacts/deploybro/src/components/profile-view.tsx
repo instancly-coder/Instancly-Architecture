@@ -40,6 +40,24 @@ function toHref(raw: string): string | null {
   }
 }
 
+// For the banner image, we only accept http(s) URLs we can actually
+// resolve into an absolute URL — anything else (relative paths, junk
+// strings, malformed input) collapses to the gradient placeholder.
+// We deliberately do NOT auto-prefix `https://` here the way `toHref`
+// does, because a malformed banner URL would otherwise render a
+// broken-image icon instead of the placeholder.
+function toBannerSrc(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  try {
+    const u = new URL(trimmed);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Shared Framer-style profile body — sidebar (avatar / name / tagline /
  * bio / Edit+Share or Share / icon-row metadata / skill chips / stats)
@@ -83,9 +101,27 @@ export function ProfileView({
   const location = user.location.trim();
   const websiteUrl = user.websiteUrl.trim();
   const websiteHref = toHref(websiteUrl);
+  const bannerSrc = toBannerSrc(user.bannerUrl);
 
   return (
     <>
+      {/* Cover banner. Renders the user's image if they've set one,
+          otherwise a subtle gradient placeholder so the page still
+          has the same vertical rhythm. The avatar in the sidebar
+          below uses a negative top margin to overlap the banner's
+          bottom edge, matching the social-profile convention. */}
+      <div
+        className={
+          "w-full h-32 md:h-44 border-b border-border " +
+          (bannerSrc
+            ? "bg-cover bg-center"
+            : "bg-gradient-to-r from-blue-900/40 via-blue-700/30 to-purple-900/40")
+        }
+        style={bannerSrc ? { backgroundImage: `url(${JSON.stringify(bannerSrc)})` } : undefined}
+        role={bannerSrc ? "img" : undefined}
+        aria-label={bannerSrc ? `${user.displayName} cover image` : undefined}
+      />
+
       <div className="p-4 md:p-8 w-full">
         <div className="flex flex-col md:flex-row gap-12">
           {/* Left sidebar — Framer-style profile card. Left-aligned
@@ -94,8 +130,12 @@ export function ProfileView({
               expert profile layout: small avatar, name, headline, bio,
               primary action(s), icon rows of metadata, skill chips). */}
           <aside className="w-full md:w-72 shrink-0">
+            {/* `-mt-12 md:-mt-16` lifts the avatar so its top half
+                overlaps the cover banner above. The thicker
+                background-colored ring (border-4 border-background)
+                punches the avatar out of the banner cleanly. */}
             <div
-              className="w-16 h-16 rounded-full border border-border flex items-center justify-center text-2xl font-bold mb-5 text-white shadow-lg bg-gradient-to-br from-blue-500 via-blue-900 to-black"
+              className="w-20 h-20 -mt-12 md:-mt-16 rounded-full border-4 border-background flex items-center justify-center text-2xl font-bold mb-5 text-white shadow-lg bg-gradient-to-br from-blue-500 via-blue-900 to-black"
               aria-hidden="true"
             >
               {user.username[0].toUpperCase()}

@@ -43,6 +43,7 @@ router.get("/users/:username", async (req: Request, res: Response): Promise<void
       location: user.location,
       websiteUrl: user.websiteUrl,
       skills: user.skills,
+      bannerUrl: user.bannerUrl,
       avatarUrl: user.avatarUrl,
       plan: user.plan,
       balance: Number(user.balance),

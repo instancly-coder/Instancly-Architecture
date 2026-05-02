@@ -24,6 +24,11 @@ export const usersTable = pgTable("users", {
   // the column itself is permissive so historical data isn't lost
   // if those caps shift later.
   skills: text("skills").array().default(sql`'{}'::text[]`).notNull(),
+  // Wide cover image rendered at the top of the public profile.
+  // Stored as a URL (same convention as `avatarUrl`); empty string =
+  // "use the gradient placeholder". Length-capped on write so a hostile
+  // client can't dump a huge data: URI in here.
+  bannerUrl: text("banner_url").default("").notNull(),
   avatarUrl: text("avatar_url"),
   plan: text("plan").default("Free").notNull(),
   balance: numeric("balance", { precision: 12, scale: 2 }).default("0").notNull(),
