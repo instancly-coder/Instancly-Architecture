@@ -2696,6 +2696,15 @@ export default function Builder() {
           )}
 
           <div className="flex-1 overflow-hidden relative">
+            {/* `key={iframeKey}` on PreviewPane is load-bearing: it
+                forces a fresh PreviewPane instance after each build,
+                which is what resets `iframeLoaded`/`iframeBlank` so
+                the post-build reload mask + nav effects work. The
+                PreviewPane's internal reset effect only depends on
+                `previewSrc` and `hasIndex` — neither changes when
+                `isBuilding` toggles — so removing this key would
+                break the building-state takeover transition. Don't
+                drop it. */}
             {activeTab === "preview" && (
               <PreviewPane
                 key={iframeKey}
@@ -4274,13 +4283,18 @@ function PreviewPane({
 
   // Three distinct empty states sit on top of the white "device" frame:
   //   1. Files still loading from the server  → soft loader.
-  //   2. A build is in flight + no index yet  → branded "building" splash
-  //      with shimmer skeletons that mimic a page being painted in.
+  //   2. A build is in flight                 → branded "building" splash
+  //      that takes over the WHOLE preview area for the duration of
+  //      the stream. We do this even when an `index.html` already
+  //      exists from a prior build so the user gets an unmistakable
+  //      "I'm working on it" cue instead of a stale-looking page that
+  //      silently gets replaced under them. The iframe remounts after
+  //      the build ends, and the blank-screen overlay below covers
+  //      the brief reload flash.
   //   3. No build yet at all                  → branded "no preview" splash
   //      that nudges the user to send a prompt.
-  // Once `index.html` exists we hand the frame off to the live iframe.
-  const showBuilding = !hasIndex && isBuilding;
-  const showEmpty = !hasIndex && !isBuilding && files !== undefined;
+  const showBuilding = isBuilding;
+  const showEmpty = !isBuilding && !hasIndex && files !== undefined;
 
   // ─── Blank-screen guard ─────────────────────────────────────────────
   // Even after `index.html` exists, the iframe can flash white in two
