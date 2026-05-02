@@ -39,6 +39,7 @@ import { aiLimiter } from "../middlewares/rate-limits";
 import { provisionAppDatabase, parentProjectId } from "../lib/neon";
 import { encryptSecret, decryptSecret } from "../lib/secret-cipher";
 import { logger } from "../lib/logger";
+import { getPrompt, renderPrompt } from "../lib/prompts";
 
 const router: IRouter = Router();
 
@@ -615,66 +616,21 @@ router.post(
     // tends to keep asking forever.
     const questionsAsked = messages.filter((m) => m.role === "assistant").length;
 
-    const planSystemPrompt = `You are a friendly AI design assistant interviewing a user to plan their website. Your job is to ask SHORT, focused questions ONE AT A TIME until you have enough info, then produce a final structured plan.
-
-User's original brief:
-"""
-${originalPrompt}
-"""${refsLine}
-
-${isFirstBuild ? "This is a FIRST build — you'll be planning the whole site." : `This is an ITERATION on an existing project (${existingPaths.length} files). Plan only what the user is asking to add or change. Existing paths: ${existingPaths.slice(0, 20).map((f) => f.path).join(", ")}.`}
-
-Topics to cover, in roughly this order. Skip any the user already addressed in the original brief or earlier in the conversation — DO NOT ask redundant questions.
-1. Purpose & audience — what is this site, who is it for?
-2. Tone & vibe — bold, friendly, minimal, playful, editorial, etc.
-3. Color direction — propose a few palette options.
-4. Typography — propose a few font pairings.
-5. Pages & key features — confirm what to include.
-
-Conversation rules:
-- Ask ONE question per turn. Keep it conversational and SHORT (1-2 sentences max).
-- ALWAYS provide 3-5 quick-pick \`suggestions\` the user can tap to answer in one click. Make suggestions CONCRETE and helpful:
-  - For colors: name + feel, e.g. "Warm earth tones", "Cool minimal blues", "Bold purple + lime", "Monochrome + accent"
-  - For fonts: pairing + feel, e.g. "Inter + Inter (clean & modern)", "Playfair + Source Sans (editorial)", "Space Grotesk + Inter (tech)", "DM Serif + DM Sans (warm)"
-  - For tone: a few words, e.g. "Bold & confident", "Friendly & casual", "Quiet & minimal", "Playful & quirky"
-  - For pages/features: short noun phrases, e.g. "Pricing page", "Blog", "Contact form", "You decide"
-- Always include a "You decide" or "Up to you" suggestion so the user can defer to your taste.
-- After ${Math.max(0, 4 - questionsAsked)} more question${4 - questionsAsked === 1 ? "" : "s"} you should have enough — output the final plan instead of asking another question. NEVER ask more than 5 questions total. So far you have asked ${questionsAsked}.
-- If the user's reply is vague ("sure", "whatever", "you pick"), do NOT ask a follow-up — pick something sensible and move on.
-
-Output STRICT JSON ONLY. No prose before/after, no markdown fences, no comments. Two valid shapes:
-
-QUESTION TURN:
-{
-  "kind": "question",
-  "text": "Your one short question here.",
-  "suggestions": ["Option A", "Option B", "Option C", "You decide"]
-}
-
-FINAL PLAN TURN (use when you have enough info):
-{
-  "kind": "plan",
-  "text": "One friendly sentence summarising what you're going to build.",
-  "plan": {
-    "projectName": string,
-    "summary": string,
-    "pages": string[],
-    "sections": [{"name": string, "description": string, "enabled": true}],
-    "colors": [{"name": string, "hex": "#RRGGBB"}],
-    "fonts": {"heading": string, "body": string},
-    "features": string[],
-    "copyTone": string
-  }
-}
-
-Plan rules (only relevant for the FINAL plan turn):
-- 4-6 named brand colors with valid #RRGGBB hex strings — no placeholder greys.
-- Sections cover the primary landing page comprehensively (Hero, Features, Social proof, Pricing, FAQ, CTA, Footer — pick what fits). All sections default to enabled: true.
-- Pages: 1-5 top-level pages.
-- Features: 3-6 short bullet points.
-- Use whatever the user told you in the conversation; for anything they deferred on, pick sensibly.
-
-Output ONLY the JSON object. Nothing else.`;
+    // Plan-stage prompt is sourced from prompts/plan.md (see lib/prompts.ts).
+    // Keeping it in markdown lets product/design tweak the interview flow
+    // without redeploying compiled TS, and gives the rest of the pipeline
+    // (clarify.md, build.md, verification.md) a uniform place to live.
+    const questionsLeft = Math.max(0, 4 - questionsAsked);
+    const planSystemPrompt = renderPrompt("plan", {
+      originalPrompt,
+      refsLine,
+      contextLine: isFirstBuild
+        ? "This is a FIRST build — you'll be planning the whole site."
+        : `This is an ITERATION on an existing project (${existingPaths.length} files). Plan only what the user is asking to add or change. Existing paths: ${existingPaths.slice(0, 20).map((f) => f.path).join(", ")}.`,
+      questionsAsked,
+      questionsLeft,
+      questionsLeftPlural: questionsLeft === 1 ? "" : "s",
+    });
 
     // Convert the turn history to Anthropic message format. We don't
     // include the suggestions in the assistant content — only the
@@ -1219,8 +1175,13 @@ router.post(
       //     no plan attached): keeps the older "write a numbered plan
       //     before code" behaviour as a fallback for any client that
       //     hasn't been updated.
+      // Final system prompt = giant inline build prompt (components-catalog)
+      // + the small build.md addendum (pipeline awareness, what verifier
+      // checks for) + plan-mode / approved-plan instructions.
       const systemPrompt =
         buildSystemPrompt(project.name, project.framework) +
+        "\n\n" +
+        getPrompt("build") +
         (approvedPlan
           ? buildApprovedPlanInstruction(approvedPlan)
           : planMode
@@ -1564,6 +1525,399 @@ router.post(
     } finally {
       if (!res.writableEnded) res.end();
     }
+  },
+);
+
+// ─── Clarification gate ──────────────────────────────────────────────
+// Stage 1 of the build pipeline. Called BEFORE /ai/build. A fast Haiku
+// call decides whether the user's prompt has enough detail to build
+// confidently, OR whether ONE specific clarifying question would
+// dramatically lift quality. The shape mirrors the plan turn's
+// "question" payload so the client can reuse the same suggestion-chip
+// UI to render the question.
+//
+// Response shapes (always 200, JSON):
+//   { ok: true }                                 → build can proceed as-is
+//   { ok: false, question: "...", suggestions: [...] }
+//
+// Iterations on existing projects ALWAYS pass through — the existing
+// code is the context, no clarification needed. Same for any prompt
+// over ~20 words or with attached URLs.
+router.post(
+  "/ai/clarify/:username/:slug",
+  aiLimiter,
+  requireAuth,
+  async (req: Request, res: Response): Promise<void> => {
+    const username = String(req.params.username);
+    const slug = String(req.params.slug);
+    const prompt = String(req.body?.prompt ?? "").trim();
+    const hasUrls = Array.isArray(req.body?.urls) && req.body.urls.length > 0;
+    const hasImages = Array.isArray(req.body?.images) && req.body.images.length > 0;
+
+    if (!prompt) {
+      res.status(400).json({
+        status: "error",
+        message: "Couldn't read your prompt — please try again.",
+      });
+      return;
+    }
+
+    const rows = await db
+      .select({ project: projectsTable, ownerId: usersTable.id })
+      .from(projectsTable)
+      .innerJoin(usersTable, eq(usersTable.id, projectsTable.userId))
+      .where(and(eq(usersTable.username, username), eq(projectsTable.slug, slug)))
+      .limit(1);
+    const project = rows[0]?.project;
+    const ownerId = rows[0]?.ownerId;
+    if (!project) {
+      res.status(404).json({ status: "error", message: "Project not found" });
+      return;
+    }
+    const authedUser = getAuthedUser(req);
+    if (!authedUser || authedUser.id !== ownerId) {
+      res.status(403).json({ status: "error", message: "Forbidden" });
+      return;
+    }
+
+    // Cheap fast-path checks before paying for a Haiku call. These
+    // mirror the rules in clarify.md but run client-side-fast so we
+    // don't waste a roundtrip when the answer is obviously "ok".
+    const fileCount = (
+      await db
+        .select({ id: projectFilesTable.id })
+        .from(projectFilesTable)
+        .where(eq(projectFilesTable.projectId, project.id))
+        .limit(1)
+    ).length;
+    const isIteration = fileCount > 0;
+    const wordCount = prompt.split(/\s+/).filter(Boolean).length;
+    if (isIteration || wordCount > 20 || hasUrls || hasImages) {
+      res.json({ ok: true });
+      return;
+    }
+
+    if (!anthropic) {
+      // No AI available — degrade gracefully and let the build proceed.
+      res.json({ ok: true });
+      return;
+    }
+
+    const system = renderPrompt("clarify", {
+      prompt,
+      contextLine: isIteration
+        ? `Iteration on a project that already has ${fileCount} files.`
+        : "First build — no project files yet.",
+    });
+
+    let raw = "";
+    try {
+      const result = await anthropic.messages.create({
+        model: MODELS.haiku.id,
+        max_tokens: 600,
+        system,
+        messages: [{ role: "user", content: prompt }],
+      });
+      raw = result.content
+        .map((b) => (b.type === "text" ? b.text : ""))
+        .join("");
+    } catch (err) {
+      req.log.warn({ err }, "Clarify call failed; passing through");
+      // On AI failure, never block the user — let the build run.
+      res.json({ ok: true });
+      return;
+    }
+
+    // Parse strict-JSON envelope. On any parse failure, pass through
+    // — better to skip clarification than to block on a malformed reply.
+    const cleaned = raw
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/```\s*$/i, "")
+      .trim();
+    const startIdx = cleaned.indexOf("{");
+    const endIdx = cleaned.lastIndexOf("}");
+    let parsed: Record<string, unknown> | null = null;
+    if (startIdx >= 0 && endIdx > startIdx) {
+      try {
+        const obj = JSON.parse(cleaned.slice(startIdx, endIdx + 1));
+        if (obj && typeof obj === "object") parsed = obj as Record<string, unknown>;
+      } catch {
+        parsed = null;
+      }
+    }
+    if (!parsed || parsed.ok === true) {
+      res.json({ ok: true });
+      return;
+    }
+
+    const question =
+      typeof parsed.question === "string" && parsed.question.trim()
+        ? parsed.question.trim()
+        : null;
+    if (!question) {
+      res.json({ ok: true });
+      return;
+    }
+    const suggestions = Array.isArray(parsed.suggestions)
+      ? (parsed.suggestions as unknown[])
+          .filter((s): s is string => typeof s === "string" && s.trim() !== "")
+          .slice(0, 4)
+      : [];
+    res.json({ ok: false, question, suggestions });
+  },
+);
+
+// ─── Verification stage ──────────────────────────────────────────────
+// Stage 4 of the build pipeline. Called by the client immediately
+// after a successful build's `done` event. Loads the project's current
+// file set, runs a Haiku audit against verification.md, and returns a
+// fixed-shape checklist (8 entries: html_entry, script_targets_exist,
+// components_defined, router_complete, no_network_calls, no_imports,
+// content_quality, accessibility_basics). Each entry has a status
+// (pass/warn/fail) and, on warn/fail, a self-contained `fixPrompt`
+// the client can hand back to /ai/build with one click.
+//
+// Response shape (always 200, JSON):
+//   { summary: "...", checks: [{ id, title, status, summary, files, fixPrompt }] }
+//
+// On any failure (no AI, malformed reply, etc.) we return a graceful
+// pass-everything stub rather than blocking the user — verification is
+// a quality-of-life feature, not a build gate.
+router.post(
+  "/ai/verify/:username/:slug",
+  aiLimiter,
+  requireAuth,
+  async (req: Request, res: Response): Promise<void> => {
+    const username = String(req.params.username);
+    const slug = String(req.params.slug);
+    const userPrompt = String(req.body?.prompt ?? "").trim();
+
+    const rows = await db
+      .select({ project: projectsTable, ownerId: usersTable.id })
+      .from(projectsTable)
+      .innerJoin(usersTable, eq(usersTable.id, projectsTable.userId))
+      .where(and(eq(usersTable.username, username), eq(projectsTable.slug, slug)))
+      .limit(1);
+    const project = rows[0]?.project;
+    const ownerId = rows[0]?.ownerId;
+    if (!project) {
+      res.status(404).json({ status: "error", message: "Project not found" });
+      return;
+    }
+    const authedUser = getAuthedUser(req);
+    if (!authedUser || authedUser.id !== ownerId) {
+      res.status(403).json({ status: "error", message: "Forbidden" });
+      return;
+    }
+
+    // Load current files. Cap content size per file (8KB) and total
+    // file count (40) so a huge project doesn't blow Haiku's context.
+    // The verifier looks at structural HTML/JSX patterns, so an 8KB
+    // window is more than enough to spot bugs in the relevant areas.
+    const allFiles = await db
+      .select({ path: projectFilesTable.path, content: projectFilesTable.content })
+      .from(projectFilesTable)
+      .where(eq(projectFilesTable.projectId, project.id))
+      .orderBy(asc(projectFilesTable.path));
+
+    if (allFiles.length === 0) {
+      // Nothing to verify — return pass-everything so the panel renders
+      // empty rather than an error state.
+      res.json({
+        summary: "No files yet to verify.",
+        checks: [],
+      });
+      return;
+    }
+
+    // Prioritise the files most likely to surface verifier-relevant
+    // issues: index.html first, then layout/page files, then
+    // components, then everything else. Truncated to 40 / 8KB each.
+    const PRIORITY: (p: string) => number = (p) => {
+      if (p === "index.html") return 0;
+      if (p.endsWith("/layout.jsx") || p.endsWith("layout.jsx")) return 1;
+      if (p.endsWith("/page.jsx") || p.endsWith("page.jsx")) return 2;
+      if (p.startsWith("components/")) return 3;
+      return 4;
+    };
+    const sorted = [...allFiles].sort(
+      (a, b) => PRIORITY(a.path) - PRIORITY(b.path) || a.path.localeCompare(b.path),
+    );
+    // Char-budget instead of fixed file count: 200KB total, 8KB per
+    // file. Stops once the budget is hit so a project with 41 small
+    // priority-3 files still includes a critical Header.jsx that would
+    // otherwise be dropped by a hard slice(0, 40). Always includes at
+    // least one file so we never send an empty audit.
+    const PER_FILE_CAP = 8000;
+    const TOTAL_CAP = 200_000;
+    const included: typeof sorted = [];
+    let usedChars = 0;
+    for (const f of sorted) {
+      const slice = f.content.length > PER_FILE_CAP
+        ? f.content.slice(0, PER_FILE_CAP)
+        : f.content;
+      if (included.length > 0 && usedChars + slice.length > TOTAL_CAP) break;
+      included.push({ ...f, content: slice });
+      usedChars += slice.length;
+    }
+    const filesContext = included
+      .map((f) => {
+        const truncated = f.content.length >= PER_FILE_CAP
+          ? f.content + "\n…[truncated]"
+          : f.content;
+        return `--- ${f.path} ---\n${truncated}`;
+      })
+      .join("\n\n");
+
+    if (!anthropic) {
+      res.json({
+        summary: "Verification skipped — AI is not configured on this server.",
+        checks: [],
+      });
+      return;
+    }
+
+    const system = renderPrompt("verification", {
+      prompt: userPrompt || "(not provided)",
+      filesContext,
+    });
+
+    let raw = "";
+    let inputTokens = 0;
+    let outputTokens = 0;
+    try {
+      const result = await anthropic.messages.create({
+        model: MODELS.haiku.id,
+        max_tokens: 3_500,
+        system,
+        messages: [
+          {
+            role: "user",
+            content:
+              "Audit the files above against the verification checklist and return the JSON envelope.",
+          },
+        ],
+      });
+      inputTokens = result.usage?.input_tokens ?? 0;
+      outputTokens = result.usage?.output_tokens ?? 0;
+      raw = result.content
+        .map((b) => (b.type === "text" ? b.text : ""))
+        .join("");
+    } catch (err) {
+      req.log.warn({ err }, "Verify call failed; returning empty checklist");
+      res.json({
+        summary: "Couldn't run verification right now.",
+        checks: [],
+      });
+      return;
+    }
+
+    const cleaned = raw
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/```\s*$/i, "")
+      .trim();
+    const startIdx = cleaned.indexOf("{");
+    const endIdx = cleaned.lastIndexOf("}");
+    let parsed: Record<string, unknown> | null = null;
+    if (startIdx >= 0 && endIdx > startIdx) {
+      try {
+        const obj = JSON.parse(cleaned.slice(startIdx, endIdx + 1));
+        if (obj && typeof obj === "object") parsed = obj as Record<string, unknown>;
+      } catch {
+        parsed = null;
+      }
+    }
+
+    if (!parsed) {
+      req.log.warn(
+        { raw: cleaned.slice(0, 400) },
+        "Verify response was not valid JSON",
+      );
+      res.json({
+        summary: "Verification reply was malformed — try again.",
+        checks: [],
+      });
+      return;
+    }
+
+    const checksRaw = Array.isArray(parsed.checks) ? parsed.checks : [];
+    const ALLOWED_STATUS = new Set(["pass", "warn", "fail"]);
+    const checks = checksRaw
+      .filter((c): c is Record<string, unknown> => !!c && typeof c === "object")
+      .map((c) => {
+        const status =
+          typeof c.status === "string" && ALLOWED_STATUS.has(c.status)
+            ? (c.status as "pass" | "warn" | "fail")
+            : "pass";
+        const files = Array.isArray(c.files)
+          ? (c.files as unknown[])
+              .filter((f): f is string => typeof f === "string")
+              .slice(0, 8)
+          : [];
+        const fixPrompt =
+          status !== "pass" &&
+          typeof c.fixPrompt === "string" &&
+          c.fixPrompt.trim().length > 0
+            ? c.fixPrompt.trim()
+            : null;
+        return {
+          id: typeof c.id === "string" ? c.id : "unknown",
+          title: typeof c.title === "string" ? c.title : "Check",
+          status,
+          summary:
+            typeof c.summary === "string" ? c.summary : "",
+          files,
+          fixPrompt,
+        };
+      })
+      .slice(0, 12);
+
+    // Tone the default summary to match the worst-case status so a
+    // missing/blank `summary` field on the AI's reply doesn't say
+    // "Build verified." over a checklist with 8 fails.
+    const failCount = checks.filter((c) => c.status === "fail").length;
+    const warnCount = checks.filter((c) => c.status === "warn").length;
+    const summary =
+      typeof parsed.summary === "string" && parsed.summary.trim()
+        ? parsed.summary.trim()
+        : failCount > 0
+          ? `Found ${failCount} issue${failCount === 1 ? "" : "s"} that need attention.`
+          : warnCount > 0
+            ? `Build runs, but ${warnCount} thing${warnCount === 1 ? "" : "s"} could be improved.`
+            : "Build verified.";
+
+    // Bill the Haiku audit cost (typically <$0.01). Same per-million
+    // pricing model as plan/build, recorded as its own transaction
+    // line so users can see verification costs separately. Use 4-decimal
+    // precision so sub-cent audits don't round to $0.00 — the balance
+    // column is `numeric` and the transactions UI already truncates for
+    // display, so we don't lose anything by storing the actual cost.
+    const rawCost = Math.max(
+      0,
+      (inputTokens / 1_000_000) * MODELS.haiku.rates.input +
+        (outputTokens / 1_000_000) * MODELS.haiku.rates.output,
+    );
+    const cost = (Math.round(rawCost * 10000) / 10000).toFixed(4);
+    if (ownerId && Number(cost) > 0) {
+      try {
+        await db.transaction(async (tx) => {
+          await tx
+            .update(usersTable)
+            .set({ balance: sql`${usersTable.balance} - ${cost}` })
+            .where(eq(usersTable.id, ownerId));
+          await tx.insert(transactionsTable).values({
+            userId: ownerId,
+            amount: `-${cost}`,
+            method: "Build verification",
+            status: "Success",
+          });
+        });
+      } catch (err) {
+        req.log.error({ err }, "Failed to bill for verify call");
+      }
+    }
+
+    res.json({ summary, checks });
   },
 );
 

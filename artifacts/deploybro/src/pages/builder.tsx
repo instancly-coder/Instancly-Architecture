@@ -463,6 +463,29 @@ type StreamStep = {
   status: "in_progress" | "done" | "error";
 };
 
+// One row in the post-build verification checklist. The Haiku verifier
+// emits a fixed list of these against /api/ai/verify; on warn/fail
+// each entry carries a self-contained `fixPrompt` the user can hand
+// back to /ai/build with one click.
+type VerificationCheck = {
+  id: string;
+  title: string;
+  status: "pass" | "warn" | "fail";
+  summary: string;
+  files: string[];
+  fixPrompt: string | null;
+};
+
+// Per-build verification state tracked in a Record keyed by buildId.
+// `running` covers the brief window between the build's done event
+// and the verifier's reply; `ready` carries the resolved checklist;
+// `error` lets us surface a graceful "couldn't run verification" row
+// without blowing away the build itself.
+type VerificationState =
+  | { status: "running" }
+  | { status: "ready"; summary: string; checks: VerificationCheck[] }
+  | { status: "error"; message: string };
+
 function timeAgo(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
   const m = Math.floor(ms / 60000);
@@ -875,6 +898,37 @@ export default function Builder() {
   // from the previous run can fire 600ms into the new run and wipe
   // `phase` / `typed` / `streamSteps` mid-stream.
   const cleanupTimerRef = useRef<number | null>(null);
+  // Reentrancy guard for the clarification gate. Without this, a fast
+  // double-tap on Send (or an auto-send racing with a manual click)
+  // fires two parallel /ai/clarify requests during the ~1s window
+  // before isStreaming flips true; the second response wins and can
+  // overwrite the first's pendingClarification with a stale answer.
+  const clarifyInFlightRef = useRef(false);
+
+  // ─── Clarification gate (Stage 1 of the pipeline) ─────────────────────
+  // When the user sends a thin first-build prompt, the server may ask ONE
+  // clarifying question before letting the build run. We render the
+  // question + suggestion chips inline as a chat bubble; the user's tap
+  // (or typed answer) merges with the original prompt and the build
+  // proceeds. Set by handleSend, cleared by submit/cancel.
+  const [pendingClarification, setPendingClarification] = useState<{
+    prompt: string;
+    question: string;
+    suggestions: string[];
+    overrides: {
+      modelKey?: "haiku" | "sonnet" | "opus";
+      urls?: string[];
+      files?: File[];
+    };
+  } | null>(null);
+
+  // ─── Verification (Stage 4 of the pipeline) ───────────────────────────
+  // Keyed by buildId so each completed build keeps its own checklist
+  // alongside its bubble in the chat. The map persists for the session;
+  // re-running verification on the same build overwrites the entry.
+  const [verifications, setVerifications] = useState<
+    Record<string, VerificationState>
+  >({});
 
   // Cancel any in-flight build OR plan stream when this component unmounts
   // so the server can close the upstream Claude connection and stop billing.
@@ -1269,6 +1323,101 @@ export default function Builder() {
     setChatInput((cur) => (cur.trim().length === 0 ? restored : cur));
   };
 
+  // ─── Verification helper (Stage 4 of the pipeline) ────────────────────
+  // POST /api/ai/verify, store the result keyed by buildId. Called
+  // from the build's `done` event handler once invalidateQueries has
+  // settled (so the build is visible in pastBuilds when the panel
+  // renders). Failures are swallowed — verification is quality-of-life,
+  // not a build gate.
+  const verifyBuild = async (buildId: string, originalPrompt: string) => {
+    if (!username || !slug) return;
+    setVerifications((cur) => ({ ...cur, [buildId]: { status: "running" } }));
+    try {
+      const res = await fetch(`/api/ai/verify/${username}/${slug}`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ prompt: originalPrompt, buildId }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const j = (await res.json()) as {
+        summary?: string;
+        checks?: unknown;
+      };
+      const checks: VerificationCheck[] = Array.isArray(j.checks)
+        ? (j.checks as Array<Record<string, unknown>>)
+            .map((c) => ({
+              id: typeof c.id === "string" ? c.id : "unknown",
+              title: typeof c.title === "string" ? c.title : "Check",
+              status:
+                c.status === "pass" || c.status === "warn" || c.status === "fail"
+                  ? c.status
+                  : "pass",
+              summary: typeof c.summary === "string" ? c.summary : "",
+              files: Array.isArray(c.files)
+                ? (c.files as unknown[]).filter(
+                    (f): f is string => typeof f === "string",
+                  )
+                : [],
+              fixPrompt:
+                typeof c.fixPrompt === "string" && c.fixPrompt.trim()
+                  ? c.fixPrompt
+                  : null,
+            }))
+        : [];
+      setVerifications((cur) => ({
+        ...cur,
+        [buildId]: {
+          status: "ready",
+          summary:
+            typeof j.summary === "string" && j.summary.trim()
+              ? j.summary
+              : "Build verified.",
+          checks,
+        },
+      }));
+    } catch (err) {
+      setVerifications((cur) => ({
+        ...cur,
+        [buildId]: {
+          status: "error",
+          message:
+            err instanceof Error ? err.message : "Couldn't verify build",
+        },
+      }));
+    }
+  };
+
+  // Click handler for "Apply fix" on a verification check. Hands the
+  // server's pre-baked fixPrompt back to /ai/build via handleSend, with
+  // skipClarify=true so we don't re-prompt the user mid-fix.
+  const applyVerificationFix = (check: VerificationCheck) => {
+    if (!check.fixPrompt) return;
+    void handleSend(check.fixPrompt, { skipClarify: true });
+  };
+
+  // Click handler for the clarification chip / Submit button. Merges
+  // the user's answer onto the original prompt and re-enters handleSend
+  // with skipClarify=true so we don't loop on the same gate.
+  const submitClarificationAnswer = (answer: string) => {
+    const c = pendingClarification;
+    if (!c) return;
+    const trimmed = answer.trim();
+    setPendingClarification(null);
+    const merged = trimmed
+      ? `${c.prompt}\n\nAdditional context: ${trimmed}`
+      : c.prompt;
+    void handleSend(merged, { ...c.overrides, skipClarify: true });
+  };
+
+  const cancelClarification = () => {
+    const c = pendingClarification;
+    setPendingClarification(null);
+    // Restore the original prompt to the composer so the user can
+    // edit and re-send without re-typing the whole thing.
+    if (c) setChatInput((cur) => (cur.trim().length === 0 ? c.prompt : cur));
+  };
+
   // Optional `overrides` lets callers (specifically the rehydration effect
   // and the plan-conversation "Build this" callback) pass freshly-parsed
   // composer settings without waiting for React state setters to flush —
@@ -1284,6 +1433,10 @@ export default function Builder() {
       // When present we skip the planning pass and POST straight to
       // /ai/build with the plan as the locked spec.
       approvedPlan?: ApprovedPlan;
+      // Set by the clarification flow (and verification's "Apply fix"
+      // button) so a re-entrant call doesn't ask the same question
+      // twice. Without this we'd loop forever on a thin prompt.
+      skipClarify?: boolean;
     },
   ) => {
     // Defensive: callers like `<button onClick={handleSend}>` pass a
@@ -1335,6 +1488,87 @@ export default function Builder() {
         files: _sendingFiles,
       });
       return;
+    }
+
+    // ─── Clarification gate (Stage 1) — fires before the build ──────────
+    // Quick Haiku check: is the prompt detailed enough to build well, or
+    // would ONE specific question dramatically lift quality? Only runs
+    // for fresh build mode (not Plan Mode, not approved plans, and not
+    // when the same call already came back from a clarification reply
+    // — that's the `overrides.skipClarify` escape hatch). On a needs-
+    // clarification reply we render the question inline and pause the
+    // pipeline; submitClarificationAnswer re-enters handleSend with the
+    // merged prompt and skipClarify set, so we don't loop.
+    if (
+      !_effectivePlanMode &&
+      !overrides?.approvedPlan &&
+      !overrides?.skipClarify
+    ) {
+      // Don't fire a parallel clarify check while one is already in
+      // flight or a bubble is already on screen — both indicate the
+      // user is mid-clarification and a second request would race.
+      if (clarifyInFlightRef.current || pendingClarification) {
+        return;
+      }
+      clarifyInFlightRef.current = true;
+      try {
+        const clarifyRes = await fetch(
+          `/api/ai/clarify/${username}/${slug}`,
+          {
+            method: "POST",
+            credentials: "include",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              prompt,
+              urls: overrides?.urls ?? refUrls,
+              images: (overrides?.files ?? attachments).filter((f) =>
+                f.type.startsWith("image/"),
+              ).length
+                ? [{}] // shape-only signal so the server takes the "has images" branch
+                : [],
+            }),
+          },
+        );
+        if (clarifyRes.ok) {
+          const j = (await clarifyRes.json().catch(() => null)) as {
+            ok?: boolean;
+            question?: string;
+            suggestions?: string[];
+          } | null;
+          if (j && j.ok === false && typeof j.question === "string") {
+            // Pause here. The bubble takes over from the user's POV;
+            // on submit we re-enter handleSend with the answer merged
+            // into the prompt and skipClarify=true.
+            const _modelKey =
+              overrides?.modelKey ??
+              AVAILABLE_MODELS.find((m) => m.name === selectedModel)?.key;
+            setPendingClarification({
+              prompt,
+              question: j.question,
+              suggestions: Array.isArray(j.suggestions)
+                ? j.suggestions
+                    .filter((s) => typeof s === "string" && s.trim())
+                    .slice(0, 4)
+                : [],
+              overrides: {
+                modelKey: _modelKey,
+                urls: overrides?.urls ?? refUrls,
+                files: overrides?.files ?? attachments,
+              },
+            });
+            setChatInput("");
+            return;
+          }
+        }
+      } catch {
+        // Network or AI hiccup — fall through to the build. Clarify
+        // never blocks the user's main flow.
+      } finally {
+        // Always clear the in-flight flag — both the success/return
+        // path and the "no clarification needed → continue to build"
+        // path want subsequent sends to work normally.
+        clarifyInFlightRef.current = false;
+      }
     }
 
     setChatInput("");
@@ -1606,6 +1840,29 @@ export default function Builder() {
       setPendingPrompt(null);
       // Force the preview iframe to reload with the freshly-written files.
       setIframeKey((k) => k + 1);
+
+      // ─── Trigger Stage 4: verification ───────────────────────────────
+      // Now that the new build is in pastBuilds and its files are
+      // persisted, kick off the audit. The panel renders inside the
+      // build's chat row from `verifications[buildId]`, so the spinner
+      // shows the moment we set { status: "running" } and the checklist
+      // pops in once the Haiku call returns. Fire-and-forget — we
+      // don't await so the UI doesn't block on the audit.
+      try {
+        const builds = queryClient.getQueryData<ApiBuild[]>([
+          "projects",
+          username,
+          slug,
+          "builds",
+        ]);
+        const newest = Array.isArray(builds) ? builds[0] : undefined;
+        if (newest?.id) {
+          void verifyBuild(newest.id, prompt);
+        }
+      } catch {
+        // verifyBuild handles its own errors; this catch is just a
+        // belt-and-braces guard against a malformed cache snapshot.
+      }
     } catch (err) {
       const aborted = (err as { name?: string })?.name === "AbortError";
       finishAll(aborted ? "done" : "error");
@@ -2107,6 +2364,16 @@ export default function Builder() {
             setActiveTab={setActiveTab}
             username={username}
             slug={slug}
+            // Stage 1 — clarification gate. Bubble renders inline when
+            // the AI needs ONE more piece of info before building.
+            pendingClarification={pendingClarification}
+            onClarificationSubmit={submitClarificationAnswer}
+            onClarificationCancel={cancelClarification}
+            // Stage 4 — verification checklist. Keyed by buildId; each
+            // past-build row reads its own entry. Fix-click hands the
+            // server-baked fixPrompt back into /ai/build.
+            verifications={verifications}
+            onApplyVerificationFix={applyVerificationFix}
           />
         </aside>
         {/* Drag handle to resize chat */}
@@ -2311,6 +2578,11 @@ function ChatPanel({
   setActiveTab,
   username,
   slug,
+  pendingClarification,
+  onClarificationSubmit,
+  onClarificationCancel,
+  verifications,
+  onApplyVerificationFix,
 }: {
   chatInput: string;
   setChatInput: (v: string) => void;
@@ -2381,6 +2653,24 @@ function ChatPanel({
   setActiveTab: React.Dispatch<React.SetStateAction<TabKey>>;
   username: string | undefined;
   slug: string | undefined;
+  // Stage 1 — clarification gate state passed down from Builder. Set
+  // when /ai/clarify returns ok:false; cleared by submit/cancel.
+  pendingClarification: {
+    prompt: string;
+    question: string;
+    suggestions: string[];
+    overrides: {
+      modelKey?: "haiku" | "sonnet" | "opus";
+      urls?: string[];
+      files?: File[];
+    };
+  } | null;
+  onClarificationSubmit: (answer: string) => void;
+  onClarificationCancel: () => void;
+  // Stage 4 — verification map keyed by buildId. Each past-build row
+  // reads its own entry to render the checklist (if any).
+  verifications: Record<string, VerificationState>;
+  onApplyVerificationFix: (check: VerificationCheck) => void;
 }) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -2485,8 +2775,30 @@ function ChatPanel({
     }
   };
 
+  // Pipeline stage indicator state. Drives the small stepper at the
+  // top of the chat — collapses out when nothing's happening so it
+  // doesn't take up space in the empty state. Order maps to the four
+  // pipeline stages defined in build.md: clarify → plan → build → verify.
+  const pipelineStage: "idle" | "clarify" | "plan" | "build" | "verify" =
+    pendingClarification
+      ? "clarify"
+      : planConversation
+        ? "plan"
+        : isStreaming
+          ? "build"
+          : (() => {
+              // If the most recent build has a running verification, show
+              // "verify". Otherwise idle.
+              const latest = pastBuilds[pastBuilds.length - 1];
+              if (latest && verifications[latest.id]?.status === "running") {
+                return "verify";
+              }
+              return "idle";
+            })();
+
   return (
     <>
+      <PipelineIndicator stage={pipelineStage} />
       <div
         ref={scrollRef}
         onScroll={onScroll}
@@ -2551,6 +2863,18 @@ function ChatPanel({
                     }}
                   />
                 ))}
+
+                {/* Stage 4 — verification checklist. Renders only when
+                    a verifier result exists for this build. Sits
+                    between the AI prose and the checkpoint footer so
+                    it reads as part of the assistant's reply, not as
+                    a separate card. */}
+                {verifications[b.id] && (
+                  <VerificationPanel
+                    state={verifications[b.id]}
+                    onApplyFix={onApplyVerificationFix}
+                  />
+                )}
 
                 {/* Footer: Checkpoint on its own line, then an inline
                     "Worked for…" collapsible — chevron + text, no card
@@ -2680,6 +3004,20 @@ function ChatPanel({
             onApprovePlan={onApprovePlan}
             onCancelPlan={onCancelPlan}
             onUpdatePlan={onUpdatePlan}
+          />
+        )}
+
+        {/* Stage 1 — clarification bubble. Pauses the pipeline with
+            ONE specific question + suggestion chips when the prompt
+            is too thin to build well. User taps a chip or types a
+            free-form answer; submit merges it into the original
+            prompt and resumes the build. Cancel restores the prompt
+            to the composer for editing. */}
+        {pendingClarification && (
+          <ClarificationBubble
+            clarification={pendingClarification}
+            onSubmit={onClarificationSubmit}
+            onCancel={onClarificationCancel}
           />
         )}
 
@@ -3018,6 +3356,351 @@ function ChatPanel({
         </div>
       </div>
     </>
+  );
+}
+
+// ─── PipelineIndicator ──────────────────────────────────────────────────
+// Compact 4-dot stepper at the top of the chat panel that lights up the
+// active pipeline stage. Collapses to nothing when idle so the empty
+// state stays clean. Order matches build.md: Clarify → Plan → Build →
+// Verify. Past stages get a faded check, the current stage gets the
+// brand color + a soft pulse, future stages stay muted.
+function PipelineIndicator({
+  stage,
+}: {
+  stage: "idle" | "clarify" | "plan" | "build" | "verify";
+}) {
+  if (stage === "idle") return null;
+  const steps: Array<{ key: typeof stage; label: string }> = [
+    { key: "clarify", label: "Clarify" },
+    { key: "plan", label: "Plan" },
+    { key: "build", label: "Build" },
+    { key: "verify", label: "Verify" },
+  ];
+  const activeIdx = steps.findIndex((s) => s.key === stage);
+  return (
+    <div className="px-4 pt-3 shrink-0">
+      <div className="flex items-center gap-1.5 text-[10px] font-mono">
+        {steps.map((s, i) => {
+          const isPast = i < activeIdx;
+          const isActive = i === activeIdx;
+          return (
+            <div key={s.key} className="flex items-center gap-1.5">
+              <div
+                className={`flex items-center gap-1 px-1.5 py-0.5 rounded transition-colors ${
+                  isActive
+                    ? "bg-primary/15 text-primary"
+                    : isPast
+                      ? "text-secondary/80"
+                      : "text-secondary/50"
+                }`}
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full transition-colors ${
+                    isActive
+                      ? "bg-primary animate-pulse"
+                      : isPast
+                        ? "bg-success"
+                        : "bg-secondary/30"
+                  }`}
+                />
+                <span className="uppercase tracking-wider">{s.label}</span>
+              </div>
+              {i < steps.length - 1 && (
+                <ChevronRight
+                  className={`w-3 h-3 ${
+                    isPast ? "text-secondary/60" : "text-secondary/30"
+                  }`}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── ClarificationBubble ────────────────────────────────────────────────
+// Inline assistant bubble for the Stage 1 clarification gate. Renders
+// a single specific question, up to 4 chip suggestions for one-tap
+// answers, a free-form input for typed replies, and a "Skip" link that
+// proceeds with the original prompt unchanged. The bubble owns its
+// own input state so a typed answer doesn't pollute the main composer.
+function ClarificationBubble({
+  clarification,
+  onSubmit,
+  onCancel,
+}: {
+  clarification: {
+    prompt: string;
+    question: string;
+    suggestions: string[];
+  };
+  onSubmit: (answer: string) => void;
+  onCancel: () => void;
+}) {
+  const [draft, setDraft] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  // Auto-focus so the user can just start typing without an extra tap.
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+  const submit = () => {
+    const t = draft.trim();
+    if (!t) return;
+    onSubmit(t);
+  };
+  return (
+    <div className="rounded-xl border border-primary/30 bg-primary/5 p-3.5 space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-200">
+      <div className="flex items-start gap-2">
+        <div className="w-6 h-6 rounded-md bg-primary/20 flex items-center justify-center shrink-0">
+          <MessageSquare className="w-3.5 h-3.5 text-primary" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-[10px] uppercase tracking-wider font-mono text-primary mb-1">
+            Quick question
+          </div>
+          <div className="text-sm text-foreground leading-snug">
+            {clarification.question}
+          </div>
+        </div>
+      </div>
+
+      {clarification.suggestions.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {clarification.suggestions.map((s, i) => (
+            <button
+              key={`cs-${i}`}
+              onClick={() => onSubmit(s)}
+              className="px-2.5 py-1 rounded-full border border-primary/30 bg-background hover:bg-primary/10 hover:border-primary/50 text-[11px] text-foreground transition-colors text-left"
+              title={s}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="flex items-center gap-1.5">
+        <input
+          ref={inputRef}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              submit();
+            }
+          }}
+          placeholder="Or type your answer…"
+          className="flex-1 min-w-0 h-8 px-3 rounded-md border border-border bg-background text-xs text-foreground focus:outline-none focus:border-primary"
+        />
+        <button
+          onClick={submit}
+          disabled={!draft.trim()}
+          className="h-8 px-3 rounded-md text-[11px] font-medium bg-primary text-primary-foreground disabled:opacity-40 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors"
+        >
+          Send
+        </button>
+      </div>
+
+      <div className="flex items-center justify-between text-[10px]">
+        <button
+          onClick={() => onSubmit("")}
+          className="text-secondary hover:text-foreground transition-colors"
+          title="Build with the original prompt"
+        >
+          Skip — build with what I had
+        </button>
+        <button
+          onClick={onCancel}
+          className="text-secondary hover:text-foreground transition-colors"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── VerificationPanel ──────────────────────────────────────────────────
+// Stage 4 checklist that renders under each completed build. Three
+// states: running (compact spinner row), error (single muted line), or
+// ready (8-row checklist with click-to-fix on warn/fail entries). The
+// panel is collapsible — once everything's green users usually want it
+// out of the way; the header summary stays visible so scanning past
+// builds still tells you the audit happened.
+function VerificationPanel({
+  state,
+  onApplyFix,
+}: {
+  state: VerificationState;
+  onApplyFix: (check: VerificationCheck) => void;
+}) {
+  // Default open while running OR when there's anything that isn't a
+  // pass — users care most when something needs attention.
+  const initiallyOpen =
+    state.status === "running" ||
+    (state.status === "ready" &&
+      state.checks.some((c) => c.status !== "pass"));
+  const [open, setOpen] = useState(initiallyOpen);
+
+  if (state.status === "running") {
+    return (
+      <div className="mt-2 flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-surface-raised text-xs text-secondary">
+        <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
+        <span>Verifying build…</span>
+      </div>
+    );
+  }
+
+  if (state.status === "error") {
+    return (
+      <div className="mt-2 flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-surface-raised text-xs text-secondary">
+        <AlertCircle className="w-3.5 h-3.5 text-secondary" />
+        <span>Verification skipped — {state.message}</span>
+      </div>
+    );
+  }
+
+  // status === "ready"
+  const passCount = state.checks.filter((c) => c.status === "pass").length;
+  const warnCount = state.checks.filter((c) => c.status === "warn").length;
+  const failCount = state.checks.filter((c) => c.status === "fail").length;
+  const overallTone =
+    failCount > 0
+      ? "fail"
+      : warnCount > 0
+        ? "warn"
+        : "pass";
+
+  return (
+    <div className="mt-2 rounded-lg border border-border bg-surface-raised overflow-hidden">
+      {/* Header — always visible. Click to expand/collapse the
+          checklist. Tone color comes from the worst-case status so
+          the user can scan past builds without expanding each one. */}
+      <button
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-background/40 transition-colors"
+      >
+        <ChevronRight
+          className={`w-3 h-3 shrink-0 text-secondary transition-transform duration-150 ${
+            open ? "rotate-90" : ""
+          }`}
+        />
+        <Sparkles
+          className={`w-3.5 h-3.5 shrink-0 ${
+            overallTone === "fail"
+              ? "text-red-500"
+              : overallTone === "warn"
+                ? "text-amber-500"
+                : "text-success"
+          }`}
+        />
+        <div className="flex-1 min-w-0">
+          <div className="text-xs font-medium text-foreground truncate">
+            Verification · {passCount}/{state.checks.length} passed
+          </div>
+          <div className="text-[10px] text-secondary truncate">
+            {state.summary}
+          </div>
+        </div>
+        {(warnCount > 0 || failCount > 0) && (
+          <span className="shrink-0 text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600">
+            {failCount > 0 ? `${failCount} fail` : `${warnCount} warn`}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="border-t border-border divide-y divide-border/60 animate-in fade-in slide-in-from-top-1 duration-150">
+          {state.checks.map((c) => (
+            <VerificationRow key={c.id} check={c} onApplyFix={onApplyFix} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// One row in the verification checklist. Pulled out so each row owns
+// its own "show files" toggle without re-rendering the whole panel.
+function VerificationRow({
+  check,
+  onApplyFix,
+}: {
+  check: VerificationCheck;
+  onApplyFix: (check: VerificationCheck) => void;
+}) {
+  const [filesOpen, setFilesOpen] = useState(false);
+  const tone =
+    check.status === "pass"
+      ? "text-success"
+      : check.status === "warn"
+        ? "text-amber-500"
+        : "text-red-500";
+  const Icon =
+    check.status === "pass"
+      ? Check
+      : check.status === "warn"
+        ? AlertCircle
+        : X;
+  return (
+    <div className="px-3 py-2 space-y-1.5">
+      <div className="flex items-start gap-2">
+        <Icon className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${tone}`} />
+        <div className="flex-1 min-w-0">
+          <div className="text-xs font-medium text-foreground">
+            {check.title}
+          </div>
+          {check.summary && (
+            <div className="text-[11px] text-secondary leading-snug mt-0.5">
+              {check.summary}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {(check.files.length > 0 || check.fixPrompt) && (
+        <div className="ml-5.5 pl-0.5 flex items-center gap-3 text-[10px] font-mono">
+          {check.files.length > 0 && (
+            <button
+              onClick={() => setFilesOpen(!filesOpen)}
+              className="text-secondary hover:text-foreground transition-colors inline-flex items-center gap-1"
+            >
+              <ChevronRight
+                className={`w-2.5 h-2.5 transition-transform duration-150 ${
+                  filesOpen ? "rotate-90" : ""
+                }`}
+              />
+              {check.files.length} file{check.files.length === 1 ? "" : "s"}
+            </button>
+          )}
+          {check.fixPrompt && check.status !== "pass" && (
+            <button
+              onClick={() => onApplyFix(check)}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-primary/15 text-primary border border-primary/30 hover:bg-primary/25 transition-colors uppercase tracking-wider"
+              title="Send this fix to the AI"
+            >
+              <Sparkles className="w-2.5 h-2.5" />
+              Apply fix
+            </button>
+          )}
+        </div>
+      )}
+
+      {filesOpen && check.files.length > 0 && (
+        <div className="ml-5.5 pl-0.5 space-y-0.5 text-[10px] font-mono text-secondary">
+          {check.files.map((f, i) => (
+            <div key={`vf-${i}`} className="truncate">
+              {f}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -123,6 +123,13 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
   const publicSrc = path.resolve(artifactDir, "src/public");
   const publicDest = path.resolve(artifactDir, "dist/public");
   await cp(publicSrc, publicDest, { recursive: true });
+
+  // Copy the markdown prompt files so the runtime loader (lib/prompts.ts)
+  // can read them via __dirname at runtime. Resolved from dist/lib/.. to
+  // dist/prompts/, mirroring the source layout of src/lib/ → prompts/.
+  const promptsSrc = path.resolve(artifactDir, "prompts");
+  const promptsDest = path.resolve(artifactDir, "dist/prompts");
+  await cp(promptsSrc, promptsDest, { recursive: true });
 }
 
 buildAll().catch((err) => {
