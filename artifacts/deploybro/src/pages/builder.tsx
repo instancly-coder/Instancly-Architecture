@@ -730,7 +730,10 @@ export default function Builder() {
       });
     } else if (activeDeployment.status === "failed") {
       lastToastedStatusRef.current = key;
+      // Stable id so the deployment-poll toast and a separate publish-
+      // start error from the same root cause collapse into one card.
       toast.error("Publish failed", {
+        id: "deploybro-publish-error",
         description: activeDeployment.errorMessage ?? "Please try again.",
       });
     }
@@ -825,6 +828,7 @@ export default function Builder() {
         });
       } else {
         toast.error("Could not start publish", {
+          id: "deploybro-publish-error",
           description: err instanceof Error ? err.message : "Unknown error",
         });
       }
@@ -1283,7 +1287,12 @@ export default function Builder() {
       if (!aborted) {
         const msg =
           err instanceof Error ? err.message : "Couldn't draft a reply";
-        toast.error(msg);
+        // Stable id so a user retrying a few times doesn't stack three
+        // copies of the same plan-turn error in the corner.
+        toast.error("Plan mode hit a snag", {
+          id: "deploybro-plan-turn-error",
+          description: msg,
+        });
         // Drop back to "asking" so the user can retry by sending
         // another message — we don't blow away the whole thread on
         // a single failed turn.
@@ -1966,7 +1975,13 @@ export default function Builder() {
       const aborted = (err as { name?: string })?.name === "AbortError";
       finishAll(aborted ? "done" : "error");
       if (!aborted) {
-        toast.error(err instanceof Error ? err.message : "Build failed");
+        // Stable id so back-to-back build retries (e.g. user mashes
+        // Send after a flake) collapse into one toast instead of
+        // stacking on top of each other.
+        toast.error("Build failed", {
+          id: "deploybro-build-error",
+          description: err instanceof Error ? err.message : "Unknown error",
+        });
       }
     } finally {
       abortRef.current = null;

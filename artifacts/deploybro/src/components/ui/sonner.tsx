@@ -2,6 +2,29 @@
 
 import { useTheme } from "next-themes";
 import { Toaster as Sonner, type ToasterProps } from "sonner";
+import {
+  CheckCircle2,
+  AlertCircle,
+  AlertTriangle,
+  Info,
+  Loader2,
+} from "lucide-react";
+
+// Branded icon set. We override sonner's default icons so every toast —
+// success / error / warning / info / loading — uses the same Lucide
+// family already used elsewhere in DeployBro's UI. Combined with the
+// per-type left-border accent below, this gives the toast stack a
+// single consistent voice instead of mixing sonner's defaults with our
+// own Lucide-styled UI buttons. `toast.message()` (no type) inherits
+// the default look — we leave that alone since it's the right "neutral
+// notice" treatment.
+const BRANDED_ICONS = {
+  success: <CheckCircle2 className="w-4 h-4" />,
+  error: <AlertCircle className="w-4 h-4" />,
+  warning: <AlertTriangle className="w-4 h-4" />,
+  info: <Info className="w-4 h-4" />,
+  loading: <Loader2 className="w-4 h-4 animate-spin" />,
+};
 
 const Toaster = (props: ToasterProps) => {
   const { theme = "system" } = useTheme();
@@ -17,6 +40,7 @@ const Toaster = (props: ToasterProps) => {
       gap={10}
       offset={20}
       duration={5000}
+      icons={BRANDED_ICONS}
       className="deploybro-toaster"
       style={
         {

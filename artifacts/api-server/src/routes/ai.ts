@@ -658,11 +658,27 @@ router.post(
     // tends to keep asking forever.
     const questionsAsked = messages.filter((m) => m.role === "assistant").length;
 
+    // Hard wrap-up gate. After 4 questions, the next turn MUST be the
+    // final plan — historically the model would drift into plain prose
+    // ("Perfect! One last one — what about…") when it was caught between
+    // "you have enough info" and "you can still ask one more". The
+    // turnDirective swap makes the instruction unambiguous: the
+    // wrap-up turn is plan-only, no questions allowed.
+    const isFinalTurn = questionsAsked >= 4;
+    const turnDirective = isFinalTurn
+      ? `=== FINAL TURN — PLAN ONLY ===
+You have already asked ${questionsAsked} questions. This response MUST be the FINAL PLAN turn.
+- Do NOT ask another question under any circumstances.
+- Output ONLY the kind:"plan" JSON envelope (the FINAL PLAN TURN shape below).
+- Use whatever the user told you. For anything they didn't address, pick sensible defaults yourself.
+- Your entire response must start with { and end with }. No prose outside the JSON.
+=== END FINAL TURN DIRECTIVE ===`
+      : `You may ask up to ${Math.max(0, 4 - questionsAsked)} more question(s) before you MUST output the final plan. Aim for fewer questions if you already have enough.`;
+
     // Plan-stage prompt is sourced from prompts/plan.md (see lib/prompts.ts).
     // Keeping it in markdown lets product/design tweak the interview flow
     // without redeploying compiled TS, and gives the rest of the pipeline
     // (clarify.md, build.md, verification.md) a uniform place to live.
-    const questionsLeft = Math.max(0, 4 - questionsAsked);
     const planSystemPrompt = renderPrompt("plan", {
       originalPrompt,
       refsLine,
@@ -670,8 +686,7 @@ router.post(
         ? "This is a FIRST build — you'll be planning the whole site."
         : `This is an ITERATION on an existing project (${existingPaths.length} files). Plan only what the user is asking to add or change. Existing paths: ${existingPaths.slice(0, 20).map((f) => f.path).join(", ")}.`,
       questionsAsked,
-      questionsLeft,
-      questionsLeftPlural: questionsLeft === 1 ? "" : "s",
+      turnDirective,
     });
 
     // Convert the turn history to Anthropic message format. We don't
@@ -690,10 +705,36 @@ router.post(
     let outputTokens = 0;
     let raw = "";
 
+    // Helper: extract a parsed JSON object envelope from a raw model
+    // response, tolerating ```json fences and stray prose around the
+    // {...}. Returns null if nothing parseable is found — the caller
+    // decides whether to retry or surface an error.
+    const extractEnvelope = (text: string): Record<string, unknown> | null => {
+      const cleaned = text
+        .replace(/^```(?:json)?\s*/i, "")
+        .replace(/```\s*$/i, "")
+        .trim();
+      const startIdx = cleaned.indexOf("{");
+      const endIdx = cleaned.lastIndexOf("}");
+      if (startIdx < 0 || endIdx <= startIdx) return null;
+      try {
+        const obj = JSON.parse(cleaned.slice(startIdx, endIdx + 1));
+        return obj && typeof obj === "object"
+          ? (obj as Record<string, unknown>)
+          : null;
+      } catch {
+        return null;
+      }
+    };
+
     try {
       const result = await anthropic.messages.create({
         model: MODELS.haiku.id,
-        max_tokens: 2_500,
+        // Final-turn responses serialise the full plan envelope (pages,
+        // sections, colors, fonts, features, copy tone) which can run
+        // 2-3k tokens on its own. Bump the cap on the final turn so a
+        // dense plan doesn't get truncated mid-JSON and fail to parse.
+        max_tokens: isFinalTurn ? 4_000 : 2_500,
         system: planSystemPrompt,
         messages: apiMessages,
       });
@@ -712,30 +753,98 @@ router.post(
     }
 
     // Strip accidental fences and locate the JSON envelope.
-    const cleaned = raw
-      .replace(/^```(?:json)?\s*/i, "")
-      .replace(/```\s*$/i, "")
-      .trim();
-    const startIdx = cleaned.indexOf("{");
-    const endIdx = cleaned.lastIndexOf("}");
-    let parsed: Record<string, unknown> | null = null;
-    if (startIdx >= 0 && endIdx > startIdx) {
+    let parsed = extractEnvelope(raw);
+
+    // One-shot recovery pass. The model occasionally drops out of JSON
+    // mode and replies with plain prose ("Perfect — one more question…"),
+    // which historically blew up the whole interview at the wrap-up
+    // step. Or — on the final turn — it returns valid JSON but with
+    // kind:"question" (still asking) when it MUST emit kind:"plan".
+    // Both cases get re-prompted once with a stern "wrap this up as
+    // JSON" reminder, and we re-extract. Costs one extra Haiku turn
+    // in the rare case it triggers, vs. losing the whole session.
+    const needsRepair =
+      !parsed ||
+      (isFinalTurn && parsed.kind !== "plan");
+
+    if (needsRepair && !clientGone) {
+      req.log.warn(
+        {
+          raw: raw.slice(0, 500),
+          isFinalTurn,
+          parsedKind: parsed?.kind ?? null,
+          reason: !parsed ? "invalid_json" : "final_turn_returned_question",
+        },
+        "Plan turn needs repair — attempting one-shot recovery",
+      );
       try {
-        const obj = JSON.parse(cleaned.slice(startIdx, endIdx + 1));
-        if (obj && typeof obj === "object")
-          parsed = obj as Record<string, unknown>;
-      } catch {
-        parsed = null;
+        const repairResult = await anthropic.messages.create({
+          model: MODELS.haiku.id,
+          max_tokens: isFinalTurn ? 4_000 : 2_500,
+          system: planSystemPrompt,
+          messages: [
+            ...apiMessages,
+            { role: "assistant" as const, content: raw },
+            {
+              role: "user" as const,
+              content: isFinalTurn
+                ? "STOP — this MUST be the final plan turn. Re-emit it now as the FINAL PLAN envelope only — start with `{` end with `}`, kind:\"plan\", include the full plan object with projectName, summary, pages, sections, colors, fonts, features, copyTone. Do NOT ask another question. No prose outside the JSON."
+                : "Your last reply was not valid JSON. Re-emit the same intent as the kind:\"question\" envelope — start with `{` end with `}`, no prose.",
+            },
+          ],
+        });
+        inputTokens += repairResult.usage?.input_tokens ?? 0;
+        outputTokens += repairResult.usage?.output_tokens ?? 0;
+        const repaired = repairResult.content
+          .map((b) => (b.type === "text" ? b.text : ""))
+          .join("");
+        const repairedParsed = extractEnvelope(repaired);
+        // Only accept the repair if it actually fixed the underlying
+        // problem — a final-turn repair that still returns kind:question
+        // is worse than the original (would silently extend the
+        // interview), so we'd rather fall through to the error path.
+        if (
+          repairedParsed &&
+          (!isFinalTurn || repairedParsed.kind === "plan")
+        ) {
+          parsed = repairedParsed;
+          raw = repaired;
+        }
+      } catch (repairErr) {
+        req.log.warn(
+          { err: repairErr },
+          "Plan-turn JSON repair pass failed",
+        );
       }
     }
+
     if (!parsed) {
       req.log.warn(
-        { raw: cleaned.slice(0, 500) },
-        "Plan turn response was not valid JSON",
+        { raw: raw.slice(0, 500) },
+        "Plan turn response was not valid JSON (after repair attempt)",
       );
       send("error", {
         message:
           "I had trouble drafting that one — try rephrasing or build without Plan Mode.",
+      });
+      send("done", { ok: false });
+      res.end();
+      return;
+    }
+
+    // Final-turn contract enforcement. Even if JSON is well-formed, a
+    // kind:"question" response on the wrap-up turn would silently
+    // extend the interview past the 5-question cap — surface a
+    // recoverable error instead so the user can either retry or
+    // escape into a non-plan-mode build.
+    if (isFinalTurn && parsed.kind !== "plan") {
+      req.log.warn(
+        { raw: raw.slice(0, 500), parsedKind: parsed.kind },
+        "Final plan turn returned a question even after repair",
+      );
+      send("error", {
+        message:
+          "Plan mode couldn't wrap up. Try again or build without Plan Mode.",
       });
       send("done", { ok: false });
       res.end();
@@ -763,7 +872,7 @@ router.post(
     // dropping back to a question.
     if (kind === "plan" && !finalPlan) {
       req.log.warn(
-        { raw: cleaned.slice(0, 500) },
+        { raw: raw.slice(0, 500) },
         "Plan turn marked kind:plan but plan was malformed",
       );
       send("error", {
