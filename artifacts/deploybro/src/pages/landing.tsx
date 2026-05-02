@@ -25,10 +25,11 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 
-const HOME_MODELS: { name: string; key: "haiku" | "sonnet" | "opus"; note: string; isPro?: boolean }[] = [
+const HOME_MODELS: { name: string; key: "auto" | "haiku" | "sonnet" | "opus"; note: string }[] = [
+  { name: "Auto Bro",    key: "auto",   note: "Picks the right model" },
   { name: "Economy Bro", key: "haiku",  note: "Fast & cheap"   },
-  { name: "Smart Bro",   key: "sonnet", note: "Balanced (recommended)", isPro: true },
-  { name: "Power Bro",   key: "opus",   note: "Most capable",            isPro: true },
+  { name: "Smart Bro",   key: "sonnet", note: "Balanced" },
+  { name: "Power Bro",   key: "opus",   note: "Most capable" },
 ];
 
 
@@ -92,7 +93,7 @@ const STEPS = [
 export default function Landing() {
   const [, navigate] = useLocation();
   const [prompt, setPrompt] = useState("");
-  const [selectedModel, setSelectedModel] = useState<string>("Economy Bro");
+  const [selectedModel, setSelectedModel] = useState<string>("Auto Bro");
   const [planMode, setPlanMode] = useState<boolean>(false);
   const [refUrls, setRefUrls] = useState<string[]>([]);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
@@ -269,7 +270,7 @@ export default function Landing() {
     try { sessionStorage.setItem("deploybro:initial-prompt", finalPrompt); }
     catch {}
     try {
-      const modelKey = HOME_MODELS.find((m) => m.name === selectedModel)?.key ?? "haiku";
+      const modelKey = HOME_MODELS.find((m) => m.name === selectedModel)?.key ?? "auto";
       const baseSettings: Record<string, unknown> = { model: modelKey, planMode };
       if (refUrls.length > 0) baseSettings.urls = refUrls;
       let imagesPayload: { name: string; type: string; dataUrl: string }[] | null = null;
@@ -533,49 +534,32 @@ export default function Landing() {
                         <div className="px-2 pt-1.5 pb-1 text-[10px] uppercase tracking-wider font-mono text-secondary">Model</div>
                         {HOME_MODELS.map((m) => {
                           const active = m.name === selectedModel;
-                          // Mirrors the in-builder model menu: Pro-only
-                          // entries stay visible so free users know what
-                          // they're missing, but clicking one bounces to
-                          // billing instead of switching the model.
-                          const locked = isFreePlan && !!m.isPro;
+                          // All tiers are available to every user —
+                          // billing flows per-token from the user's
+                          // balance, so the model picker is a UX
+                          // choice, not a paywall.
                           return (
                             <button
                               key={m.name}
                               type="button"
                               onClick={() => {
-                                if (locked) {
-                                  setModelOpen(false);
-                                  toast.message("Pro plan required", {
-                                    description:
-                                      "Smart Bro and Power Bro are available on the Pro plan.",
-                                    action: {
-                                      label: "Upgrade",
-                                      onClick: () => navigate("/dashboard/billing"),
-                                    },
-                                  });
-                                  return;
-                                }
                                 setSelectedModel(m.name);
                                 setModelOpen(false);
                               }}
-                              className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-xs transition-colors ${
-                                locked
-                                  ? "text-secondary hover:bg-surface-raised"
-                                  : "text-foreground hover:bg-surface-raised"
-                              }`}
+                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-xs transition-colors text-foreground hover:bg-surface-raised"
                             >
                               <div className="flex-1 min-w-0">
                                 <div className="font-medium truncate flex items-center gap-1.5">
                                   <span className="truncate">{m.name}</span>
-                                  {m.isPro && (
+                                  {m.key === "auto" && (
                                     <span className="text-[9px] leading-none px-1.5 py-0.5 rounded bg-primary/15 text-primary border border-primary/25 font-mono uppercase tracking-wider shrink-0">
-                                      Pro
+                                      Default
                                     </span>
                                   )}
                                 </div>
                                 <div className="text-[10px] text-secondary font-mono">{m.note}</div>
                               </div>
-                              {active && !locked && (
+                              {active && (
                                 <Check className="w-3.5 h-3.5 text-primary shrink-0" />
                               )}
                             </button>

@@ -77,19 +77,23 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-// Three Claude-backed tiers under DeployBro branding. `key` maps to the
-// backend model registry. Plan mode server-side auto-upgrades paid users
-// to Power Bro regardless of which tier is selected here.
+// Four Claude-backed tiers under DeployBro branding. `key` maps to the
+// backend model registry — `auto` is a sentinel that tells the server
+// to pick the cheapest model that should be able to handle the request
+// (scored from prompt length, attachments, plan flags). All tiers are
+// available to every user; the per-token cost flows through the user's
+// balance regardless of billing plan.
 const AVAILABLE_MODELS: {
   name: string;
   provider: string;
   costRange: string;
-  key: "haiku" | "sonnet" | "opus";
+  key: "auto" | "haiku" | "sonnet" | "opus";
   note: string;
 }[] = [
-  { name: "Economy Bro", provider: "Anthropic · Haiku 4.5",  costRange: "$0.005 - $0.025", key: "haiku",  note: "Fast & cheap" },
-  { name: "Smart Bro",   provider: "Anthropic · Sonnet 4.5", costRange: "$0.012 - $0.06",  key: "sonnet", note: "Balanced (recommended)" },
-  { name: "Power Bro",   provider: "Anthropic · Opus",       costRange: "$0.02 - $0.10",   key: "opus",   note: "Most capable" },
+  { name: "Auto Bro",    provider: "Picks the right model for the task", costRange: "Variable",         key: "auto",   note: "Recommended" },
+  { name: "Economy Bro", provider: "Anthropic · Haiku 4.5",              costRange: "$0.005 - $0.025",  key: "haiku",  note: "Fast & cheap" },
+  { name: "Smart Bro",   provider: "Anthropic · Sonnet 4.5",             costRange: "$0.012 - $0.06",   key: "sonnet", note: "Balanced" },
+  { name: "Power Bro",   provider: "Anthropic · Opus",                   costRange: "$0.02 - $0.10",    key: "opus",   note: "Most capable" },
 ];
 import {
   useMe,
@@ -886,9 +890,9 @@ export default function Builder() {
   // Lifted from ChatPanel so handleSend (declared here) can read which model
   // the user picked and pass its key to the backend. Both desktop and mobile
   // ChatPanel instances share this single state, which is the right UX too.
-  // Default to Economy Bro by name (not by list index) so reordering the
+  // Default to Auto Bro by name (not by list index) so reordering the
   // picker never silently changes the default model.
-  const [selectedModel, setSelectedModel] = useState<string>("Economy Bro");
+  const [selectedModel, setSelectedModel] = useState<string>("Auto Bro");
   // Plan mode: when ON, the user's submit triggers a conversational
   // interview — the AI asks one question at a time (with quick-pick
   // chip suggestions) until it has enough info, then emits the final
@@ -906,7 +910,7 @@ export default function Builder() {
   const [planConversation, setPlanConversation] = useState<{
     originalPrompt: string;
     overrides: {
-      modelKey?: "haiku" | "sonnet" | "opus";
+      modelKey?: "auto" | "haiku" | "sonnet" | "opus";
       urls?: string[];
       files?: File[];
     };
@@ -963,7 +967,7 @@ export default function Builder() {
     question: string;
     suggestions: string[];
     overrides: {
-      modelKey?: "haiku" | "sonnet" | "opus";
+      modelKey?: "auto" | "haiku" | "sonnet" | "opus";
       urls?: string[];
       files?: File[];
     };
@@ -1009,7 +1013,7 @@ export default function Builder() {
     // before the send fires — that was a real timing race.
     let overrides:
       | {
-          modelKey?: "haiku" | "sonnet" | "opus";
+          modelKey?: "auto" | "haiku" | "sonnet" | "opus";
           planMode?: boolean;
           urls?: string[];
           files?: File[];
@@ -1084,7 +1088,7 @@ export default function Builder() {
     | ((
         overridePrompt?: string,
         overrides?: {
-          modelKey?: "haiku" | "sonnet" | "opus";
+          modelKey?: "auto" | "haiku" | "sonnet" | "opus";
           planMode?: boolean;
           urls?: string[];
           files?: File[];
@@ -1298,7 +1302,7 @@ export default function Builder() {
   const startPlanConversation = (
     prompt: string,
     overrides: {
-      modelKey?: "haiku" | "sonnet" | "opus";
+      modelKey?: "auto" | "haiku" | "sonnet" | "opus";
       urls?: string[];
       files?: File[];
     },
@@ -1520,7 +1524,7 @@ export default function Builder() {
   const handleSend = async (
     overridePrompt?: string,
     overrides?: {
-      modelKey?: "haiku" | "sonnet" | "opus";
+      modelKey?: "auto" | "haiku" | "sonnet" | "opus";
       planMode?: boolean;
       urls?: string[];
       files?: File[];
@@ -2771,7 +2775,7 @@ function ChatPanel({
     question: string;
     suggestions: string[];
     overrides: {
-      modelKey?: "haiku" | "sonnet" | "opus";
+      modelKey?: "auto" | "haiku" | "sonnet" | "opus";
       urls?: string[];
       files?: File[];
     };
@@ -3328,52 +3332,32 @@ function ChatPanel({
                   </div>
                   {AVAILABLE_MODELS.map((m) => {
                     const active = m.name === selectedModel;
-                    // Smart Bro and Power Bro are Pro-tier only. Free
-                    // users can still see them in the menu so they know
-                    // what they're missing, but selecting one bounces to
-                    // billing instead of switching the model.
-                    const isProOnly = m.key !== "haiku";
-                    const locked = isFreePlan && isProOnly;
+                    // All tiers are available to every user — billing
+                    // is per-token from the user's balance, so the
+                    // model picker is a UX choice, not a paywall.
                     return (
                       <button
                         key={m.name}
                         onClick={() => {
-                          if (locked) {
-                            setModelOpen(false);
-                            toast.message("Pro plan required", {
-                              description:
-                                "Smart Bro and Power Bro are available on the Pro plan.",
-                              action: {
-                                label: "Upgrade",
-                                onClick: () =>
-                                  setLocation("/dashboard/billing"),
-                              },
-                            });
-                            return;
-                          }
                           setSelectedModel(m.name);
                           setModelOpen(false);
                         }}
-                        className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-xs transition-colors ${
-                          locked
-                            ? "text-secondary hover:bg-surface-raised"
-                            : "text-foreground hover:bg-surface-raised"
-                        }`}
+                        className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-xs transition-colors text-foreground hover:bg-surface-raised"
                       >
                         <div className="flex-1 min-w-0">
                           <div className="font-medium truncate flex items-center gap-1.5">
                             <span className="truncate">{m.name}</span>
-                            {isProOnly && (
+                            {m.key === "auto" && (
                               <span className="text-[9px] leading-none px-1.5 py-0.5 rounded bg-primary/15 text-primary border border-primary/25 font-mono uppercase tracking-wider shrink-0">
-                                Pro
+                                Default
                               </span>
                             )}
                           </div>
                           <div className="text-[10px] text-secondary font-mono">
-                            {m.costRange}
+                            {m.costRange} · {m.note}
                           </div>
                         </div>
-                        {active && !locked && (
+                        {active && (
                           <Check className="w-3.5 h-3.5 text-primary shrink-0" />
                         )}
                       </button>

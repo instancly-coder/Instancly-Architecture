@@ -68,33 +68,75 @@ const MODELS: Record<
 };
 const DEFAULT_MODEL: ModelKey = "haiku";
 
-// Resolve which Claude model to run for a given request.
-// Rules, in priority order:
-//   1. Free plan is locked to Economy Bro (Haiku) regardless of any other input.
-//   2. If the user already approved a structured plan (two-stage Plan Mode
-//      pipeline), build with Smart Bro (Sonnet) — the heavy reasoning was
-//      already done in the planning pass, so we don't need Opus prices.
-//   3. Otherwise, legacy single-pass plan mode auto-upgrades paid users to
-//      Power Bro (Opus). Kept as a fallback for any client that still sends
-//      `planMode:true` without an `approvedPlan`.
-//   4. Honour the client's requested key, falling back to the default.
-function pickModel(
-  requested: unknown,
-  plan: string | null | undefined,
+// Auto-mode complexity scorer. When the client sends `model: "auto"`
+// (the new default — see frontend AVAILABLE_MODELS), the server picks
+// the cheapest model that should be able to handle the request. The
+// goal is "good enough" for cheap requests (so users don't burn Opus
+// dollars on a one-line tweak) and "step up" for big asks (so a 30-
+// component first build doesn't get a Haiku response that can't keep
+// up).
+//
+// Signals (in priority order):
+//   - hasApprovedPlan → sonnet. The heavy reasoning happened in the
+//     plan interview; the build step is structured execution.
+//   - planMode without approvedPlan → opus. Legacy single-pass plan
+//     mode that still benefits from the most capable model.
+//   - prompt length + attachments → tier ladder.
+//       large (>1500 chars OR ≥3 attachments OR ≥3 reference URLs) → opus
+//       medium (>280 chars OR any attachment OR any URL)            → sonnet
+//       small  (everything else, e.g. "make the hero blue")          → haiku
+function pickAutoModel(
+  prompt: string,
+  attachmentCount: number,
+  urlCount: number,
   planMode: boolean,
   hasApprovedPlan: boolean,
 ): ModelKey {
-  // An approved plan trumps every other gate — if the user paid the
-  // Haiku planning cost AND went through the review modal, the build
-  // step must run on Sonnet locked to that plan, regardless of the
-  // user's billing plan. (Plan Mode itself is the gate that controls
-  // whether free users can reach this branch in the first place.)
   if (hasApprovedPlan) return "sonnet";
-  if ((plan ?? "Free").toLowerCase() === "free") return "haiku";
   if (planMode) return "opus";
-  return typeof requested === "string" && requested in MODELS
-    ? (requested as ModelKey)
-    : DEFAULT_MODEL;
+  const len = prompt.length;
+  if (len > 1500 || attachmentCount >= 3 || urlCount >= 3) return "opus";
+  if (len > 280 || attachmentCount > 0 || urlCount > 0) return "sonnet";
+  return "haiku";
+}
+
+// Resolve which Claude model to run for a given request.
+//
+// Rules, in priority order:
+//   1. If the client explicitly picked one of the three tiers (haiku /
+//      sonnet / opus), honour it. Pro restrictions removed — billing
+//      is per-token from the user's balance, so anyone can pick any
+//      tier and the cost flows through.
+//   2. Otherwise (model is "auto", missing, or unrecognised) defer to
+//      pickAutoModel which scores complexity from the prompt + the
+//      attached files / reference URLs / plan flags.
+//
+// `plan` (the user's billing plan) is intentionally NOT consulted any
+// more — it's accepted as a parameter so existing call sites compile,
+// but model selection is a UX choice, not a billing gate.
+function pickModel(
+  requested: unknown,
+  _plan: string | null | undefined,
+  planMode: boolean,
+  hasApprovedPlan: boolean,
+  prompt: string = "",
+  attachmentCount: number = 0,
+  urlCount: number = 0,
+): ModelKey {
+  if (
+    typeof requested === "string" &&
+    requested !== "auto" &&
+    requested in MODELS
+  ) {
+    return requested as ModelKey;
+  }
+  return pickAutoModel(
+    prompt,
+    attachmentCount,
+    urlCount,
+    planMode,
+    hasApprovedPlan,
+  );
 }
 
 // ---------- SSRF-safe URL fetching ----------
@@ -930,15 +972,19 @@ router.post(
     let aborted = clientGone;
     let stream: ReturnType<typeof anthropic.messages.stream> | null = null;
 
-    // Resolve which Claude model to run. Free plan is forced to Economy Bro;
-    // plan mode auto-upgrades paid users to Power Bro; otherwise we honour
-    // the client's choice. The chosen model also determines the per-token
-    // rates used to bill the user's balance after the build.
+    // Resolve which Claude model to run. If the client picked a specific
+    // tier we honour it; if it asked for "auto" (the new default) we
+    // score complexity from the prompt + attachments + plan flags. The
+    // chosen model also determines the per-token rates used to bill the
+    // user's balance after the build.
     const modelKey = pickModel(
       req.body?.model,
       ownerPlan,
       planMode,
       approvedPlan !== null,
+      prompt,
+      images.length,
+      urls.length,
     );
     const modelInfo = MODELS[modelKey];
 
