@@ -51,7 +51,6 @@ import {
   EyeOff,
   Loader2,
   Rocket,
-  Sparkles,
   Upload,
   ArrowDownAZ,
   ArrowDown10,
@@ -3616,15 +3615,6 @@ function VerificationPanel({
             open ? "rotate-90" : ""
           }`}
         />
-        <Sparkles
-          className={`w-3.5 h-3.5 shrink-0 ${
-            overallTone === "fail"
-              ? "text-red-500"
-              : overallTone === "warn"
-                ? "text-amber-500"
-                : "text-success"
-          }`}
-        />
         <div className="flex-1 min-w-0">
           <div className="text-xs font-medium text-foreground truncate">
             Verification · {passCount}/{state.checks.length} passed
@@ -3710,7 +3700,6 @@ function VerificationRow({
               className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-primary/15 text-primary border border-primary/30 hover:bg-primary/25 transition-colors uppercase tracking-wider"
               title="Send this fix to the AI"
             >
-              <Sparkles className="w-2.5 h-2.5" />
               Apply fix
             </button>
           )}
@@ -5458,7 +5447,7 @@ function DatabaseView() {
               </>
             ) : (
               <>
-                <Sparkles className="w-4 h-4 mr-2" /> Create database
+                Create database
               </>
             )}
           </Button>
