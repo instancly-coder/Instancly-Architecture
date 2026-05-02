@@ -14,6 +14,7 @@ import {
   Send,
   ChevronDown,
   ChevronRight,
+  ChevronUp,
   FileCode2,
   Play,
   Database,
@@ -3866,23 +3867,97 @@ function PlanBox({
   const isAwaitingAssistant =
     status === "thinking" && lastMsg?.role === "user";
 
+  // Once the user clicks "Add to chat" (status flips to "approved"),
+  // the build is about to fire and the streaming feedback below needs
+  // the visual real estate. Collapse the planning thread + plan
+  // summary into a one-line pill so the in-flight bubble + AI prose
+  // dominate the chat. The user can still click the pill to expand
+  // back to the full paper trail at any time. We re-collapse on every
+  // fresh transition into "approved" so re-approving after editing
+  // always starts compact again.
+  const [userExpanded, setUserExpanded] = useState(false);
+  useEffect(() => {
+    if (isApproved) setUserExpanded(false);
+  }, [isApproved]);
+  const compact = isApproved && !userExpanded;
+
+  // Tiny derived counts for the collapsed pill — gives a glanceable
+  // preview of what's about to be built without expanding the box.
+  const pageCount = plan?.pages.length ?? 0;
+  const sectionCount = plan?.sections.filter((s) => s.enabled).length ?? 0;
+  const summaryBits: string[] = [];
+  if (pageCount > 0)
+    summaryBits.push(`${pageCount} page${pageCount === 1 ? "" : "s"}`);
+  if (sectionCount > 0)
+    summaryBits.push(
+      `${sectionCount} section${sectionCount === 1 ? "" : "s"}`,
+    );
+
+  if (compact) {
+    return (
+      <button
+        type="button"
+        onClick={() => setUserExpanded(true)}
+        className="w-full bg-surface-raised hover:bg-background border border-transparent hover:border-border rounded-xl px-3.5 py-2.5 flex items-center gap-2.5 text-left transition-colors group"
+        aria-label="Expand plan details"
+        title="Expand plan details"
+      >
+        <Check className="w-3.5 h-3.5 text-primary shrink-0" aria-hidden />
+        <div className="min-w-0 flex-1">
+          <div className="text-xs font-semibold text-foreground truncate">
+            Plan{plan?.projectName ? `: ${plan.projectName}` : ""}
+          </div>
+          {summaryBits.length > 0 && (
+            <div className="text-[11px] text-secondary truncate font-mono">
+              {summaryBits.join(" · ")}
+            </div>
+          )}
+        </div>
+        <ChevronDown
+          className="w-3.5 h-3.5 text-secondary group-hover:text-foreground shrink-0 transition-colors"
+          aria-hidden
+        />
+      </button>
+    );
+  }
+
   return (
     <div className="bg-surface-raised rounded-xl p-4 space-y-3">
       {/* Header — swaps label when the plan is ready. The leading
           icon was dropped per design feedback; the title alone is
-          enough chrome for the box. */}
+          enough chrome for the box. The Approved-state header
+          doubles as a "collapse" affordance so the user can shrink
+          the box back into a pill (matching the auto-collapsed
+          state above) and clear the visual real estate for the
+          streaming feedback below. */}
       <div className="flex items-center gap-2">
-        <div className="text-sm font-semibold text-foreground">
-          {isApproved
-            ? "Plan added to chat"
-            : isReady
-            ? "Plan ready"
-            : "Planning your app"}
-        </div>
-        {!showPlan && steps.length > 0 && (
-          <div className="ml-auto text-[10px] font-mono uppercase tracking-wider text-secondary">
-            Step {lastStepIdx + 1}
-          </div>
+        {isApproved ? (
+          <button
+            type="button"
+            onClick={() => setUserExpanded(false)}
+            className="flex-1 flex items-center gap-2 text-left -m-1 p-1 rounded hover:bg-background/60 transition-colors group"
+            aria-label="Collapse plan details"
+            title="Collapse plan details"
+          >
+            <div className="text-sm font-semibold text-foreground flex-1 truncate">
+              {plan?.projectName ? `Plan: ${plan.projectName}` : "Plan added to chat"}
+            </div>
+            <ChevronUp
+              className="w-3.5 h-3.5 text-secondary group-hover:text-foreground shrink-0 transition-colors"
+              aria-hidden
+            />
+          </button>
+        ) : (
+          <>
+            <div className="text-sm font-semibold text-foreground">
+              {isReady ? "Plan ready" : "Planning your app"}
+            </div>
+            {!showPlan && steps.length > 0 && (
+              <div className="ml-auto text-[10px] font-mono uppercase tracking-wider text-secondary">
+                Step {lastStepIdx + 1}
+              </div>
+            )}
+          </>
         )}
       </div>
 
