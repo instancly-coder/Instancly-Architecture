@@ -22,6 +22,8 @@ export interface Me {
   skills: string[];
   /** Wide cover image URL shown at the top of the profile. Empty = use placeholder gradient. */
   bannerUrl: string;
+  /** Profile picture URL. NULL = render the default gradient initial. */
+  avatarUrl: string | null;
   plan: string;
   balance: number;
   status: string;

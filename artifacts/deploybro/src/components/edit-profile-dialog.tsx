@@ -20,6 +20,7 @@ const BIO_MAX = 280;
 const LOCATION_MAX = 80;
 const WEBSITE_MAX = 200;
 const BANNER_MAX = 500;
+const AVATAR_MAX = 500;
 const SKILL_MAX = 32;
 const SKILLS_MAX_COUNT = 12;
 
@@ -127,6 +128,7 @@ export function EditProfileDialog({
   const [location, setLocation] = useState(me.location);
   const [websiteUrl, setWebsiteUrl] = useState(me.websiteUrl);
   const [bannerUrl, setBannerUrl] = useState(me.bannerUrl);
+  const [avatarUrl, setAvatarUrl] = useState(me.avatarUrl ?? "");
   const [skills, setSkills] = useState<string[]>(me.skills);
 
   const hydratedRef = useRef(false);
@@ -143,6 +145,7 @@ export function EditProfileDialog({
     setLocation(me.location);
     setWebsiteUrl(me.websiteUrl);
     setBannerUrl(me.bannerUrl);
+    setAvatarUrl(me.avatarUrl ?? "");
     // Normalize legacy duplicates here too (case-insensitive),
     // mirroring the server-side dedupe in PATCH /me. Without this,
     // a stored `["React","react"]` would render two identical chips
@@ -174,6 +177,7 @@ export function EditProfileDialog({
         location: location.trim(),
         websiteUrl: websiteUrl.trim(),
         bannerUrl: bannerUrl.trim(),
+        avatarUrl: avatarUrl.trim(),
         skills,
       },
       {
@@ -261,6 +265,43 @@ export function EditProfileDialog({
             </div>
           </div>
 
+          <div className="grid grid-cols-1 sm:grid-cols-[auto_1fr] gap-3 items-start">
+            {/* Live avatar preview to the left of the input. Same
+                fallback rules as the public profile: blank/invalid
+                URL → gradient initial, valid http(s) URL → image. */}
+            {avatarUrl.trim() ? (
+              <img
+                src={avatarUrl.trim()}
+                alt="Avatar preview"
+                className="w-16 h-16 rounded-full object-cover border border-border bg-surface-raised"
+                onError={(e) => {
+                  e.currentTarget.style.display = "none";
+                }}
+              />
+            ) : (
+              <div
+                className="w-16 h-16 rounded-full border border-border flex items-center justify-center text-xl font-bold text-white shadow bg-gradient-to-br from-blue-500 via-blue-900 to-black"
+                aria-hidden
+              >
+                {(me.displayName[0] ?? me.username[0] ?? "?").toUpperCase()}
+              </div>
+            )}
+            <div className="space-y-2 min-w-0">
+              <Label htmlFor="ep-avatar">Profile picture URL</Label>
+              <Input
+                id="ep-avatar"
+                type="url"
+                value={avatarUrl}
+                onChange={(e) => setAvatarUrl(e.target.value)}
+                maxLength={AVATAR_MAX}
+                placeholder="https://…/avatar.png"
+              />
+              <p className="text-[11px] text-secondary">
+                Paste an https:// link to a square image. Leave blank for the default gradient initial.
+              </p>
+            </div>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="ep-banner">Cover image URL</Label>
             <Input
@@ -271,11 +312,17 @@ export function EditProfileDialog({
               maxLength={BANNER_MAX}
               placeholder="https://images.unsplash.com/…"
             />
-            {bannerUrl.trim() && (
+            {bannerUrl.trim() ? (
               <div
                 className="mt-2 w-full h-24 rounded-md border border-border bg-cover bg-center bg-surface-raised"
                 style={{ backgroundImage: `url(${JSON.stringify(bannerUrl.trim())})` }}
                 aria-label="Cover image preview"
+                role="img"
+              />
+            ) : (
+              <div
+                className="mt-2 w-full h-24 rounded-md border border-border bg-gradient-to-br from-blue-500 via-blue-900 to-black"
+                aria-label="Default cover gradient preview"
                 role="img"
               />
             )}

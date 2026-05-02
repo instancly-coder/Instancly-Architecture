@@ -14,5 +14,7 @@ export interface UpdateMeBody {
   location?: string;
   websiteUrl?: string;
   bannerUrl?: string;
+  /** Profile picture URL. Empty string clears the avatar. */
+  avatarUrl?: string;
   skills?: string[];
 }

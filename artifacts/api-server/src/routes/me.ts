@@ -132,6 +132,7 @@ function toMe(user: typeof usersTable.$inferSelect): typeof GetMeResponse._type 
     websiteUrl: user.websiteUrl,
     skills: user.skills,
     bannerUrl: user.bannerUrl,
+    avatarUrl: user.avatarUrl ?? null,
     plan: user.plan,
     balance: Number(user.balance),
     status: user.status,
@@ -674,6 +675,7 @@ router.patch("/me", async (req: Request, res: Response): Promise<void> => {
     location,
     websiteUrl,
     bannerUrl,
+    avatarUrl,
     skills,
   } = req.body ?? {};
   const updates: Record<string, unknown> = {};
@@ -739,6 +741,18 @@ router.patch("/me", async (req: Request, res: Response): Promise<void> => {
       return;
     }
     updates.bannerUrl = trimmed;
+  }
+
+  if (typeof avatarUrl === "string") {
+    // Same 500-char cap as the banner. Empty string clears the
+    // avatar by storing NULL — the column is nullable and the UI
+    // treats null as "render the default gradient + initial".
+    const trimmed = avatarUrl.trim();
+    if (trimmed.length > 500) {
+      res.status(400).json({ status: "error", message: "Avatar URL must be at most 500 chars." });
+      return;
+    }
+    updates.avatarUrl = trimmed === "" ? null : trimmed;
   }
 
   // Skills is the chip list at the bottom of the profile sidebar. We

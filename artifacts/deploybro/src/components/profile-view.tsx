@@ -102,20 +102,25 @@ export function ProfileView({
   const websiteUrl = user.websiteUrl.trim();
   const websiteHref = toHref(websiteUrl);
   const bannerSrc = toBannerSrc(user.bannerUrl);
+  // Same validator as the banner: only http(s) URLs that parse pass
+  // through, anything else collapses to `null` and the gradient
+  // initial-letter avatar is rendered instead.
+  const avatarSrc = toBannerSrc(user.avatarUrl ?? "");
 
   return (
     <>
       {/* Cover banner. Renders the user's image if they've set one,
-          otherwise a subtle gradient placeholder so the page still
-          has the same vertical rhythm. The avatar in the sidebar
-          below uses a negative top margin to overlap the banner's
-          bottom edge, matching the social-profile convention. */}
+          otherwise the same blue→black gradient used by the default
+          avatar so the two read as one piece of branding instead of
+          competing colour stories. The avatar in the sidebar below
+          uses a negative top margin to overlap the banner's bottom
+          edge, matching the social-profile convention. */}
       <div
         className={
           "w-full h-32 md:h-44 border-b border-border " +
           (bannerSrc
             ? "bg-cover bg-center"
-            : "bg-gradient-to-r from-blue-900/40 via-blue-700/30 to-purple-900/40")
+            : "bg-gradient-to-br from-blue-500 via-blue-900 to-black")
         }
         style={bannerSrc ? { backgroundImage: `url(${JSON.stringify(bannerSrc)})` } : undefined}
         role={bannerSrc ? "img" : undefined}
@@ -133,13 +138,30 @@ export function ProfileView({
             {/* `-mt-12 md:-mt-16` lifts the avatar so its top half
                 overlaps the cover banner above. The thicker
                 background-colored ring (border-4 border-background)
-                punches the avatar out of the banner cleanly. */}
-            <div
-              className="w-20 h-20 -mt-12 md:-mt-16 rounded-full border-4 border-background flex items-center justify-center text-2xl font-bold mb-5 text-white shadow-lg bg-gradient-to-br from-blue-500 via-blue-900 to-black"
-              aria-hidden="true"
-            >
-              {user.username[0].toUpperCase()}
-            </div>
+                punches the avatar out of the banner cleanly.
+                When the user has uploaded an avatar URL we render
+                it as a cover image; otherwise we fall back to the
+                gradient + initial letter so a missing or invalid
+                URL never shows a broken-image icon. */}
+            {avatarSrc ? (
+              <img
+                src={avatarSrc}
+                alt={`${user.displayName} avatar`}
+                className="w-20 h-20 -mt-12 md:-mt-16 rounded-full border-4 border-background object-cover mb-5 shadow-lg bg-surface-raised"
+                onError={(e) => {
+                  // Hide a broken image so the next render shows the
+                  // gradient fallback instead of a browser placeholder.
+                  e.currentTarget.style.display = "none";
+                }}
+              />
+            ) : (
+              <div
+                className="w-20 h-20 -mt-12 md:-mt-16 rounded-full border-4 border-background flex items-center justify-center text-2xl font-bold mb-5 text-white shadow-lg bg-gradient-to-br from-blue-500 via-blue-900 to-black"
+                aria-hidden="true"
+              >
+                {user.username[0].toUpperCase()}
+              </div>
+            )}
             <h2 className="text-2xl font-bold tracking-tight">
               {user.displayName}
             </h2>

@@ -61,6 +61,12 @@ export const GetMeResponse = zod.object({
     .describe(
       "Wide cover image URL shown at the top of the profile. Empty = use placeholder gradient.",
     ),
+  avatarUrl: zod
+    .string()
+    .nullable()
+    .describe(
+      "Profile picture URL. NULL = render the default gradient initial.",
+    ),
   plan: zod.string(),
   balance: zod.number(),
   status: zod.string(),
@@ -93,6 +99,10 @@ export const UpdateMeBody = zod.object({
   location: zod.string().optional(),
   websiteUrl: zod.string().optional(),
   bannerUrl: zod.string().optional(),
+  avatarUrl: zod
+    .string()
+    .optional()
+    .describe("Profile picture URL. Empty string clears the avatar."),
   skills: zod.array(zod.string()).optional(),
 });
 
@@ -116,6 +126,12 @@ export const UpdateMeResponse = zod.object({
     .string()
     .describe(
       "Wide cover image URL shown at the top of the profile. Empty = use placeholder gradient.",
+    ),
+  avatarUrl: zod
+    .string()
+    .nullable()
+    .describe(
+      "Profile picture URL. NULL = render the default gradient initial.",
     ),
   plan: zod.string(),
   balance: zod.number(),
@@ -202,6 +218,12 @@ export const CompleteOnboardingResponse = zod.object({
     .string()
     .describe(
       "Wide cover image URL shown at the top of the profile. Empty = use placeholder gradient.",
+    ),
+  avatarUrl: zod
+    .string()
+    .nullable()
+    .describe(
+      "Profile picture URL. NULL = render the default gradient initial.",
     ),
   plan: zod.string(),
   balance: zod.number(),

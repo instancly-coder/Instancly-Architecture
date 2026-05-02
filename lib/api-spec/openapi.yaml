@@ -1155,6 +1155,10 @@ components:
         bannerUrl:
           type: string
           description: Wide cover image URL shown at the top of the profile. Empty = use placeholder gradient.
+        avatarUrl:
+          type: string
+          nullable: true
+          description: Profile picture URL. NULL = render the default gradient initial.
         plan: { type: string }
         balance: { type: number }
         status: { type: string }
@@ -1185,6 +1189,7 @@ components:
         - websiteUrl
         - skills
         - bannerUrl
+        - avatarUrl
         - plan
         - balance
         - status
@@ -1253,6 +1258,7 @@ components:
         location: { type: string }
         websiteUrl: { type: string }
         bannerUrl: { type: string }
+        avatarUrl: { type: string, description: "Profile picture URL. Empty string clears the avatar." }
         skills:
           type: array
           items: { type: string }
