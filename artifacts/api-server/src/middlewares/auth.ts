@@ -226,12 +226,28 @@ async function ensureUser(
 const DEV_BYPASS_ALLOWED = process.env.NODE_ENV !== "production";
 const DEV_BYPASS_AUTO_ENABLED = DEV_BYPASS_ALLOWED && !jwks;
 const DEV_BYPASS_COOKIE = "dev_bypass";
+const DEV_BYPASS_HEADER = "x-dev-bypass";
 
-function hasDevBypassCookie(req: Request): boolean {
+/**
+ * True iff the request explicitly opted in to the dev bypass via
+ * EITHER the `dev_bypass=1` cookie OR the `X-Dev-Bypass: 1` header.
+ *
+ * Both are accepted because the cookie path is unreliable in some
+ * contexts: when the dev runs the app inside the Replit workspace
+ * preview iframe (a third-party iframe relative to the parent
+ * window), Chrome silently blocks `document.cookie` writes from the
+ * client. The header path doesn't touch cookie storage and works
+ * everywhere. The deploybro frontend installs a `fetch` wrapper that
+ * adds the header on /api requests whenever the user-facing bypass
+ * is active — see `lib/dev-bypass.ts`.
+ */
+function hasDevBypassSignal(req: Request): boolean {
   if (!DEV_BYPASS_ALLOWED) return false;
   const cookies = (req as Request & { cookies?: Record<string, string> })
     .cookies;
-  return cookies?.[DEV_BYPASS_COOKIE] === "1";
+  if (cookies?.[DEV_BYPASS_COOKIE] === "1") return true;
+  const header = req.headers[DEV_BYPASS_HEADER];
+  return header === "1";
 }
 
 const DEV_BYPASS_EMAIL = "demo@deploybro.local";
@@ -401,10 +417,11 @@ export async function tryAuth(
 
   // Activate the demo-user bypass when EITHER the environment has no
   // real auth configured (auto mode) OR the request explicitly opted
-  // in via the dev-mode cookie. Both paths are gated on
+  // in via the dev-mode signal (cookie or X-Dev-Bypass header — see
+  // hasDevBypassSignal). Both paths are gated on
   // `NODE_ENV !== "production"` upstream — there is no code path that
   // attaches the demo user in a production build.
-  if (DEV_BYPASS_AUTO_ENABLED || hasDevBypassCookie(req)) {
+  if (DEV_BYPASS_AUTO_ENABLED || hasDevBypassSignal(req)) {
     try {
       const user = await getOrCreateDevUser();
       (req as AuthedRequest).auth = { payload: { sub: user.sub }, user };
