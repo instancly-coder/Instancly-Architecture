@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useParams } from "wouter";
-import { Calendar, Globe, Lock, Loader2, Pencil } from "lucide-react";
+import { Calendar, Globe, Lock, Loader2, Pencil, Copy, Check } from "lucide-react";
 import { toast } from "sonner";
 import {
   useUser,
@@ -221,7 +221,26 @@ export default function Profile() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-5xl mx-auto p-8 w-full">
+      <div className="max-w-5xl mx-auto p-4 md:p-8 w-full">
+        {/* Page header — mirrors the title-block pattern on the
+            other dashboard sub-pages (Billing / Earnings / Settings)
+            so signed-in owners get the same "where am I" rhythm
+            across their account surface. The title links to the
+            canonical /:username path. The right side carries a
+            copy-the-public-URL chip for owners so they can share
+            their profile without hunting through the address bar. */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6 md:mb-8 pb-4 border-b border-border">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold tracking-tight truncate">
+              {isOwner ? "Your profile" : `${user.displayName}'s profile`}
+            </h1>
+            <div className="text-secondary text-sm font-mono truncate">
+              @{user.username}
+            </div>
+          </div>
+          {isOwner && <PublicProfileUrl username={user.username} />}
+        </div>
+
         <div className="flex flex-col md:flex-row gap-12">
           <div className="w-full md:w-64 shrink-0">
             <div
@@ -286,5 +305,69 @@ export default function Profile() {
         </div>
       </div>
     </DashboardLayout>
+  );
+}
+
+/**
+ * Owner-facing chip that exposes the canonical public URL of the
+ * profile so the user can share it in one click. Uses
+ * `window.location.origin` so the URL stays correct on dev,
+ * preview, and production domains without any env wiring.
+ *
+ * Click anywhere on the chip (the URL itself or the icon) copies
+ * to the clipboard; the icon flips to a check for ~1.5s as
+ * confirmation, with a parallel toast for users who don't catch
+ * the icon swap.
+ */
+function PublicProfileUrl({ username }: { username: string }) {
+  const [copied, setCopied] = useState(false);
+  // SSR-safe origin read. We only render this on the client so
+  // window will exist, but guarding lets us cheaply pre-render an
+  // empty href in the worst case.
+  const origin =
+    typeof window !== "undefined" ? window.location.origin : "";
+  const url = `${origin}/${username}`;
+  // Strip the protocol for display so the chip stays scannable on
+  // narrow screens (`deploybro.com/alex` instead of
+  // `https://deploybro.com/alex`).
+  const display = url.replace(/^https?:\/\//, "");
+
+  const onCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      toast.success("Profile URL copied");
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast.error("Couldn't copy — copy it manually instead.");
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2 shrink-0">
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-surface border border-border text-xs font-mono text-secondary hover:text-foreground hover:border-primary/40 transition-colors max-w-[260px] truncate"
+        title={`Open ${url} in a new tab`}
+      >
+        <Globe className="w-3.5 h-3.5 shrink-0" />
+        <span className="truncate">{display}</span>
+      </a>
+      <button
+        type="button"
+        onClick={onCopy}
+        aria-label="Copy public profile URL"
+        title="Copy public profile URL"
+        className="w-8 h-8 rounded-md flex items-center justify-center bg-surface border border-border text-secondary hover:text-foreground hover:border-primary/40 transition-colors"
+      >
+        {copied ? (
+          <Check className="w-3.5 h-3.5 text-primary" />
+        ) : (
+          <Copy className="w-3.5 h-3.5" />
+        )}
+      </button>
+    </div>
   );
 }
