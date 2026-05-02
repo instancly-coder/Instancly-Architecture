@@ -1,4 +1,5 @@
 import { Link, useParams } from "wouter";
+import { useState } from "react";
 import {
   Copy,
   ExternalLink,
@@ -8,12 +9,16 @@ import {
   Check,
   ListTree,
   Terminal,
+  Monitor,
+  Smartphone,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useProject } from "@/lib/api";
 import { toast } from "sonner";
 import { MarketingNav } from "@/components/marketing-nav";
 import { MarketingFooter } from "@/components/marketing-footer";
+
+type ViewMode = "desktop" | "mobile";
 
 function timeAgo(iso: string | null | undefined): string {
   if (!iso) return "—";
@@ -29,6 +34,14 @@ function timeAgo(iso: string | null | undefined): string {
 export default function Project() {
   const { username, slug } = useParams();
   const { data: project, isLoading, isError } = useProject(username, slug);
+  // Viewport toggle for the preview frame. Desktop shows the
+  // captured 16:10 screenshot edge-to-edge; mobile constrains the
+  // frame to a phone silhouette so authors can see how their site
+  // crops at small widths. Default to desktop because that is the
+  // capture aspect ratio of the static screenshot — switching to
+  // mobile shows the top portion of the same image (object-cover
+  // object-top) which is usually the hero/nav.
+  const [viewMode, setViewMode] = useState<ViewMode>("desktop");
 
   const clone = () => toast.success("Project cloned to your dashboard.");
 
@@ -186,26 +199,71 @@ export default function Project() {
           </div>
         </div>
 
-        {/* Preview mockup: the inner browser frame uses `aspect-[16/10]` to
-            match the 1280×800 capture viewport exactly — that way the
-            screenshot fills the frame edge-to-edge with no cropping and no
-            empty letterboxing. The wrapper is centered top so the frame
-            sits nicely within the remaining column without stretching to
-            an arbitrary flex height. `max-w-6xl` keeps it from blowing up
-            on ultra-wide screens. */}
-        <div className="flex-1 bg-background p-3 sm:p-4 lg:p-6 flex flex-col min-h-0 overflow-y-auto">
-          <div className="w-full max-w-6xl mx-auto bg-surface rounded-lg shadow-2xl overflow-hidden border border-border flex flex-col">
+        {/* Preview mockup: the inner browser frame matches the 1280×800
+            capture viewport (16:10) in desktop mode so the screenshot
+            fills edge-to-edge with no cropping. The wrapper now spans
+            the full available width (no max-w cap, minimal padding) so
+            the preview gets as much real estate as the page allows.
+            Mobile mode swaps the frame for a phone silhouette
+            (~9:19.5) and centres it so authors can sanity-check how
+            their hero crops at small widths. */}
+        <div className="flex-1 bg-background p-2 sm:p-3 lg:p-4 flex flex-col min-h-0 overflow-y-auto">
+          <div
+            className={`w-full mx-auto bg-surface rounded-lg shadow-2xl overflow-hidden border border-border flex flex-col transition-[max-width] duration-300 ease-out ${
+              viewMode === "mobile" ? "max-w-[390px]" : "max-w-none"
+            }`}
+          >
             <div className="h-10 bg-surface-raised border-b border-border flex items-center px-3 sm:px-4 gap-2 shrink-0">
               <div className="flex gap-1.5 shrink-0">
                 <div className="w-3 h-3 rounded-full bg-foreground/20"></div>
                 <div className="w-3 h-3 rounded-full bg-foreground/20"></div>
                 <div className="w-3 h-3 rounded-full bg-foreground/20"></div>
               </div>
-              <div className="mx-auto text-[10px] sm:text-xs font-mono text-secondary bg-background px-3 sm:px-12 lg:px-24 py-1 rounded border border-border truncate max-w-[70%] sm:max-w-[60%] lg:max-w-none">
-                {slug}.deploybro.app
+              <div className="flex-1 flex justify-center min-w-0">
+                <div className="text-[10px] sm:text-xs font-mono text-secondary bg-background px-3 sm:px-6 py-1 rounded border border-border truncate max-w-full">
+                  {slug}.deploybro.app
+                </div>
+              </div>
+              {/* Desktop / mobile responsive toggle. Two small icon
+                  buttons styled as a segmented control. The active
+                  mode gets a raised background + foreground colour;
+                  the inactive one stays muted. Hidden on the very
+                  smallest screens since the toggle is meaningless
+                  when the whole page is already mobile-width. */}
+              <div className="hidden sm:flex shrink-0 items-center gap-0.5 bg-background border border-border rounded p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setViewMode("desktop")}
+                  aria-label="Desktop preview"
+                  aria-pressed={viewMode === "desktop"}
+                  className={`p-1 rounded transition-colors ${
+                    viewMode === "desktop"
+                      ? "bg-surface-raised text-foreground"
+                      : "text-secondary hover:text-foreground"
+                  }`}
+                >
+                  <Monitor className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("mobile")}
+                  aria-label="Mobile preview"
+                  aria-pressed={viewMode === "mobile"}
+                  className={`p-1 rounded transition-colors ${
+                    viewMode === "mobile"
+                      ? "bg-surface-raised text-foreground"
+                      : "text-secondary hover:text-foreground"
+                  }`}
+                >
+                  <Smartphone className="w-3.5 h-3.5" />
+                </button>
               </div>
             </div>
-            <div className="aspect-[16/10] bg-background relative">
+            <div
+              className={`bg-background relative ${
+                viewMode === "mobile" ? "aspect-[9/19.5]" : "aspect-[16/10]"
+              }`}
+            >
               {/* Prefer the static publish screenshot over a live iframe:
                   it loads instantly, costs nothing to serve, and never
                   flashes the JSX-via-Babel compile step that the in-builder
@@ -214,7 +272,10 @@ export default function Project() {
                   — typically projects that haven't been published or
                   captured. With the container at the same 16:10 ratio as
                   the capture viewport, `object-cover object-top` paints
-                  the screenshot edge-to-edge with no crop. */}
+                  the screenshot edge-to-edge with no crop. In mobile
+                  mode the same image is shown cropped to the top — most
+                  designs put their hero/nav there so the preview still
+                  reads correctly. */}
               {project.screenshotUrl || project.coverImageUrl ? (
                 <img
                   src={(project.screenshotUrl ?? project.coverImageUrl)!}
