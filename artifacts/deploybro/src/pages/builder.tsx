@@ -3202,15 +3202,28 @@ function PlanBox({
                 {isCurrent &&
                   status === "asking" &&
                   (step.question?.suggestions.length ?? 0) > 0 && (
-                    <div className="flex flex-wrap gap-1.5 pt-1">
+                    // Stacked suggestion options. Used to be inline
+                    // pills on a wrapped row, but at typical chat
+                    // widths the AI's suggestions are full sentences
+                    // that wrap mid-pill and look noisy. Stacking
+                    // vertically gives each option a real click
+                    // target and the hover chevron telegraphs that
+                    // tapping it submits the reply.
+                    <div className="flex flex-col gap-1.5 pt-1">
                       {step.question!.suggestions.map((s, j) => (
                         <button
                           key={`sug-${idx}-${j}`}
                           onClick={() => onSuggestionClick(s)}
-                          className="inline-flex items-center px-2.5 py-1 rounded-full bg-surface hover:bg-background hover:text-primary text-[11px] text-foreground transition-colors text-left"
+                          className="group flex items-center justify-between gap-2 w-full px-3 py-2 rounded-lg bg-surface hover:bg-background hover:ring-1 hover:ring-primary/40 text-xs leading-snug text-foreground hover:text-primary text-left transition-all"
                           title={s}
                         >
-                          {s}
+                          <span className="flex-1 min-w-0 break-words">
+                            {s}
+                          </span>
+                          <ChevronRight
+                            className="w-3.5 h-3.5 shrink-0 text-secondary group-hover:text-primary opacity-60 group-hover:opacity-100 -translate-x-1 group-hover:translate-x-0 transition-all"
+                            aria-hidden
+                          />
                         </button>
                       ))}
                     </div>
