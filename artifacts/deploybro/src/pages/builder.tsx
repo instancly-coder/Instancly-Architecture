@@ -3116,17 +3116,10 @@ function PlanBox({
 
   return (
     <div className="bg-surface-raised rounded-xl p-4 space-y-3">
-      {/* Header — swaps label/icon when the plan is ready. */}
+      {/* Header — swaps label when the plan is ready. The leading
+          icon was dropped per design feedback; the title alone is
+          enough chrome for the box. */}
       <div className="flex items-center gap-2">
-        {isReady ? (
-          <Check className="w-4 h-4 text-success" />
-        ) : (
-          <Sparkles
-            className={`w-4 h-4 text-primary ${
-              status === "thinking" ? "animate-pulse" : ""
-            }`}
-          />
-        )}
         <div className="text-sm font-semibold text-foreground">
           {isReady ? "Plan ready" : "Planning your app"}
         </div>
