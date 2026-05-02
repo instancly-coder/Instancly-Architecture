@@ -200,7 +200,7 @@ function ProjectCard({ project, ownerUsername }: { project: ApiProjectListItem; 
   };
 
   return (
-    <div className="group relative border border-border bg-surface rounded-xl overflow-hidden hover-elevate transition-all duration-200">
+    <div className="group relative bg-surface-raised rounded-xl overflow-hidden hover-elevate transition-all duration-200">
       <Link
         href={`/${ownerUsername}/${project.slug}/build`}
         className="absolute inset-0 z-10"
@@ -211,8 +211,11 @@ function ProjectCard({ project, ownerUsername }: { project: ApiProjectListItem; 
           aspect-[16/10] container matches the 1280×800 viewport that
           `seed-template-screenshots.mjs` and `runPublishPipeline` use, so
           `object-cover object-top` paints the page header full-width
-          without side-cropping. */}
-      <div className="aspect-[16/10] bg-surface-raised border-b border-border relative overflow-hidden">
+          without side-cropping. The thumbnail shares the card's
+          `bg-surface-raised` so the image area, the divider gap, and
+          the text area below all read as one continuous panel — no
+          outer border, no inner divider line. */}
+      <div className="aspect-[16/10] relative overflow-hidden">
         {(project.screenshotUrl ?? project.coverImageUrl) ? (
           <img
             src={(project.screenshotUrl ?? project.coverImageUrl)!}
@@ -221,7 +224,7 @@ function ProjectCard({ project, ownerUsername }: { project: ApiProjectListItem; 
             className="absolute inset-0 w-full h-full object-cover object-top"
           />
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-surface-raised to-background">
+          <div className="absolute inset-0 flex items-center justify-center">
             <div className="w-14 h-14 rounded-2xl bg-border/60 flex items-center justify-center text-secondary font-mono text-2xl">
               {project.name.charAt(0).toUpperCase()}
             </div>
